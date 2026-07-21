@@ -26,13 +26,13 @@ python -m pip install -e '.[dev]'
 Use the guided workflow:
 
 ```bash
-phdash analyze examples/malaria_surveillance.csv --interactive --open
+phframe analyze examples/malaria_surveillance.csv --interactive --open
 ```
 
 Or provide the column roles directly, which is useful for automation:
 
 ```bash
-phdash analyze examples/malaria_surveillance.csv \
+phframe analyze examples/malaria_surveillance.csv \
   --location district \
   --date report_date \
   --value cases \
@@ -45,10 +45,10 @@ phdash analyze examples/malaria_surveillance.csv \
 For an Excel workbook, use `--sheet 0` (the default), `--sheet 1`, or a sheet name:
 
 ```bash
-phdash analyze monthly-report.xlsx --sheet Surveillance --interactive
+phframe analyze monthly-report.xlsx --sheet Surveillance --interactive
 ```
 
-Run `phdash analyze --help` for all options.
+Run `phframe analyze --help` for all options.
 
 ## Development
 
@@ -68,4 +68,3 @@ pytest
 ## License
 
 MIT
-

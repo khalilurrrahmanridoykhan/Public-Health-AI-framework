@@ -32,7 +32,7 @@ def _choose(prompt: str, columns: list[str], required: bool = False) -> str | No
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="phdash", description="Generate dashboards from public-health data.")
+    parser = argparse.ArgumentParser(prog="phframe", description="Generate dashboards from public-health data.")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     subparsers = parser.add_subparsers(dest="command", required=True)
     analyze = subparsers.add_parser("analyze", help="Create an HTML dashboard from CSV or Excel data.")
@@ -77,4 +77,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

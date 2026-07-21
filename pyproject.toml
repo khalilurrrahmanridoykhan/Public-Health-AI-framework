@@ -19,7 +19,7 @@ dependencies = [
 dev = ["pytest>=8.0"]
 
 [project.scripts]
-phdash = "public_health_framework.cli:main"
+phframe = "public_health_framework.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -27,4 +27,3 @@ where = ["src"]
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
-
