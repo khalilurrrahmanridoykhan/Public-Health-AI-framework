@@ -1,131 +1,135 @@
-"""SQLite persistence and validation for declarative datasets."""
+"""Portable SQL persistence and validation for declarative datasets."""
 
 from __future__ import annotations
 
-from contextlib import contextmanager
 from datetime import date, datetime
 import json
-from pathlib import Path
-import sqlite3
-from typing import Any, Iterator
+from typing import Any
+
+from sqlalchemy import (
+    Boolean, Column, Date, DateTime, Float, Integer, MetaData, String, Table, Text,
+    create_engine, delete, inspect, insert, select, update,
+)
+from sqlalchemy.schema import CreateColumn
 
 from .config import DatasetSchema, FieldSchema, ProjectConfig
 
 
-SQL_TYPES = {
-    "string": "TEXT",
-    "location": "TEXT",
-    "integer": "INTEGER",
-    "number": "REAL",
-    "boolean": "INTEGER",
-    "date": "TEXT",
-    "datetime": "TEXT",
+TYPE_FACTORIES = {
+    "string": Text,
+    "location": Text,
+    "integer": Integer,
+    "number": Float,
+    "boolean": Boolean,
+    "date": Date,
+    "datetime": DateTime,
 }
 
 
 class Storage:
     def __init__(self, config: ProjectConfig):
         self.config = config
-        self.path = config.database_path
-
-    @contextmanager
-    def connect(self) -> Iterator[sqlite3.Connection]:
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        connection = sqlite3.connect(self.path)
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA foreign_keys = ON")
-        try:
-            yield connection
-            connection.commit()
-        finally:
-            connection.close()
+        if config.database.startswith("sqlite:///"):
+            config.database_path.parent.mkdir(parents=True, exist_ok=True)
+        self.engine = create_engine(config.database_url, future=True, pool_pre_ping=True)
+        self.metadata = MetaData()
+        self.schema_table = Table(
+            "_phframe_schema", self.metadata,
+            Column("dataset", String(255), primary_key=True),
+            Column("schema_json", Text, nullable=False),
+            Column("updated_at", DateTime(timezone=True), nullable=False),
+        )
+        self.imports_table = Table(
+            "_phframe_imports", self.metadata,
+            Column("id", Integer, primary_key=True, autoincrement=True),
+            Column("dataset", String(255), nullable=False),
+            Column("source", Text, nullable=False),
+            Column("status", String(32), nullable=False),
+            Column("total_rows", Integer, nullable=False),
+            Column("imported_rows", Integer, nullable=False),
+            Column("error_rows", Integer, nullable=False),
+            Column("errors_json", Text, nullable=False),
+            Column("created_at", DateTime(timezone=True), nullable=False),
+        )
 
     def initialize(self) -> None:
         self.migrate()
 
+    def _dataset_table(self, dataset: DatasetSchema) -> Table:
+        existing = self.metadata.tables.get(dataset.name)
+        if existing is not None:
+            return existing
+        columns = [Column("id", Integer, primary_key=True, autoincrement=True)]
+        columns.extend(
+            Column(name, TYPE_FACTORIES[schema.type](), nullable=not schema.required)
+            for name, schema in dataset.fields.items()
+        )
+        columns.extend([
+            Column("created_at", DateTime(timezone=True), nullable=False),
+            Column("updated_at", DateTime(timezone=True), nullable=False),
+        ])
+        return Table(dataset.name, self.metadata, *columns)
+
     def migrate(self, check_only: bool = False) -> list[str]:
         """Create metadata/tables and apply safe additive schema changes."""
+        self.metadata.create_all(self.engine, tables=[self.schema_table, self.imports_table])
         actions: list[str] = []
-        with self.connect() as connection:
-            connection.execute(
-                """CREATE TABLE IF NOT EXISTS _phframe_schema (
-                    dataset TEXT PRIMARY KEY, schema_json TEXT NOT NULL, updated_at TEXT NOT NULL
-                )"""
-            )
-            connection.execute(
-                """CREATE TABLE IF NOT EXISTS _phframe_imports (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    dataset TEXT NOT NULL, source TEXT NOT NULL, status TEXT NOT NULL,
-                    total_rows INTEGER NOT NULL, imported_rows INTEGER NOT NULL,
-                    error_rows INTEGER NOT NULL, errors_json TEXT NOT NULL,
-                    created_at TEXT NOT NULL
-                )"""
-            )
-            for dataset in self.config.datasets.values():
-                exists = connection.execute(
-                    "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (dataset.name,)
-                ).fetchone()
-                if not exists:
-                    actions.append(f"create dataset {dataset.name}")
-                    if not check_only:
-                        connection.execute(self._create_table_sql(dataset))
-                else:
-                    current = {
-                        row["name"]: row for row in connection.execute(f'PRAGMA table_info("{dataset.name}")').fetchall()
-                    }
-                    configured = set(dataset.fields)
-                    managed = set(current) - {"id", "created_at", "updated_at"}
-                    removed = managed - configured
-                    if removed:
-                        raise ValueError(
-                            f"Dataset '{dataset.name}' removes fields ({', '.join(sorted(removed))}). "
-                            "Destructive migrations are not automatic."
-                        )
-                    for name, schema in dataset.fields.items():
-                        if name not in current:
-                            if schema.required:
-                                raise ValueError(
-                                    f"Cannot add required field '{dataset.name}.{name}' automatically. "
-                                    "Add it as optional, populate it, then make it required."
-                                )
-                            actions.append(f"add field {dataset.name}.{name}")
-                            if not check_only:
-                                connection.execute(f'ALTER TABLE "{dataset.name}" ADD COLUMN "{name}" {SQL_TYPES[schema.type]}')
-                        else:
-                            actual = str(current[name]["type"]).upper()
-                            expected = SQL_TYPES[schema.type]
-                            if actual != expected:
-                                raise ValueError(
-                                    f"Field '{dataset.name}.{name}' is {actual} in the database but {expected} in configuration."
-                                )
-                            actual_required = bool(current[name]["notnull"])
-                            if actual_required != schema.required:
-                                raise ValueError(
-                                    f"Field '{dataset.name}.{name}' changes its required constraint. "
-                                    "Constraint-changing migrations are not automatic."
-                                )
-                signature = self._schema_json(dataset)
+        inspector = inspect(self.engine)
+        for dataset in self.config.datasets.values():
+            table = self._dataset_table(dataset)
+            dataset_actions: list[str] = []
+            if not inspector.has_table(dataset.name):
+                dataset_actions.append(f"create dataset {dataset.name}")
+                if not check_only:
+                    table.create(self.engine)
+            else:
+                current = {column["name"]: column for column in inspector.get_columns(dataset.name)}
+                managed = set(current) - {"id", "created_at", "updated_at"}
+                removed = managed - set(dataset.fields)
+                if removed:
+                    raise ValueError(
+                        f"Dataset '{dataset.name}' removes fields ({', '.join(sorted(removed))}). "
+                        "Destructive migrations are not automatic."
+                    )
+                for name, schema in dataset.fields.items():
+                    if name not in current:
+                        if schema.required:
+                            raise ValueError(
+                                f"Cannot add required field '{dataset.name}.{name}' automatically. "
+                                "Add it as optional, populate it, then make it required."
+                            )
+                        dataset_actions.append(f"add field {dataset.name}.{name}")
+                        if not check_only:
+                            definition = str(CreateColumn(table.c[name]).compile(dialect=self.engine.dialect))
+                            with self.engine.begin() as connection:
+                                connection.exec_driver_sql(f'ALTER TABLE "{dataset.name}" ADD COLUMN {definition}')
+                    else:
+                        actual_type = _type_key(current[name]["type"])
+                        if not _compatible_type(schema.type, actual_type, self.engine.dialect.name):
+                            raise ValueError(
+                                f"Field '{dataset.name}.{name}' is {actual_type} in the database "
+                                f"but {schema.type} in configuration."
+                            )
+                        actual_required = not bool(current[name]["nullable"])
+                        if actual_required != schema.required:
+                            raise ValueError(
+                                f"Field '{dataset.name}.{name}' changes its required constraint. "
+                                "Constraint-changing migrations are not automatic."
+                            )
+            actions.extend(dataset_actions)
+            signature = self._schema_json(dataset)
+            with self.engine.begin() as connection:
                 stored = connection.execute(
-                    "SELECT schema_json FROM _phframe_schema WHERE dataset = ?", (dataset.name,)
-                ).fetchone()
-                if stored and stored["schema_json"] != signature and not actions:
+                    select(self.schema_table.c.schema_json).where(self.schema_table.c.dataset == dataset.name)
+                ).scalar_one_or_none()
+                if stored and stored != signature and not dataset_actions:
                     actions.append(f"update metadata {dataset.name}")
                 if not check_only:
-                    connection.execute(
-                        """INSERT INTO _phframe_schema(dataset, schema_json, updated_at) VALUES (?, ?, ?)
-                        ON CONFLICT(dataset) DO UPDATE SET schema_json=excluded.schema_json, updated_at=excluded.updated_at""",
-                        (dataset.name, signature, datetime.now().astimezone().isoformat()),
-                    )
+                    connection.execute(delete(self.schema_table).where(self.schema_table.c.dataset == dataset.name))
+                    connection.execute(insert(self.schema_table).values(
+                        dataset=dataset.name, schema_json=signature, updated_at=_now()
+                    ))
         return actions
-
-    @staticmethod
-    def _create_table_sql(dataset: DatasetSchema) -> str:
-        columns = ["id INTEGER PRIMARY KEY AUTOINCREMENT"]
-        for name, schema in dataset.fields.items():
-            required = " NOT NULL" if schema.required else ""
-            columns.append(f'"{name}" {SQL_TYPES[schema.type]}{required}')
-        columns.extend(["created_at TEXT NOT NULL", "updated_at TEXT NOT NULL"])
-        return f'CREATE TABLE "{dataset.name}" ({", ".join(columns)})'
 
     @staticmethod
     def _schema_json(dataset: DatasetSchema) -> str:
@@ -135,100 +139,74 @@ class Storage:
         )
 
     def list(self, dataset: DatasetSchema, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
-        limit = max(1, min(limit, 1000))
-        offset = max(0, offset)
-        with self.connect() as connection:
-            rows = connection.execute(
-                f'SELECT * FROM "{dataset.name}" ORDER BY id DESC LIMIT ? OFFSET ?', (limit, offset)
-            ).fetchall()
-        return [dict(row) for row in rows]
+        table = self._dataset_table(dataset)
+        statement = select(table).order_by(table.c.id.desc()).limit(max(1, min(limit, 1000))).offset(max(0, offset))
+        with self.engine.connect() as connection:
+            rows = connection.execute(statement).mappings().all()
+        return [_serialize(dict(row)) for row in rows]
 
     def get(self, dataset: DatasetSchema, record_id: int) -> dict[str, Any] | None:
-        with self.connect() as connection:
-            row = connection.execute(f'SELECT * FROM "{dataset.name}" WHERE id = ?', (record_id,)).fetchone()
-        return dict(row) if row else None
+        table = self._dataset_table(dataset)
+        with self.engine.connect() as connection:
+            row = connection.execute(select(table).where(table.c.id == record_id)).mappings().first()
+        return _serialize(dict(row)) if row else None
 
     def create(self, dataset: DatasetSchema, payload: dict[str, Any]) -> dict[str, Any]:
         values = validate_payload(dataset, payload, partial=False)
-        now = datetime.now().astimezone().isoformat()
+        now = _now()
         values.update(created_at=now, updated_at=now)
-        names = list(values)
-        quoted = ", ".join(f'"{name}"' for name in names)
-        placeholders = ", ".join("?" for _ in names)
-        with self.connect() as connection:
-            cursor = connection.execute(
-                f'INSERT INTO "{dataset.name}" ({quoted}) VALUES ({placeholders})',
-                tuple(values.values()),
-            )
-            record_id = int(cursor.lastrowid)
+        table = self._dataset_table(dataset)
+        with self.engine.begin() as connection:
+            result = connection.execute(insert(table).values(**values))
+            record_id = int(result.inserted_primary_key[0])
         return self.get(dataset, record_id) or {}
 
     def update(self, dataset: DatasetSchema, record_id: int, payload: dict[str, Any]) -> dict[str, Any] | None:
+        table = self._dataset_table(dataset)
         if self.get(dataset, record_id) is None:
             return None
         values = validate_payload(dataset, payload, partial=True)
-        if not values:
-            return self.get(dataset, record_id)
-        values["updated_at"] = datetime.now().astimezone().isoformat()
-        assignments = ", ".join(f'"{name}" = ?' for name in values)
-        with self.connect() as connection:
-            connection.execute(
-                f'UPDATE "{dataset.name}" SET {assignments} WHERE id = ?',
-                (*values.values(), record_id),
-            )
+        if values:
+            values["updated_at"] = _now()
+            with self.engine.begin() as connection:
+                connection.execute(update(table).where(table.c.id == record_id).values(**values))
         return self.get(dataset, record_id)
 
     def delete(self, dataset: DatasetSchema, record_id: int) -> bool:
-        with self.connect() as connection:
-            cursor = connection.execute(f'DELETE FROM "{dataset.name}" WHERE id = ?', (record_id,))
-        return cursor.rowcount > 0
+        table = self._dataset_table(dataset)
+        with self.engine.begin() as connection:
+            result = connection.execute(delete(table).where(table.c.id == record_id))
+        return bool(result.rowcount)
 
     def bulk_create(self, dataset: DatasetSchema, payloads: list[dict[str, Any]]) -> int:
-        """Validate first, then insert all records in one transaction."""
         validated = [validate_payload(dataset, payload, partial=False) for payload in payloads]
         if not validated:
             return 0
-        now = datetime.now().astimezone().isoformat()
-        field_names = list(dataset.fields)
-        names = [*field_names, "created_at", "updated_at"]
-        quoted = ", ".join(f'"{name}"' for name in names)
-        placeholders = ", ".join("?" for _ in names)
-        rows = [tuple(values.get(name) for name in field_names) + (now, now) for values in validated]
-        with self.connect() as connection:
-            connection.executemany(
-                f'INSERT INTO "{dataset.name}" ({quoted}) VALUES ({placeholders})', rows
-            )
+        now = _now()
+        rows = [{**values, "created_at": now, "updated_at": now} for values in validated]
+        with self.engine.begin() as connection:
+            connection.execute(insert(self._dataset_table(dataset)), rows)
         return len(rows)
 
     def record_import(
-        self,
-        dataset: str,
-        source: str,
-        status: str,
-        total_rows: int,
-        imported_rows: int,
-        errors: list[dict[str, Any]],
+        self, dataset: str, source: str, status: str, total_rows: int,
+        imported_rows: int, errors: list[dict[str, Any]],
     ) -> int:
-        with self.connect() as connection:
-            cursor = connection.execute(
-                """INSERT INTO _phframe_imports
-                (dataset, source, status, total_rows, imported_rows, error_rows, errors_json, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                (
-                    dataset, source, status, total_rows, imported_rows, len(errors),
-                    json.dumps(errors), datetime.now().astimezone().isoformat(),
-                ),
-            )
-            return int(cursor.lastrowid)
+        with self.engine.begin() as connection:
+            result = connection.execute(insert(self.imports_table).values(
+                dataset=dataset, source=source, status=status, total_rows=total_rows,
+                imported_rows=imported_rows, error_rows=len(errors),
+                errors_json=json.dumps(errors), created_at=_now(),
+            ))
+            return int(result.inserted_primary_key[0])
 
     def import_history(self, limit: int = 20) -> list[dict[str, Any]]:
-        with self.connect() as connection:
-            rows = connection.execute(
-                "SELECT * FROM _phframe_imports ORDER BY id DESC LIMIT ?", (max(1, min(limit, 200)),)
-            ).fetchall()
+        statement = select(self.imports_table).order_by(self.imports_table.c.id.desc()).limit(max(1, min(limit, 200)))
+        with self.engine.connect() as connection:
+            rows = connection.execute(statement).mappings().all()
         result = []
         for row in rows:
-            item = dict(row)
+            item = _serialize(dict(row))
             item["errors"] = json.loads(item.pop("errors_json"))
             result.append(item)
         return result
@@ -262,12 +240,52 @@ def _coerce(name: str, value: Any, schema: FieldSchema) -> Any:
                 normalized = value.lower()
                 if normalized not in {"true", "false", "1", "0"}:
                     raise ValueError
-                return int(normalized in {"true", "1"})
-            return int(bool(value))
+                return normalized in {"true", "1"}
+            return bool(value)
         if schema.type == "date":
-            return date.fromisoformat(str(value)).isoformat()
+            return date.fromisoformat(str(value)[:10])
         if schema.type == "datetime":
-            return datetime.fromisoformat(str(value).replace("Z", "+00:00")).isoformat()
+            return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
         return str(value)
     except (TypeError, ValueError) as error:
         raise ValueError(f"Field '{name}' must be a valid {schema.type}.") from error
+
+
+def _type_key(value: Any) -> str:
+    if isinstance(value, Boolean):
+        return "boolean"
+    if isinstance(value, DateTime):
+        return "datetime"
+    if isinstance(value, Date):
+        return "date"
+    if isinstance(value, Integer):
+        return "integer"
+    if isinstance(value, Float):
+        return "number"
+    if isinstance(value, (String, Text)):
+        return "string"
+    return str(value).lower()
+
+
+def _compatible_type(configured: str, actual: str, dialect: str) -> bool:
+    if configured == actual or (configured == "location" and actual == "string"):
+        return True
+    # PHFrame 0.2.0a1 stored temporal values as SQLite TEXT and booleans as INTEGER.
+    legacy_sqlite = {
+        "date": "string",
+        "datetime": "string",
+        "boolean": "integer",
+    }
+    return dialect == "sqlite" and legacy_sqlite.get(configured) == actual
+
+
+def _serialize(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _serialize(item) for key, item in value.items()}
+    if isinstance(value, (date, datetime)):
+        return value.isoformat()
+    return value
+
+
+def _now() -> datetime:
+    return datetime.now().astimezone()

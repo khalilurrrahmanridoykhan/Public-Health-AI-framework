@@ -47,8 +47,9 @@ def _parser() -> argparse.ArgumentParser:
 
     serve = subparsers.add_parser("serve", help="Run a PHFrame project development server.")
     serve.add_argument("--config", default="phframe.yaml", help="Project configuration path")
-    serve.add_argument("--host", default="127.0.0.1")
-    serve.add_argument("--port", default=8000, type=int)
+    serve.add_argument("--host", help="Bind host (defaults to project configuration)")
+    serve.add_argument("--port", type=int, help="Bind port (defaults to project configuration)")
+    serve.add_argument("--reload", action="store_true", help="Reload when source/configuration changes")
 
     check = subparsers.add_parser("check", help="Validate project configuration and initialize storage.")
     check.add_argument("--config", default="phframe.yaml", help="Project configuration path")
@@ -151,11 +152,27 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"  Row {error['row']}: {error['message']}")
             return 2 if result.errors else 0
         if args.command == "serve":
+            import os
             import uvicorn
 
             application = PHFrame.from_file(args.config)
-            print(f"Starting {application.config.name} at http://{args.host}:{args.port}")
-            uvicorn.run(application, host=args.host, port=args.port)
+            if args.reload and application.config.environment == "production":
+                raise ValueError("--reload is not allowed in production mode.")
+            host = args.host or application.config.host
+            port = args.port or application.config.port
+            print(
+                f"Starting {application.config.name} ({application.config.environment}) "
+                f"at http://{host}:{port}"
+            )
+            if args.reload:
+                os.environ["PHFRAME_CONFIG"] = str(Path(args.config).resolve())
+                uvicorn.run(
+                    "public_health_framework.runtime:create_app",
+                    factory=True, host=host, port=port, reload=True,
+                    reload_dirs=[str(application.config.root)],
+                )
+            else:
+                uvicorn.run(application, host=host, port=port)
             return 0
 
         sheet: str | int = int(args.sheet) if str(args.sheet).isdigit() else args.sheet

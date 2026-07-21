@@ -91,6 +91,55 @@ phframe imports
 
 Imports are atomic: PHFrame validates every row before inserting anything. Each validation or import attempt is recorded in the internal audit history and exposed at `GET /api/imports`.
 
+## Development and production configuration
+
+Generated projects use SQLite for local development. Paths in SQLite URLs are resolved relative to `phframe.yaml`:
+
+```yaml
+project:
+  name: Malaria Surveillance
+  database: sqlite:///data/phframe.db
+  environment: development
+
+server:
+  host: 127.0.0.1
+  port: 8000
+```
+
+Start the development server with automatic reload:
+
+```bash
+phframe serve --reload
+```
+
+For PostgreSQL, install the optional driver:
+
+```bash
+pip install 'public-health-framework[postgres]'
+```
+
+Keep production credentials outside source control:
+
+```bash
+export PHFRAME_ENV=production
+export PHFRAME_DATABASE_URL='postgresql+psycopg://user:password@localhost/phframe'
+export PHFRAME_HOST=0.0.0.0
+export PHFRAME_PORT=8000
+
+phframe check
+phframe migrate
+phframe serve
+```
+
+Alternatively, `phframe.yaml` can refer to an environment variable:
+
+```yaml
+project:
+  database: ${DATABASE_URL}
+```
+
+PHFrame redacts database credentials in system-check output. SQLite and PostgreSQL use the same dataset, CRUD, import-audit, and migration APIs. Reload mode is intentionally disabled when `PHFRAME_ENV=production`.
+
 ## Dashboard export
 
 - Reads `.csv`, `.xlsx`, and `.xlsm` files

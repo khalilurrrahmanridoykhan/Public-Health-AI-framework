@@ -14,6 +14,11 @@ PROJECT_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9 _-]*$")
 CONFIG_TEMPLATE = """project:
   name: "{title}"
   database: sqlite:///data/phframe.db
+  environment: development
+
+server:
+  host: 127.0.0.1
+  port: 8000
 
 datasets:
   case_reports:
@@ -105,8 +110,11 @@ def check_project(config_path: str | Path = "phframe.yaml") -> tuple[ProjectConf
     messages = [f"Configuration: {Path(config_path).resolve()}"]
     messages.append(f"Project: {config.name}")
     messages.append(f"Datasets: {len(config.datasets)}")
-    messages.append(f"Database: {config.database_path}")
+    messages.append(f"Environment: {config.environment}")
+    messages.append(f"Database: {config.database_display}")
     Storage(config).initialize()
     messages.append("Database: ready")
+    if config.environment == "production" and config.database.startswith("sqlite:///"):
+        messages.append("Warning: PostgreSQL is recommended for multi-user production deployments")
     messages.append("System check passed")
     return config, messages
