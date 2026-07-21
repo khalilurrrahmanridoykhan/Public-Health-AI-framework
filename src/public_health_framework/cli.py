@@ -1,4 +1,4 @@
-"""Command-line interface for Public Health Framework."""
+"""PHFrame project and data command-line interface."""
 
 from __future__ import annotations
 
@@ -8,7 +8,9 @@ import sys
 import webbrowser
 
 from . import __version__
+from .application import PHFrame
 from .data import DashboardConfig, load_dataset, prepare_dataset, validate_config
+from .project import check_project, create_project
 from .report import build_dashboard
 
 
@@ -32,9 +34,22 @@ def _choose(prompt: str, columns: list[str], required: bool = False) -> str | No
 
 
 def _parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="phframe", description="Generate dashboards from public-health data.")
+    parser = argparse.ArgumentParser(prog="phframe", description="Build public-health data applications.")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    new = subparsers.add_parser("new", help="Create a new PHFrame project.")
+    new.add_argument("name", help="Human-readable project name")
+    new.add_argument("--directory", "-d", help="Destination directory (defaults to a project-name slug)")
+
+    serve = subparsers.add_parser("serve", help="Run a PHFrame project development server.")
+    serve.add_argument("--config", default="phframe.yaml", help="Project configuration path")
+    serve.add_argument("--host", default="127.0.0.1")
+    serve.add_argument("--port", default=8000, type=int)
+
+    check = subparsers.add_parser("check", help="Validate project configuration and initialize storage.")
+    check.add_argument("--config", default="phframe.yaml", help="Project configuration path")
+
     analyze = subparsers.add_parser("analyze", help="Create an HTML dashboard from CSV or Excel data.")
     analyze.add_argument("input", help="Path to a .csv, .xlsx, or .xlsm file")
     analyze.add_argument("-o", "--output", default="dashboard.html", help="Output HTML path")
@@ -53,6 +68,23 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     try:
+        if args.command == "new":
+            project = create_project(args.name, args.directory)
+            print(f"PHFrame project created: {project}")
+            print(f"Next: cd {project.name} && phframe serve")
+            return 0
+        if args.command == "check":
+            _, messages = check_project(args.config)
+            print("\n".join(messages))
+            return 0
+        if args.command == "serve":
+            import uvicorn
+
+            application = PHFrame.from_file(args.config)
+            print(f"Starting {application.config.name} at http://{args.host}:{args.port}")
+            uvicorn.run(application, host=args.host, port=args.port)
+            return 0
+
         sheet: str | int = int(args.sheet) if str(args.sheet).isdigit() else args.sheet
         frame = load_dataset(args.input, sheet=sheet)
         columns = frame.columns.tolist()
@@ -70,7 +102,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.open:
             webbrowser.open(output.as_uri())
         return 0
-    except (FileNotFoundError, ValueError, OSError) as error:
+    except (FileExistsError, FileNotFoundError, ImportError, ValueError, OSError) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 2
 

@@ -1,8 +1,45 @@
-# Public Health Framework
+# PHFrame
 
-Public Health Framework is an early-stage command-line toolkit that turns CSV or Excel exports into a portable HTML dashboard. It is designed for recurring surveillance and program-reporting workflows where teams currently rebuild the same summaries in spreadsheets.
+PHFrame is an early-stage framework for building extensible public-health data systems. Phase 1 introduces generated projects, declarative dataset schemas, persistent storage, and automatic APIs. The original CSV/Excel dashboard generator remains available as an export workflow.
 
-## Current MVP
+> Current version: `0.2.0a1` (Phase 1 foundation preview)
+
+## Create a public-health application
+
+```bash
+phframe new "Malaria Surveillance"
+cd malaria-surveillance
+phframe check
+phframe serve
+```
+
+Open <http://127.0.0.1:8000>. The generated project includes:
+
+- `phframe.yaml` — project, database, dataset, field, and plugin configuration
+- `data/phframe.db` — local SQLite database
+- `plugins/` — application-specific extension modules
+- `/api` — discoverable dataset metadata
+- `/api/case_reports` — generated collection API
+- `/api/case_reports/{id}` — generated record API
+
+Example request:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/case_reports \
+  -H 'content-type: application/json' \
+  -d '{
+    "case_id": "MAL-001",
+    "disease": "Malaria",
+    "status": "confirmed",
+    "report_date": "2026-07-21",
+    "district": "Bandarban",
+    "cases": 1
+  }'
+```
+
+The Phase 1 schema supports `string`, `integer`, `number`, `boolean`, `date`, `datetime`, and `location` fields, plus `required` and `protected` metadata.
+
+## Dashboard export
 
 - Reads `.csv`, `.xlsx`, and `.xlsm` files
 - Supports an interactive column-selection wizard
@@ -21,7 +58,7 @@ source .venv/bin/activate
 python -m pip install -e '.[dev]'
 ```
 
-## Quick start
+### Quick start
 
 Use the guided workflow:
 
@@ -58,12 +95,7 @@ pytest
 
 ## Roadmap
 
-1. Reusable indicator definitions (positivity, incidence, coverage, and dropout)
-2. Geographic maps using administrative boundary files
-3. Saved project configuration for repeat monthly runs
-4. KoboToolbox and DHIS2 connectors
-5. PDF and PowerPoint report export
-6. JavaScript package and optional local web interface
+See [PLAN.md](PLAN.md) for the full architecture and phased roadmap.
 
 ## License
 

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "public-health-framework"
-version = "0.1.0"
-description = "Turn CSV and Excel public-health data into shareable dashboards."
+version = "0.2.0a1"
+description = "Build extensible public-health data systems, APIs, and dashboards."
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
@@ -13,10 +13,13 @@ authors = [{name = "PublicHealthFramework contributors"}]
 dependencies = [
   "pandas>=2.0",
   "openpyxl>=3.1",
+  "PyYAML>=6.0",
+  "starlette>=0.40,<1.0",
+  "uvicorn>=0.30",
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["httpx>=0.27", "pytest>=8.0"]
 
 [project.scripts]
 phframe = "public_health_framework.cli:main"
