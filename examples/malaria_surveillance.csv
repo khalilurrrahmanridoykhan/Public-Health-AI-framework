@@ -1,0 +1,12 @@
+district,report_date,cases,population,confirmed_cases,tested,facility_type
+Dhaka,2026-01-01,42,12000000,31,180,Hospital
+Dhaka,2026-02-01,38,12000000,27,165,Hospital
+Chattogram,2026-01-01,76,9200000,61,240,Clinic
+Chattogram,2026-02-01,81,9200000,68,257,Clinic
+Khulna,2026-01-01,28,5100000,20,116,Hospital
+Khulna,2026-02-01,34,5100000,25,128,Hospital
+Rajshahi,2026-01-01,51,4800000,39,170,Clinic
+Rajshahi,2026-02-01,47,4800000,35,163,Clinic
+Sylhet,2026-01-01,93,4000000,78,290,Community
+Sylhet,2026-02-01,105,4000000,89,315,Community
+
