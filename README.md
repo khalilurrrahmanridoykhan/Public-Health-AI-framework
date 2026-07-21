@@ -39,6 +39,58 @@ curl -X POST http://127.0.0.1:8000/api/case_reports \
 
 The Phase 1 schema supports `string`, `integer`, `number`, `boolean`, `date`, `datetime`, and `location` fields, plus `required` and `protected` metadata.
 
+## Schema migrations
+
+PHFrame tracks the configured dataset schemas in the project database. Preview safe changes with:
+
+```bash
+phframe migrate --check
+```
+
+Apply them with:
+
+```bash
+phframe migrate
+```
+
+Adding optional fields is automatic. PHFrame refuses destructive field removal, incompatible type changes, and new required fields that would invalidate existing records.
+
+## Persistent data imports
+
+Validate an import without writing records:
+
+```bash
+phframe import case_reports monthly-cases.xlsx --dry-run
+```
+
+If spreadsheet headings already match dataset fields, import directly:
+
+```bash
+phframe import case_reports monthly-cases.xlsx
+```
+
+Map different source headings and save the mapping for future reporting periods:
+
+```bash
+phframe import case_reports monthly-cases.xlsx \
+  --map 'Case Number=case_id' \
+  --map 'Disease Name=disease' \
+  --map 'Classification=status' \
+  --map 'Reported=report_date' \
+  --map 'Area=district' \
+  --map 'Case Count=cases' \
+  --save-mapping mappings/case-reports.yaml
+```
+
+Reuse it later:
+
+```bash
+phframe import case_reports next-month.xlsx --mapping mappings/case-reports.yaml
+phframe imports
+```
+
+Imports are atomic: PHFrame validates every row before inserting anything. Each validation or import attempt is recorded in the internal audit history and exposed at `GET /api/imports`.
+
 ## Dashboard export
 
 - Reads `.csv`, `.xlsx`, and `.xlsm` files

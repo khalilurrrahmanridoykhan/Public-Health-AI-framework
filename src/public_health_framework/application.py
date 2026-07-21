@@ -27,6 +27,7 @@ class PHFrame:
             Route("/", self.home, methods=["GET"]),
             Route("/health", self.health, methods=["GET"]),
             Route("/api", self.api_index, methods=["GET"]),
+            Route("/api/imports", self.import_history, methods=["GET"]),
             Route("/api/{dataset}", self.collection, methods=["GET", "POST"]),
             Route("/api/{dataset}/{record_id:int}", self.detail, methods=["GET", "PUT", "PATCH", "DELETE"]),
         ]
@@ -82,6 +83,13 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
             }
         )
 
+    async def import_history(self, request: Request) -> JSONResponse:
+        try:
+            limit = int(request.query_params.get("limit", "20"))
+        except ValueError:
+            return _error("limit must be an integer.", 400)
+        return JSONResponse({"data": self.storage.import_history(limit)})
+
     def _dataset(self, request: Request) -> DatasetSchema | None:
         return self.config.datasets.get(request.path_params["dataset"])
 
@@ -124,4 +132,3 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
 
 def _error(message: str, status: int) -> JSONResponse:
     return JSONResponse({"error": {"message": message, "status": status}}, status_code=status)
-

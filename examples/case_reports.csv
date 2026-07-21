@@ -1,0 +1,4 @@
+case_id,disease,status,onset_date,report_date,district,cases,population
+MAL-001,Malaria,confirmed,2026-07-18,2026-07-20,Bandarban,1,520000
+MAL-002,Malaria,suspected,2026-07-19,2026-07-20,Rangamati,1,650000
+DEN-001,Dengue,confirmed,2026-07-20,2026-07-21,Dhaka,1,12000000

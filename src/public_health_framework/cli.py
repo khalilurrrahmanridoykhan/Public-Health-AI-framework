@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 import sys
 import webbrowser
@@ -10,8 +11,10 @@ import webbrowser
 from . import __version__
 from .application import PHFrame
 from .data import DashboardConfig, load_dataset, prepare_dataset, validate_config
+from .importer import import_dataset, load_mapping, save_mapping
 from .project import check_project, create_project
 from .report import build_dashboard
+from .storage import Storage
 
 
 def _choose(prompt: str, columns: list[str], required: bool = False) -> str | None:
@@ -50,6 +53,24 @@ def _parser() -> argparse.ArgumentParser:
     check = subparsers.add_parser("check", help="Validate project configuration and initialize storage.")
     check.add_argument("--config", default="phframe.yaml", help="Project configuration path")
 
+    migrate = subparsers.add_parser("migrate", help="Apply safe dataset schema changes.")
+    migrate.add_argument("--config", default="phframe.yaml", help="Project configuration path")
+    migrate.add_argument("--check", action="store_true", help="Report changes without applying them")
+
+    importer = subparsers.add_parser("import", help="Import CSV or Excel records into a dataset.")
+    importer.add_argument("dataset", help="Configured dataset name")
+    importer.add_argument("source", help="Path to a .csv, .xlsx, or .xlsm file")
+    importer.add_argument("--config", default="phframe.yaml", help="Project configuration path")
+    importer.add_argument("--sheet", default="0", help="Excel sheet name or zero-based number")
+    importer.add_argument("--mapping", help="Reusable YAML column mapping")
+    importer.add_argument("--map", action="append", default=[], metavar="SOURCE=FIELD", help="Map a source column")
+    importer.add_argument("--save-mapping", help="Save the effective mapping to YAML")
+    importer.add_argument("--dry-run", action="store_true", help="Validate without importing records")
+
+    history = subparsers.add_parser("imports", help="Show recent dataset import runs.")
+    history.add_argument("--config", default="phframe.yaml", help="Project configuration path")
+    history.add_argument("--limit", type=int, default=20)
+
     analyze = subparsers.add_parser("analyze", help="Create an HTML dashboard from CSV or Excel data.")
     analyze.add_argument("input", help="Path to a .csv, .xlsx, or .xlsm file")
     analyze.add_argument("-o", "--output", default="dashboard.html", help="Output HTML path")
@@ -77,6 +98,58 @@ def main(argv: list[str] | None = None) -> int:
             _, messages = check_project(args.config)
             print("\n".join(messages))
             return 0
+        if args.command == "migrate":
+            from .config import ProjectConfig
+
+            config = ProjectConfig.load(args.config)
+            actions = Storage(config).migrate(check_only=args.check)
+            if actions:
+                prefix = "Pending" if args.check else "Applied"
+                print(f"{prefix} migrations:")
+                for action in actions:
+                    print(f"  - {action}")
+                return 1 if args.check else 0
+            print("Database schema is up to date.")
+            return 0
+        if args.command == "imports":
+            from .config import ProjectConfig
+
+            storage = Storage(ProjectConfig.load(args.config))
+            storage.initialize()
+            print(json.dumps(storage.import_history(args.limit), indent=2))
+            return 0
+        if args.command == "import":
+            from .config import ProjectConfig
+
+            config = ProjectConfig.load(args.config)
+            mapping: dict[str, str] = {}
+            if args.mapping:
+                mapped_dataset, mapping = load_mapping(args.mapping)
+                if mapped_dataset and mapped_dataset != args.dataset:
+                    raise ValueError(
+                        f"Mapping is for dataset '{mapped_dataset}', not '{args.dataset}'."
+                    )
+            for item in args.map:
+                source, separator, target = item.partition("=")
+                if not separator or not source or not target:
+                    raise ValueError("--map must use SOURCE=FIELD format.")
+                mapping[source] = target
+            sheet: str | int = int(args.sheet) if str(args.sheet).isdigit() else args.sheet
+            result = import_dataset(
+                config, args.dataset, args.source, mapping or None, sheet=sheet, dry_run=args.dry_run
+            )
+            if args.save_mapping:
+                if not mapping:
+                    frame = load_dataset(args.source, sheet=sheet)
+                    mapping = {column: column for column in frame.columns if column in config.datasets[args.dataset].fields}
+                saved = save_mapping(args.save_mapping, args.dataset, mapping)
+                print(f"Mapping saved: {saved}")
+            print(f"Import run: {result.run_id}")
+            print(f"Status: {result.status}")
+            print(f"Rows: {result.imported_rows} imported / {result.total_rows} total")
+            for error in result.errors[:20]:
+                print(f"  Row {error['row']}: {error['message']}")
+            return 2 if result.errors else 0
         if args.command == "serve":
             import uvicorn
 

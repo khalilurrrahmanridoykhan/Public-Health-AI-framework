@@ -54,6 +54,7 @@ This public-health application was created with PHFrame.
 
 ```bash
 phframe check
+phframe migrate
 phframe serve
 ```
 
@@ -61,6 +62,14 @@ Open <http://127.0.0.1:8000> and inspect API metadata at
 <http://127.0.0.1:8000/api>.
 
 Edit `phframe.yaml` to customize datasets and fields.
+
+## Import records
+
+```bash
+phframe import case_reports records.xlsx --dry-run
+phframe import case_reports records.xlsx --save-mapping mappings/case-reports.yaml
+phframe imports
+```
 """
 
 GITIGNORE_TEMPLATE = """__pycache__/
@@ -81,6 +90,7 @@ def create_project(name: str, directory: str | Path | None = None) -> Path:
     root.mkdir(parents=True, exist_ok=True)
     (root / "data").mkdir(exist_ok=True)
     (root / "plugins").mkdir(exist_ok=True)
+    (root / "mappings").mkdir(exist_ok=True)
     (root / "phframe.yaml").write_text(CONFIG_TEMPLATE.format(title=name), encoding="utf-8")
     (root / "README.md").write_text(README_TEMPLATE.format(title=name), encoding="utf-8")
     (root / ".gitignore").write_text(GITIGNORE_TEMPLATE, encoding="utf-8")
@@ -100,4 +110,3 @@ def check_project(config_path: str | Path = "phframe.yaml") -> tuple[ProjectConf
     messages.append("Database: ready")
     messages.append("System check passed")
     return config, messages
-
