@@ -9,7 +9,17 @@ description = "Build extensible public-health data systems, APIs, and dashboards
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
-authors = [{name = "PublicHealthFramework contributors"}]
+authors = [{name = "Khalilur Rahman Ridoy Khan"}]
+keywords = ["public health", "health informatics", "surveillance", "data", "api"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Information Analysis",
+]
 dependencies = [
   "pandas>=2.0",
   "openpyxl>=3.1",
@@ -25,6 +35,12 @@ postgres = ["psycopg[binary]>=3.2"]
 
 [project.scripts]
 phframe = "public_health_framework.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework"
+Documentation = "https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework#readme"
+Issues = "https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/issues"
+Changelog = "https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/blob/main/CHANGELOG.md"
 
 [tool.setuptools.packages.find]
 where = ["src"]

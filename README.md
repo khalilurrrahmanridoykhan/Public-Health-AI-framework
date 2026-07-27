@@ -1,8 +1,28 @@
 # PHFrame
 
+[![CI](https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/actions/workflows/ci.yml/badge.svg)](https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/actions/workflows/ci.yml)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Status: Alpha](https://img.shields.io/badge/status-alpha-orange.svg)](CHANGELOG.md)
+
 PHFrame is an early-stage framework for building extensible public-health data systems. Phase 1 introduces generated projects, declarative dataset schemas, persistent storage, and automatic APIs. The original CSV/Excel dashboard generator remains available as an export workflow.
 
 > Current version: `0.2.0a1` (Phase 1 foundation preview)
+
+## Why PHFrame?
+
+Public-health teams often begin with spreadsheets and later need validated imports, persistent storage, audit history, and APIs. PHFrame provides a progressive path from those files to a configurable application while keeping the data model explicit.
+
+Current capabilities include:
+
+- Declarative datasets and validation in `phframe.yaml`
+- Generated CRUD APIs backed by SQLite or PostgreSQL
+- Atomic CSV and Excel imports with reusable column mappings
+- Import audit history and safe schema migration checks
+- Portable HTML dashboards for offline sharing
+
+> [!IMPORTANT]
+> PHFrame is alpha software. Evaluate it with non-sensitive data before considering production use. It does not yet provide authentication or a complete deployment security model.
 
 ## Create a public-health application
 
@@ -193,6 +213,12 @@ Run `phframe analyze --help` for all options.
 ```bash
 pytest
 ```
+
+Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow and [SECURITY.md](SECURITY.md) for responsible vulnerability reporting.
+
+## Project status
+
+PHFrame follows semantic versioning after the `0.2.0a1` preview. See [CHANGELOG.md](CHANGELOG.md) for release notes and [PLAN.md](PLAN.md) for the full architecture and phased roadmap.
 
 ## Roadmap
 
