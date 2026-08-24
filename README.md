@@ -9,7 +9,7 @@
 
 PHFrame is an early-stage framework for building extensible public-health data systems. It combines generated projects, declarative health schemas, persistent storage, automatic APIs, a public-health engine, and a standards-based Web Component interface. The original CSV/Excel dashboard generator remains available as an export workflow.
 
-> Current version: `0.8.0a6` (administrative boundary maps preview)
+> Current version: `0.8.0a7` (searchable boundary-country selector preview)
 
 ## Why PHFrame?
 
@@ -188,7 +188,7 @@ GET /api/geospatial/{dataset}?latitude=latitude&longitude=longitude
 ```
 
 For administrative choropleth maps, open **Settings → Geographic boundaries**,
-enter a three-letter ISO country code, select ADM0–ADM5, and download the layer.
+search for a country by name or ISO3 code, select ADM0–ADM5, and download the layer.
 PHFrame stores the simplified GeoJSON inside the project and uses the newest
 installed layer for geographic dimension maps. Area names in the data are matched
 to the downloaded boundary names. Boundary files come from geoBoundaries gbOpen

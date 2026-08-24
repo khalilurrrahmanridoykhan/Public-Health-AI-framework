@@ -53,6 +53,7 @@ class PHFrame:
             Route("/api/settings", self.settings_api, methods=["GET", "PUT"]),
             Route("/api/settings/assets/{kind}", self.settings_asset_upload, methods=["POST"]),
             Route("/api/boundaries", self.boundary_index, methods=["GET", "POST"]),
+            Route("/api/boundaries/countries", self.boundary_countries, methods=["GET"]),
             Route("/api/boundaries/{boundary_id}", self.boundary_detail, methods=["GET"]),
             Route("/api/ai/deidentify/{dataset}", self.ai_deidentify, methods=["POST"]),
             Route("/api/ai/chat", self.ai_chat, methods=["GET", "POST"]),
@@ -219,6 +220,10 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
         item = self.site_settings.boundary(request.path_params["boundary_id"])
         if not item: return _error("Boundary layer not found.", 404)
         return JSONResponse({"data": item})
+
+    async def boundary_countries(self, request: Request) -> Response:
+        try: return JSONResponse({"data": await run_in_threadpool(self.site_settings.boundary_countries)})
+        except (ValueError, OSError) as error: return _error(str(error), 502)
 
     def _actor(self, request: Request, declared: str = "") -> str:
         token = request.cookies.get("phframe_session", "")

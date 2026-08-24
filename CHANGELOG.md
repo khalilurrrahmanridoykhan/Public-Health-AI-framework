@@ -4,6 +4,13 @@ All notable changes to PHFrame will be documented here. The project intends to f
 
 ## [Unreleased]
 
+## [0.8.0a7] - 2026-08-24
+
+### Added
+
+- Add a searchable country-name and ISO3 combobox to the geographic boundary settings.
+- Add a cached country catalog API populated from the geoBoundaries open collection.
+
 ## [0.8.0a6] - 2026-08-24
 
 ### Added
@@ -195,7 +202,8 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Import audit history.
 - Portable HTML dashboard export.
 
-[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a6...HEAD
+[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a7...HEAD
+[0.8.0a7]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a6...v0.8.0a7
 [0.8.0a6]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a5...v0.8.0a6
 [0.8.0a5]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a4...v0.8.0a5
 [0.8.0a4]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a3...v0.8.0a4

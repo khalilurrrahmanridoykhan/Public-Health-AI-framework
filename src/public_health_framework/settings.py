@@ -221,6 +221,18 @@ class SiteSettings:
             except (OSError, json.JSONDecodeError): continue
         return items
 
+    def boundary_countries(self) -> list[dict[str, str]]:
+        cache = self.boundary_dir / "countries.json"
+        if cache.exists():
+            try: return json.loads(cache.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError): pass
+        records = self._download_json("https://www.geoboundaries.org/api/current/gbOpen/ALL/ADM0/", 2_000_000)
+        if not isinstance(records, list): raise ValueError("Boundary provider returned an invalid country catalog.")
+        countries = sorted(({"name": str(item.get("boundaryName", "")), "iso3": str(item.get("boundaryISO", "")).upper()} for item in records if re.fullmatch(r"[A-Z]{3}", str(item.get("boundaryISO", "")).upper())), key=lambda item: item["name"])
+        self.boundary_dir.mkdir(parents=True, exist_ok=True)
+        cache.write_text(json.dumps(countries), encoding="utf-8")
+        return countries
+
     def boundary(self, boundary_id: str) -> dict[str, Any] | None:
         if not re.fullmatch(r"[A-Z]{3}-ADM[0-5]", boundary_id): return None
         path = self.boundary_dir / f"{boundary_id}.json"
@@ -245,7 +257,7 @@ class SiteSettings:
         return {key: stored[key] for key in ("id", "country", "iso3", "level", "year", "source", "license", "feature_count")}
 
     @staticmethod
-    def _download_json(url: str, maximum: int) -> dict[str, Any]:
+    def _download_json(url: str, maximum: int) -> Any:
         request = Request(url, headers={"User-Agent": "PHFrame-boundary-manager/1", "Accept": "application/json"})
         with urlopen(request, timeout=30) as response:
             content = response.read(maximum + 1)

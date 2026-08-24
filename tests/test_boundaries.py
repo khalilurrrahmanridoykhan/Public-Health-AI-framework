@@ -31,3 +31,12 @@ def test_boundary_download_validates_country_and_level(tmp_path: Path):
         assert "three-letter ISO" in str(error)
     else:
         raise AssertionError("Invalid boundary request accepted")
+
+
+def test_searchable_country_catalog_is_sorted_and_cached(monkeypatch, tmp_path: Path):
+    records = [{"boundaryName": "Zimbabwe", "boundaryISO": "ZWE"}, {"boundaryName": "Bangladesh", "boundaryISO": "BGD"}]
+    monkeypatch.setattr(SiteSettings, "_download_json", staticmethod(lambda url, maximum: records))
+    settings = SiteSettings(tmp_path, "Test")
+    assert settings.boundary_countries() == [{"name": "Bangladesh", "iso3": "BGD"}, {"name": "Zimbabwe", "iso3": "ZWE"}]
+    monkeypatch.setattr(SiteSettings, "_download_json", staticmethod(lambda url, maximum: (_ for _ in ()).throw(AssertionError("cache not used"))))
+    assert settings.boundary_countries()[0]["iso3"] == "BGD"
