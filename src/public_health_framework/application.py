@@ -318,9 +318,24 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
             try:
                 limit = int(request.query_params.get("limit", "100"))
                 offset = int(request.query_params.get("offset", "0"))
+                filters = {
+                    key: value for key, value in request.query_params.items()
+                    if key not in {"limit", "offset", "filter"}
+                }
+                saved_filter_name = request.query_params.get("filter")
+                if saved_filter_name:
+                    saved_filter = self.config.saved_filters.get(saved_filter_name)
+                    if saved_filter is None:
+                        raise ValueError(f"Saved filter '{saved_filter_name}' not found.")
+                    if saved_filter.dataset != dataset.name:
+                        raise ValueError(f"Saved filter '{saved_filter_name}' belongs to a different dataset.")
+                    filters = {**saved_filter.values, **filters}
             except ValueError:
-                return _error("limit and offset must be integers.", 400)
-            records = self.storage.list(dataset, limit, offset)
+                return _error("Invalid collection filter, limit, or offset.", 400)
+            try:
+                records = self.storage.list(dataset, limit, offset, filters)
+            except ValueError as error:
+                return _error(str(error), 422)
             return JSONResponse({"data": records, "count": len(records), "limit": limit, "offset": offset})
         try:
             payload = await request.json()

@@ -20,3 +20,19 @@ def test_frontend_shell_and_assets(tmp_path: Path):
     assert javascript.status_code == 200
     assert 'customElements.define("ph-app-shell"' in javascript.text
     assert "ph-route" in javascript.text
+    for component in ["ph-data-form", "ph-case-table", "ph-filter-bar", "ph-org-unit-select", "ph-quality-panel"]:
+        assert f'customElements.define("{component}"' in javascript.text
+    assert "fields[name].protected" in javascript.text
+    assert 'role="status"' in javascript.text
+
+
+def test_record_collection_supports_saved_filters(tmp_path: Path):
+    root = create_project("Frontend Filters", tmp_path / "frontend-filters")
+    client = TestClient(PHFrame.from_file(str(root / "phframe.yaml")))
+    base = {"disease": "Malaria", "report_date": "2026-08-20", "district": "Bandarban", "cases": 1}
+    client.post("/api/case_reports", json={**base, "case_id": "1", "status": "confirmed"})
+    client.post("/api/case_reports", json={**base, "case_id": "2", "status": "suspected"})
+    response = client.get("/api/case_reports?filter=confirmed_cases")
+    assert response.status_code == 200
+    assert response.json()["count"] == 1
+    assert response.json()["data"][0]["status"] == "confirmed"

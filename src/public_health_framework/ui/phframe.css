@@ -38,4 +38,16 @@ button, a { touch-action: manipulation; }
 .ph-grid { display: grid; gap: var(--ph-space-4); grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
 .ph-muted { color: var(--ph-color-muted); }
 .ph-error { color: var(--ph-color-danger); }
+.ph-stack { display: grid; gap: var(--ph-space-4); }
+.ph-actions { display: flex; flex-wrap: wrap; align-items: end; gap: var(--ph-space-3); }
+.ph-field { display: grid; gap: var(--ph-space-1); }
+.ph-field label { font-weight: 650; }
+.ph-field input, .ph-field select { width: 100%; padding: .65rem; color: var(--ph-color-text); background: var(--ph-color-surface); border: 1px solid var(--ph-color-border); border-radius: .35rem; }
+.ph-button { border: 0; border-radius: .35rem; padding: .65rem 1rem; color: #fff; background: var(--ph-color-primary); cursor: pointer; }
+.ph-button:hover { background: var(--ph-color-primary-strong); }
+.ph-table-wrap { overflow-x: auto; }
+.ph-table { width: 100%; border-collapse: collapse; }
+.ph-table th, .ph-table td { padding: .65rem; border-bottom: 1px solid var(--ph-color-border); text-align: left; vertical-align: top; }
+.ph-table th { background: var(--ph-color-background); }
+.ph-status { min-height: 1.5rem; }
 @media (max-width: 680px) { .ph-header { align-items: flex-start; flex-direction: column; } .ph-main { padding: 1rem; } }

@@ -153,9 +153,16 @@ class Storage:
             sort_keys=True,
         )
 
-    def list(self, dataset: DatasetSchema, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
+    def list(
+        self, dataset: DatasetSchema, limit: int = 100, offset: int = 0,
+        filters: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
         table = self._dataset_table(dataset)
         statement = select(table).order_by(table.c.id.desc()).limit(max(1, min(limit, 1000))).offset(max(0, offset))
+        for name, value in (filters or {}).items():
+            if name not in dataset.fields:
+                raise ValueError(f"Unknown filter field '{name}'.")
+            statement = statement.where(table.c[name] == _coerce(name, value, dataset.fields[name]))
         with self.engine.connect() as connection:
             rows = connection.execute(statement).mappings().all()
         return [_serialize(dict(row)) for row in rows]
