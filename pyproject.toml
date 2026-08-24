@@ -45,6 +45,9 @@ Changelog = "https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framew
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+"public_health_framework.ui" = ["*.css", "*.js"]
+
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]

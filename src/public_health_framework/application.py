@@ -15,6 +15,7 @@ from .config import DatasetSchema, ProjectConfig
 from .plugins import load_plugins
 from .periods import resolve_period
 from .storage import Storage
+from .ui import asset_text
 
 
 class PHFrame:
@@ -26,6 +27,9 @@ class PHFrame:
         self.storage.initialize()
         routes = [
             Route("/", self.home, methods=["GET"]),
+            Route("/app", self.frontend, methods=["GET"]),
+            Route("/assets/phframe.css", self.frontend_css, methods=["GET"]),
+            Route("/assets/phframe.js", self.frontend_js, methods=["GET"]),
             Route("/health", self.health, methods=["GET"]),
             Route("/api", self.api_index, methods=["GET"]),
             Route("/api/imports", self.import_history, methods=["GET"]),
@@ -71,6 +75,19 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
 
     async def health(self, request: Request) -> JSONResponse:
         return JSONResponse({"status": "ok", "framework": "PHFrame", "version": __version__, "project": self.config.name})
+
+    async def frontend(self, request: Request) -> HTMLResponse:
+        return HTMLResponse("""<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>PHFrame</title>
+<link rel="stylesheet" href="/assets/phframe.css"></head><body><ph-app-shell></ph-app-shell>
+<noscript>PHFrame requires JavaScript for the application interface. Dataset APIs remain available at /api.</noscript>
+<script type="module" src="/assets/phframe.js"></script></body></html>""")
+
+    async def frontend_css(self, request: Request) -> Response:
+        return Response(asset_text("phframe.css"), media_type="text/css")
+
+    async def frontend_js(self, request: Request) -> Response:
+        return Response(asset_text("phframe.js"), media_type="text/javascript")
 
     async def api_index(self, request: Request) -> JSONResponse:
         return JSONResponse(
