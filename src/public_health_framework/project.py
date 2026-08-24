@@ -147,6 +147,11 @@ dashboards:
         date_field: report_date
         value_field: cases
 
+ui:
+  theme: light
+  locale: en
+  translations: {{}}
+
 plugins: []
 """
 
@@ -225,6 +230,7 @@ def check_project(config_path: str | Path = "phframe.yaml") -> tuple[ProjectConf
     messages.append(f"Thresholds: {len(config.thresholds)}")
     messages.append(f"Organisation units: {len(config.organisation_units)}")
     messages.append(f"Dashboards: {len(config.dashboards)}")
+    messages.append(f"UI: {config.ui.theme}, {config.ui.locale}")
     messages.append(f"Environment: {config.environment}")
     messages.append(f"Database: {config.database_display}")
     Storage(config).initialize()

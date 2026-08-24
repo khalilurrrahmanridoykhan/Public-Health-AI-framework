@@ -20,6 +20,26 @@
   background: var(--ph-color-background);
 }
 
+:root[data-theme="dark"] {
+  --ph-color-primary: #35b8c5;
+  --ph-color-primary-strong: #064f59;
+  --ph-color-surface: #14272f;
+  --ph-color-background: #0b1b22;
+  --ph-color-text: #edf7f8;
+  --ph-color-muted: #b4cbd1;
+  --ph-color-border: #45616b;
+}
+:root[data-theme="high-contrast"] {
+  --ph-color-primary: #005fcc;
+  --ph-color-primary-strong: #000000;
+  --ph-color-surface: #ffffff;
+  --ph-color-background: #ffffff;
+  --ph-color-text: #000000;
+  --ph-color-muted: #222222;
+  --ph-color-border: #000000;
+  --ph-shadow: none;
+}
+
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--ph-color-background); color: var(--ph-color-text); }
 button, input, select { font: inherit; }
@@ -57,4 +77,10 @@ button, a { touch-action: manipulation; }
 .ph-chart-point { fill: var(--ph-color-primary-strong); }
 .ph-widget-wide { grid-column: 1 / -1; }
 .ph-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.ph-theme { color: inherit; background: transparent; border: 1px solid currentColor; border-radius: .35rem; padding: .4rem; }
+.ph-dialog { width: min(32rem, calc(100% - 2rem)); color: var(--ph-color-text); background: var(--ph-color-surface); border: 1px solid var(--ph-color-border); border-radius: var(--ph-radius); }
+.ph-dialog::backdrop { background: rgb(0 0 0 / 55%); }
+.ph-toast-region { position: fixed; right: 1rem; bottom: 1rem; z-index: 50; display: grid; gap: .5rem; }
+.ph-toast { max-width: 28rem; padding: .8rem 1rem; color: var(--ph-color-text); background: var(--ph-color-surface); border: 2px solid var(--ph-color-primary); border-radius: var(--ph-radius); box-shadow: var(--ph-shadow); }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
 @media (max-width: 680px) { .ph-header { align-items: flex-start; flex-direction: column; } .ph-main { padding: 1rem; } }

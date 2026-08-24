@@ -27,6 +27,19 @@ def test_frontend_shell_and_assets(tmp_path: Path):
     for component in ["ph-kpi", "ph-indicator-chart", "ph-epi-curve", "ph-dashboard"]:
         assert f'customElements.define("{component}"' in javascript.text
     assert 'role="img"' in javascript.text
+    for component in ["ph-notification-center", "ph-modal", "ph-confirm"]:
+        assert f'customElements.define("{component}"' in javascript.text
+    assert 'aria-live="polite"' in javascript.text
+    assert "showModal()" in javascript.text
+    assert "prefers-reduced-motion" in css.text
+    assert ':root[data-theme="dark"]' in css.text
+    assert ':root[data-theme="high-contrast"]' in css.text
+
+
+def test_frontend_metadata_includes_ui_configuration(tmp_path: Path):
+    root = create_project("Localized UI", tmp_path / "localized-ui")
+    metadata = TestClient(PHFrame.from_file(str(root / "phframe.yaml"))).get("/api").json()
+    assert metadata["ui"] == {"theme": "light", "locale": "en", "translations": {}}
 
 
 def test_record_collection_supports_saved_filters(tmp_path: Path):

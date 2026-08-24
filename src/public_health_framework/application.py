@@ -72,7 +72,7 @@ class PHFrame:
 code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.mark{{color:#087e8b}}</style></head>
 <body><h1><span class="mark">PHFrame</span> · {escape(self.config.name)}</h1>
 <p>Your public-health application is running.</p><h2>Datasets</h2><ul>{datasets}</ul>
-<p><a href="/api">API metadata</a> · <a href="/health">Health check</a></p></body></html>"""
+<p><a href="/app">Open application</a> · <a href="/api">API metadata</a> · <a href="/health">Health check</a></p></body></html>"""
         return HTMLResponse(html)
 
     async def health(self, request: Request) -> JSONResponse:
@@ -153,6 +153,11 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
                 "dashboards": {
                     item.name: {"label": item.label, "endpoint": f"/api/dashboards/{item.name}"}
                     for item in self.config.dashboards.values()
+                },
+                "ui": {
+                    "theme": self.config.ui.theme,
+                    "locale": self.config.ui.locale,
+                    "translations": self.config.ui.translations,
                 },
             }
         )

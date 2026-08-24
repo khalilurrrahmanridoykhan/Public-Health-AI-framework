@@ -327,6 +327,26 @@ class DashboardSchema:
 
 
 @dataclass(frozen=True)
+class UIConfig:
+    theme: str = "light"
+    locale: str = "en"
+    translations: dict[str, str] = dataclass_field(default_factory=dict)
+
+    @classmethod
+    def from_dict(cls, value: dict[str, Any]) -> "UIConfig":
+        theme = str(value.get("theme", "light"))
+        if theme not in {"light", "dark", "high-contrast"}:
+            raise ValueError("ui.theme must be light, dark, or high-contrast.")
+        locale = str(value.get("locale", "en")).strip()
+        if not re.fullmatch(r"[a-z]{2}(?:-[A-Z]{2})?", locale):
+            raise ValueError("ui.locale must use a language code such as en or en-US.")
+        translations = value.get("translations", {}) or {}
+        if not isinstance(translations, dict):
+            raise ValueError("ui.translations must be an object.")
+        return cls(theme=theme, locale=locale, translations={str(key): str(item) for key, item in translations.items()})
+
+
+@dataclass(frozen=True)
 class ProjectConfig:
     name: str
     database: str = "sqlite:///data/phframe.db"
@@ -338,6 +358,7 @@ class ProjectConfig:
     thresholds: dict[str, ThresholdSchema] = dataclass_field(default_factory=dict)
     organisation_units: dict[str, OrganisationUnitSchema] = dataclass_field(default_factory=dict)
     dashboards: dict[str, DashboardSchema] = dataclass_field(default_factory=dict)
+    ui: UIConfig = dataclass_field(default_factory=UIConfig)
     plugins: tuple[str, ...] = ()
     environment: str = "development"
     host: str = "127.0.0.1"
@@ -419,6 +440,10 @@ class ProjectConfig:
                     for item in raw_widgets
                 ),
             )
+        raw_ui = raw.get("ui", {}) or {}
+        if not isinstance(raw_ui, dict):
+            raise ValueError("Configuration 'ui' must be an object.")
+        ui = UIConfig.from_dict(raw_ui)
         plugins = tuple(str(item) for item in raw.get("plugins", []))
         database = os.environ.get("PHFRAME_DATABASE_URL") or _expand_env(
             str(project.get("database", "sqlite:///data/phframe.db"))
@@ -438,6 +463,7 @@ class ProjectConfig:
             thresholds=thresholds,
             organisation_units=organisation_units,
             dashboards=dashboards,
+            ui=ui,
             plugins=plugins,
             environment=environment,
             host=os.environ.get("PHFRAME_HOST", str(server.get("host", "127.0.0.1"))),

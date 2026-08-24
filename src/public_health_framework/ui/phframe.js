@@ -1,4 +1,8 @@
 const PHFrame = {
+  messages: {
+    en: { dashboard: "Dashboard", records: "Records", quality: "Data quality", theme: "Theme", saved: "Record saved." },
+    bn: { dashboard: "ড্যাশবোর্ড", records: "রেকর্ড", quality: "ডেটার গুণমান", theme: "থিম", saved: "রেকর্ড সংরক্ষিত হয়েছে।" }
+  },
   async get(path) {
     const response = await fetch(path, { headers: { accept: "application/json" } });
     if (!response.ok) throw new Error((await response.json()).error?.message || `Request failed (${response.status})`);
@@ -16,7 +20,9 @@ const PHFrame = {
     const span = document.createElement("span");
     span.textContent = value == null ? "" : String(value);
     return span.innerHTML;
-  }
+  },
+  t(key) { return this.customMessages?.[key] || this.messages[this.locale]?.[key] || this.messages.en[key] || key; },
+  notify(message) { dispatchEvent(new CustomEvent("ph-notify", { detail: { message } })); }
 };
 
 class PHElement extends HTMLElement {
@@ -29,6 +35,10 @@ class PHAppShell extends PHElement {
     this.innerHTML = `<p class="ph-muted" role="status">Loading PHFrame…</p>`;
     try {
       this.metadata = await PHFrame.get("/api");
+      PHFrame.locale = this.metadata.ui?.locale || "en";
+      PHFrame.customMessages = this.metadata.ui?.translations || {};
+      document.documentElement.lang = PHFrame.locale;
+      document.documentElement.dataset.theme = localStorage.getItem("ph-theme") || this.metadata.ui?.theme || "light";
       this.draw();
       addEventListener("hashchange", () => this.route());
     } catch (error) {
@@ -38,8 +48,12 @@ class PHAppShell extends PHElement {
   draw() {
     this.innerHTML = `<a class="ph-skip-link" href="#main">Skip to content</a>
       <div class="ph-shell"><header class="ph-header"><h1 class="ph-brand">PHFrame · ${PHFrame.escape(this.metadata.project)}</h1>
-      <nav class="ph-nav" aria-label="Primary"><a href="#/dashboard" data-route="dashboard">Dashboard</a><a href="#/records" data-route="records">Records</a><a href="#/quality" data-route="quality">Data quality</a></nav></header>
-      <main class="ph-main" id="main" tabindex="-1"><div id="ph-view"></div></main></div>`;
+      <nav class="ph-nav" aria-label="Primary"><a href="#/dashboard" data-route="dashboard">${PHFrame.t("dashboard")}</a><a href="#/records" data-route="records">${PHFrame.t("records")}</a><a href="#/quality" data-route="quality">${PHFrame.t("quality")}</a></nav>
+      <label>${PHFrame.t("theme")} <select class="ph-theme" aria-label="${PHFrame.t("theme")}"><option value="light">Light</option><option value="dark">Dark</option><option value="high-contrast">High contrast</option></select></label></header>
+      <main class="ph-main" id="main" tabindex="-1"><div id="ph-view"></div></main><ph-notification-center></ph-notification-center></div>`;
+    const theme = this.querySelector(".ph-theme");
+    theme.value = document.documentElement.dataset.theme;
+    theme.addEventListener("change", () => { document.documentElement.dataset.theme = theme.value; localStorage.setItem("ph-theme", theme.value); });
     this.route();
   }
   route() {
@@ -86,7 +100,8 @@ class PHDataForm extends PHElement {
     const payload = Object.fromEntries([...new FormData(form)].filter(([, value]) => value !== ""));
     try {
       await PHFrame.send(`/api/${this.dataset}`, "POST", payload);
-      status.textContent = "Record saved.";
+      status.textContent = PHFrame.t("saved");
+      PHFrame.notify(PHFrame.t("saved"));
       form.reset();
       dispatchEvent(new CustomEvent("ph-record-saved", { detail: { dataset: this.dataset } }));
     } catch (error) { status.textContent = error.message; status.className = "ph-status ph-error"; }
@@ -196,6 +211,41 @@ class PHDashboard extends PHElement {
   }
 }
 
+class PHNotificationCenter extends PHElement {
+  connectedCallback() {
+    this.innerHTML = `<div class="ph-toast-region" role="status" aria-live="polite" aria-atomic="true"></div>`;
+    addEventListener("ph-notify", event => this.show(event.detail.message));
+  }
+  show(message) {
+    const toast = document.createElement("div");
+    toast.className = "ph-toast";
+    toast.textContent = message;
+    this.firstElementChild.append(toast);
+    setTimeout(() => toast.remove(), 5000);
+  }
+}
+
+class PHModal extends PHElement {
+  connectedCallback() {
+    const title = this.getAttribute("title") || "Dialog";
+    const content = this.innerHTML;
+    this.innerHTML = `<dialog class="ph-dialog" aria-labelledby="ph-modal-title"><h2 id="ph-modal-title">${PHFrame.escape(title)}</h2><div>${content}</div><form method="dialog"><button class="ph-button">Close</button></form></dialog>`;
+  }
+  open() { this.querySelector("dialog").showModal(); }
+  close() { this.querySelector("dialog").close(); }
+}
+
+class PHConfirm extends PHElement {
+  connectedCallback() {
+    const label = this.getAttribute("label") || "Confirm";
+    this.innerHTML = `<button class="ph-button" type="button">${PHFrame.escape(label)}</button><dialog class="ph-dialog" aria-labelledby="ph-confirm-title"><h2 id="ph-confirm-title">Confirm action</h2><p>${PHFrame.escape(this.getAttribute("message") || "Are you sure?")}</p><div class="ph-actions"><button type="button" data-confirm class="ph-button">Confirm</button><button type="button" data-cancel>Cancel</button></div></dialog>`;
+    const dialog = this.querySelector("dialog");
+    this.querySelector(":scope > button").addEventListener("click", () => dialog.showModal());
+    this.querySelector("[data-cancel]").addEventListener("click", () => dialog.close());
+    this.querySelector("[data-confirm]").addEventListener("click", () => { dialog.close(); this.dispatchEvent(new CustomEvent("ph-confirmed", { bubbles: true })); });
+  }
+}
+
 customElements.define("ph-app-shell", PHAppShell);
 customElements.define("ph-data-form", PHDataForm);
 customElements.define("ph-case-table", PHCaseTable);
@@ -206,4 +256,7 @@ customElements.define("ph-kpi", PHKPI);
 customElements.define("ph-indicator-chart", PHIndicatorChart);
 customElements.define("ph-epi-curve", PHEpiCurve);
 customElements.define("ph-dashboard", PHDashboard);
+customElements.define("ph-notification-center", PHNotificationCenter);
+customElements.define("ph-modal", PHModal);
+customElements.define("ph-confirm", PHConfirm);
 window.PHFrame = PHFrame;
