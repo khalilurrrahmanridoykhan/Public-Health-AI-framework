@@ -128,6 +128,25 @@ organisation_units:
     level: district
     parent: chattogram_division
 
+dashboards:
+  main:
+    label: Malaria Surveillance Dashboard
+    widgets:
+      - type: kpi
+        title: Total cases
+        indicator: total_cases
+      - type: kpi
+        title: Incidence per 100,000
+        indicator: incidence_per_100000
+      - type: chart
+        title: Cases by district
+        dimension: cases_by_district
+      - type: epi_curve
+        title: Cases over time
+        dataset: case_reports
+        date_field: report_date
+        value_field: cases
+
 plugins: []
 """
 
@@ -205,6 +224,7 @@ def check_project(config_path: str | Path = "phframe.yaml") -> tuple[ProjectConf
     messages.append(f"Dimensions: {len(config.dimensions)}")
     messages.append(f"Thresholds: {len(config.thresholds)}")
     messages.append(f"Organisation units: {len(config.organisation_units)}")
+    messages.append(f"Dashboards: {len(config.dashboards)}")
     messages.append(f"Environment: {config.environment}")
     messages.append(f"Database: {config.database_display}")
     Storage(config).initialize()

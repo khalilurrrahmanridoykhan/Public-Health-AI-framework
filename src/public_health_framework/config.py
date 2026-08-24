@@ -279,6 +279,54 @@ class OrganisationUnitSchema:
 
 
 @dataclass(frozen=True)
+class DashboardWidgetSchema:
+    type: str
+    title: str
+    indicator: str | None = None
+    dimension: str | None = None
+    dataset: str | None = None
+    date_field: str | None = None
+    value_field: str | None = None
+
+    @classmethod
+    def from_dict(
+        cls, value: dict[str, Any], datasets: dict[str, DatasetSchema],
+        indicators: dict[str, IndicatorSchema], dimensions: dict[str, DimensionSchema],
+    ) -> "DashboardWidgetSchema":
+        widget_type = str(value.get("type", ""))
+        if widget_type not in {"kpi", "chart", "epi_curve"}:
+            raise ValueError(f"Unsupported dashboard widget type '{widget_type}'.")
+        widget = cls(
+            type=widget_type, title=str(value.get("title", widget_type.replace("_", " ").title())),
+            indicator=value.get("indicator"), dimension=value.get("dimension"),
+            dataset=value.get("dataset"), date_field=value.get("date_field"),
+            value_field=value.get("value_field"),
+        )
+        if widget_type == "kpi" and widget.indicator not in indicators:
+            raise ValueError(f"Dashboard KPI references unknown indicator '{widget.indicator}'.")
+        if widget_type == "chart" and widget.dimension not in dimensions:
+            raise ValueError(f"Dashboard chart references unknown dimension '{widget.dimension}'.")
+        if widget_type == "epi_curve":
+            if widget.dataset not in datasets:
+                raise ValueError(f"Dashboard epidemiological curve references unknown dataset '{widget.dataset}'.")
+            fields = datasets[widget.dataset].fields
+            if widget.date_field not in fields or fields[widget.date_field].type not in {"date", "datetime"}:
+                raise ValueError("Dashboard epidemiological curve requires a date or datetime date_field.")
+            if widget.value_field and (
+                widget.value_field not in fields or fields[widget.value_field].type not in {"integer", "number"}
+            ):
+                raise ValueError("Dashboard epidemiological curve value_field must be numeric.")
+        return widget
+
+
+@dataclass(frozen=True)
+class DashboardSchema:
+    name: str
+    label: str
+    widgets: tuple[DashboardWidgetSchema, ...]
+
+
+@dataclass(frozen=True)
 class ProjectConfig:
     name: str
     database: str = "sqlite:///data/phframe.db"
@@ -289,6 +337,7 @@ class ProjectConfig:
     dimensions: dict[str, DimensionSchema] = dataclass_field(default_factory=dict)
     thresholds: dict[str, ThresholdSchema] = dataclass_field(default_factory=dict)
     organisation_units: dict[str, OrganisationUnitSchema] = dataclass_field(default_factory=dict)
+    dashboards: dict[str, DashboardSchema] = dataclass_field(default_factory=dict)
     plugins: tuple[str, ...] = ()
     environment: str = "development"
     host: str = "127.0.0.1"
@@ -352,6 +401,24 @@ class ProjectConfig:
             for code, value in raw_units.items()
         }
         _validate_organisation_units(organisation_units)
+        raw_dashboards = raw.get("dashboards", {})
+        if not isinstance(raw_dashboards, dict):
+            raise ValueError("Configuration 'dashboards' must be an object.")
+        dashboards = {}
+        for dashboard_name, dashboard_value in raw_dashboards.items():
+            _validate_identifier(dashboard_name, "dashboard")
+            dashboard_value = dashboard_value or {}
+            raw_widgets = dashboard_value.get("widgets", [])
+            if not isinstance(raw_widgets, list):
+                raise ValueError(f"Dashboard '{dashboard_name}' widgets must be a list.")
+            dashboards[dashboard_name] = DashboardSchema(
+                name=dashboard_name,
+                label=str(dashboard_value.get("label", dashboard_name.replace("_", " ").title())),
+                widgets=tuple(
+                    DashboardWidgetSchema.from_dict(item or {}, datasets, indicators, dimensions)
+                    for item in raw_widgets
+                ),
+            )
         plugins = tuple(str(item) for item in raw.get("plugins", []))
         database = os.environ.get("PHFRAME_DATABASE_URL") or _expand_env(
             str(project.get("database", "sqlite:///data/phframe.db"))
@@ -370,6 +437,7 @@ class ProjectConfig:
             dimensions=dimensions,
             thresholds=thresholds,
             organisation_units=organisation_units,
+            dashboards=dashboards,
             plugins=plugins,
             environment=environment,
             host=os.environ.get("PHFRAME_HOST", str(server.get("host", "127.0.0.1"))),

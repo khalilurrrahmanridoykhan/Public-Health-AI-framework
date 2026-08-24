@@ -345,6 +345,25 @@ class Storage:
             "values": [{"value": _serialize(row["value"]), "count": int(row["count"])} for row in rows],
         }
 
+    def epi_curve(
+        self, dataset: DatasetSchema, date_field: str, value_field: str | None = None
+    ) -> list[dict[str, Any]]:
+        if date_field not in dataset.fields or dataset.fields[date_field].type not in {"date", "datetime"}:
+            raise ValueError("date_field must identify a date or datetime field.")
+        if value_field and (
+            value_field not in dataset.fields or dataset.fields[value_field].type not in {"integer", "number"}
+        ):
+            raise ValueError("value_field must identify an integer or number field.")
+        table = self._dataset_table(dataset)
+        date_column = table.c[date_field]
+        measure = func.sum(table.c[value_field]) if value_field else func.count(table.c.id)
+        statement = select(date_column.label("date"), measure.label("value")).where(
+            date_column.is_not(None)
+        ).group_by(date_column).order_by(date_column)
+        with self.engine.connect() as connection:
+            rows = connection.execute(statement).mappings().all()
+        return [{"date": _serialize(row["date"]), "value": float(row["value"])} for row in rows]
+
 
 def validate_payload(dataset: DatasetSchema, payload: dict[str, Any], partial: bool) -> dict[str, Any]:
     if not isinstance(payload, dict):

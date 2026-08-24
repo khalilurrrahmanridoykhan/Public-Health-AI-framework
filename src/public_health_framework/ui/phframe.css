@@ -50,4 +50,11 @@ button, a { touch-action: manipulation; }
 .ph-table th, .ph-table td { padding: .65rem; border-bottom: 1px solid var(--ph-color-border); text-align: left; vertical-align: top; }
 .ph-table th { background: var(--ph-color-background); }
 .ph-status { min-height: 1.5rem; }
+.ph-kpi-value { margin: .25rem 0; font-size: clamp(2rem, 5vw, 3.5rem); font-weight: 750; color: var(--ph-color-primary-strong); }
+.ph-chart { width: 100%; min-height: 220px; }
+.ph-chart-bar { fill: var(--ph-color-primary); }
+.ph-chart-line { fill: none; stroke: var(--ph-color-primary); stroke-width: 3; }
+.ph-chart-point { fill: var(--ph-color-primary-strong); }
+.ph-widget-wide { grid-column: 1 / -1; }
+.ph-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 @media (max-width: 680px) { .ph-header { align-items: flex-start; flex-direction: column; } .ph-main { padding: 1rem; } }

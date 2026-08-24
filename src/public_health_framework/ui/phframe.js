@@ -59,7 +59,8 @@ class PHAppShell extends PHElement {
     } else if (route === "quality") {
       view.innerHTML = `<h2>Data quality</h2><ph-quality-panel></ph-quality-panel>`;
     } else {
-      view.innerHTML = `<h2>Dashboard</h2><p class="ph-muted">Surveillance indicators and charts will appear here.</p>`;
+      const dashboard = Object.keys(this.metadata.dashboards || {})[0];
+      view.innerHTML = dashboard ? `<ph-dashboard name="${PHFrame.escape(dashboard)}"></ph-dashboard>` : `<h2>Dashboard</h2><p class="ph-muted">No dashboard configured.</p>`;
     }
     this.dispatchEvent(new CustomEvent("ph-route", { detail: { route, view, metadata: this.metadata } }));
   }
@@ -140,10 +141,69 @@ class PHQualityPanel extends PHElement {
   }
 }
 
+class PHKPI extends PHElement {
+  async render() {
+    try {
+      const response = await PHFrame.get(`/api/indicators/${this.getAttribute("indicator")}`);
+      const value = response.data.value;
+      this.innerHTML = `<article class="ph-card"><h3>${PHFrame.escape(this.getAttribute("title") || response.data.label)}</h3><p class="ph-kpi-value">${value == null ? "—" : new Intl.NumberFormat().format(value)}</p><p class="ph-muted">${PHFrame.escape(response.data.operation)}</p></article>`;
+    } catch (error) { this.innerHTML = `<p class="ph-error" role="alert">${PHFrame.escape(error.message)}</p>`; }
+  }
+}
+
+class PHIndicatorChart extends PHElement {
+  async render() {
+    try {
+      const response = await PHFrame.get(`/api/dimensions/${this.getAttribute("dimension")}`);
+      const values = response.data.values;
+      const maximum = Math.max(1, ...values.map(item => item.count));
+      const width = 600, row = 38;
+      const bars = values.map((item, index) => `<g transform="translate(0 ${index * row})"><text x="0" y="20">${PHFrame.escape(item.value ?? "Unknown")}</text><rect class="ph-chart-bar" x="150" y="5" width="${Math.round(item.count / maximum * 400)}" height="22"><title>${item.count}</title></rect><text x="560" y="20" text-anchor="end">${item.count}</text></g>`).join("");
+      this.innerHTML = `<article class="ph-card ph-widget-wide"><h3>${PHFrame.escape(this.getAttribute("title") || response.data.label)}</h3><svg class="ph-chart" viewBox="0 0 ${width} ${Math.max(row, values.length * row)}" role="img" aria-label="${PHFrame.escape(response.data.label)} bar chart">${bars}</svg>${this.table(values, "Value", "Count")}</article>`;
+    } catch (error) { this.innerHTML = `<p class="ph-error" role="alert">${PHFrame.escape(error.message)}</p>`; }
+  }
+  table(values, first, second) {
+    return `<table class="ph-sr-only"><caption>${PHFrame.escape(this.getAttribute("title") || "Chart data")}</caption><thead><tr><th>${first}</th><th>${second}</th></tr></thead><tbody>${values.map(item => `<tr><td>${PHFrame.escape(item.value)}</td><td>${item.count}</td></tr>`).join("")}</tbody></table>`;
+  }
+}
+
+class PHEpiCurve extends PHElement {
+  async render() {
+    const query = new URLSearchParams({ date_field: this.getAttribute("date-field") });
+    if (this.getAttribute("value-field")) query.set("value_field", this.getAttribute("value-field"));
+    try {
+      const response = await PHFrame.get(`/api/epi-curve/${this.getAttribute("dataset")}?${query}`);
+      const values = response.data;
+      const maximum = Math.max(1, ...values.map(item => item.value));
+      const points = values.map((item, index) => `${values.length === 1 ? 300 : index / (values.length - 1) * 560 + 20},${200 - item.value / maximum * 170}`).join(" ");
+      const circles = points.split(" ").filter(Boolean).map((point, index) => { const [x, y] = point.split(","); return `<circle class="ph-chart-point" cx="${x}" cy="${y}" r="4"><title>${PHFrame.escape(values[index].date)}: ${values[index].value}</title></circle>`; }).join("");
+      this.innerHTML = `<article class="ph-card ph-widget-wide"><h3>${PHFrame.escape(this.getAttribute("title") || "Epidemiological curve")}</h3><svg class="ph-chart" viewBox="0 0 600 220" role="img" aria-label="Cases by reporting date"><polyline class="ph-chart-line" points="${points}"></polyline>${circles}</svg><table class="ph-sr-only"><caption>Epidemiological curve data</caption><thead><tr><th>Date</th><th>Value</th></tr></thead><tbody>${values.map(item => `<tr><td>${PHFrame.escape(item.date)}</td><td>${item.value}</td></tr>`).join("")}</tbody></table></article>`;
+    } catch (error) { this.innerHTML = `<p class="ph-error" role="alert">${PHFrame.escape(error.message)}</p>`; }
+  }
+}
+
+class PHDashboard extends PHElement {
+  async render() {
+    try {
+      const response = await PHFrame.get(`/api/dashboards/${this.getAttribute("name")}`);
+      const widgets = response.data.widgets.map(widget => {
+        if (widget.type === "kpi") return `<ph-kpi title="${PHFrame.escape(widget.title)}" indicator="${widget.indicator}"></ph-kpi>`;
+        if (widget.type === "chart") return `<ph-indicator-chart title="${PHFrame.escape(widget.title)}" dimension="${widget.dimension}"></ph-indicator-chart>`;
+        return `<ph-epi-curve title="${PHFrame.escape(widget.title)}" dataset="${widget.dataset}" date-field="${widget.date_field}" value-field="${widget.value_field || ""}"></ph-epi-curve>`;
+      }).join("");
+      this.innerHTML = `<h2>${PHFrame.escape(response.data.label)}</h2><div class="ph-grid">${widgets}</div>`;
+    } catch (error) { this.innerHTML = `<p class="ph-error" role="alert">${PHFrame.escape(error.message)}</p>`; }
+  }
+}
+
 customElements.define("ph-app-shell", PHAppShell);
 customElements.define("ph-data-form", PHDataForm);
 customElements.define("ph-case-table", PHCaseTable);
 customElements.define("ph-filter-bar", PHFilterBar);
 customElements.define("ph-org-unit-select", PHOrgUnitSelect);
 customElements.define("ph-quality-panel", PHQualityPanel);
+customElements.define("ph-kpi", PHKPI);
+customElements.define("ph-indicator-chart", PHIndicatorChart);
+customElements.define("ph-epi-curve", PHEpiCurve);
+customElements.define("ph-dashboard", PHDashboard);
 window.PHFrame = PHFrame;

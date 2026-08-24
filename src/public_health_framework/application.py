@@ -44,6 +44,8 @@ class PHFrame:
             Route("/api/thresholds/{threshold}", self.threshold_result, methods=["GET"]),
             Route("/api/organisation-units", self.organisation_unit_index, methods=["GET"]),
             Route("/api/organisation-units/{code}", self.organisation_unit_detail, methods=["GET"]),
+            Route("/api/dashboards/{dashboard}", self.dashboard, methods=["GET"]),
+            Route("/api/epi-curve/{dataset}", self.epi_curve, methods=["GET"]),
             Route("/api/{dataset}", self.collection, methods=["GET", "POST"]),
             Route("/api/{dataset}/{record_id:int}", self.detail, methods=["GET", "PUT", "PATCH", "DELETE"]),
         ]
@@ -147,6 +149,10 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
                 "organisation_units": {
                     "count": len(self.config.organisation_units),
                     "endpoint": "/api/organisation-units",
+                },
+                "dashboards": {
+                    item.name: {"label": item.label, "endpoint": f"/api/dashboards/{item.name}"}
+                    for item in self.config.dashboards.values()
                 },
             }
         )
@@ -299,6 +305,29 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
             "children": [item.code for item in self.config.organisation_units.values() if item.parent == unit.code],
             "endpoint": f"/api/organisation-units/{unit.code}",
         }
+
+    async def dashboard(self, request: Request) -> Response:
+        dashboard = self.config.dashboards.get(request.path_params["dashboard"])
+        if dashboard is None:
+            return _error("Dashboard not found.", 404)
+        return JSONResponse({"data": {
+            "name": dashboard.name, "label": dashboard.label,
+            "widgets": [
+                {key: value for key, value in vars(widget).items() if value is not None}
+                for widget in dashboard.widgets
+            ],
+        }})
+
+    async def epi_curve(self, request: Request) -> Response:
+        dataset = self.config.datasets.get(request.path_params["dataset"])
+        if dataset is None:
+            return _error("Dataset not found.", 404)
+        date_field = request.query_params.get("date_field", "")
+        value_field = request.query_params.get("value_field")
+        try:
+            return JSONResponse({"data": self.storage.epi_curve(dataset, date_field, value_field)})
+        except ValueError as error:
+            return _error(str(error), 422)
 
     async def import_history(self, request: Request) -> JSONResponse:
         try:
