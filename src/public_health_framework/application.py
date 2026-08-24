@@ -36,6 +36,8 @@ class PHFrame:
             Route("/api/filters", self.filter_index, methods=["GET"]),
             Route("/api/dimensions", self.dimension_index, methods=["GET"]),
             Route("/api/dimensions/{dimension}", self.dimension_result, methods=["GET"]),
+            Route("/api/thresholds", self.threshold_index, methods=["GET"]),
+            Route("/api/thresholds/{threshold}", self.threshold_result, methods=["GET"]),
             Route("/api/{dataset}", self.collection, methods=["GET", "POST"]),
             Route("/api/{dataset}/{record_id:int}", self.detail, methods=["GET", "PUT", "PATCH", "DELETE"]),
         ]
@@ -115,6 +117,14 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
                     }
                     for item in self.config.dimensions.values()
                 },
+                "thresholds": {
+                    item.name: {
+                        "label": item.label, "indicator": item.indicator, "operator": item.operator,
+                        "value": item.value, "severity": item.severity,
+                        "endpoint": f"/api/thresholds/{item.name}",
+                    }
+                    for item in self.config.thresholds.values()
+                },
             }
         )
 
@@ -134,29 +144,31 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
         reserved = {"start", "end", "period", "filter"}
         filters = {key: value for key, value in request.query_params.items() if key not in reserved}
         try:
-            saved_filter_name = request.query_params.get("filter")
-            if saved_filter_name:
-                saved_filter = self.config.saved_filters.get(saved_filter_name)
-                if saved_filter is None:
-                    raise ValueError(f"Saved filter '{saved_filter_name}' not found.")
-                if saved_filter.dataset != indicator.dataset:
-                    raise ValueError(f"Saved filter '{saved_filter_name}' belongs to a different dataset.")
-                filters = {**saved_filter.values, **filters}
-            start, end = request.query_params.get("start"), request.query_params.get("end")
-            period = request.query_params.get("period")
-            if period:
-                if start or end:
-                    raise ValueError("Use period or start/end, not both.")
-                period_start, period_end = resolve_period(period)
-                start, end = period_start.isoformat(), period_end.isoformat()
-            result = self.storage.indicator(
-                indicator, filters, start, end
-            )
-            if period:
-                result["period"]["name"] = period
-            return JSONResponse({"data": result})
+            return JSONResponse({"data": self._indicator_query(indicator, request, filters)})
         except ValueError as error:
             return _error(str(error), 422)
+
+    def _indicator_query(self, indicator: Any, request: Request, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+        applied_filters = dict(filters or {})
+        saved_filter_name = request.query_params.get("filter")
+        if saved_filter_name:
+            saved_filter = self.config.saved_filters.get(saved_filter_name)
+            if saved_filter is None:
+                raise ValueError(f"Saved filter '{saved_filter_name}' not found.")
+            if saved_filter.dataset != indicator.dataset:
+                raise ValueError(f"Saved filter '{saved_filter_name}' belongs to a different dataset.")
+            applied_filters = {**saved_filter.values, **applied_filters}
+        start, end = request.query_params.get("start"), request.query_params.get("end")
+        period = request.query_params.get("period")
+        if period:
+            if start or end:
+                raise ValueError("Use period or start/end, not both.")
+            period_start, period_end = resolve_period(period)
+            start, end = period_start.isoformat(), period_end.isoformat()
+        result = self.storage.indicator(indicator, applied_filters, start, end)
+        if period:
+            result["period"]["name"] = period
+        return result
 
     async def data_quality_index(self, request: Request) -> JSONResponse:
         return JSONResponse({"data": [self.storage.data_quality(rule) for rule in self.config.data_quality_rules.values()]})
@@ -198,6 +210,43 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
             return JSONResponse({"data": self.storage.dimension(dimension, filters)})
         except ValueError as error:
             return _error(str(error), 422)
+
+    async def threshold_index(self, request: Request) -> Response:
+        try:
+            return JSONResponse({"data": [self._evaluate_threshold(item, request) for item in self.config.thresholds.values()]})
+        except ValueError as error:
+            return _error(str(error), 422)
+
+    async def threshold_result(self, request: Request) -> Response:
+        threshold = self.config.thresholds.get(request.path_params["threshold"])
+        if threshold is None:
+            return _error("Threshold not found.", 404)
+        try:
+            return JSONResponse({"data": self._evaluate_threshold(threshold, request)})
+        except ValueError as error:
+            return _error(str(error), 422)
+
+    def _evaluate_threshold(self, threshold: Any, request: Request) -> dict[str, Any]:
+        indicator = self.config.indicators[threshold.indicator]
+        reserved = {"start", "end", "period", "filter"}
+        filters = {key: value for key, value in request.query_params.items() if key not in reserved}
+        result = self._indicator_query(indicator, request, filters)
+        actual = result["value"]
+        comparisons = {
+            "gt": lambda current, target: current > target,
+            "gte": lambda current, target: current >= target,
+            "lt": lambda current, target: current < target,
+            "lte": lambda current, target: current <= target,
+            "eq": lambda current, target: current == target,
+        }
+        triggered = comparisons[threshold.operator](actual, threshold.value) if actual is not None else None
+        return {
+            "name": threshold.name, "label": threshold.label, "indicator": threshold.indicator,
+            "operator": threshold.operator, "threshold": threshold.value, "actual": actual,
+            "triggered": triggered, "status": "no_data" if actual is None else ("triggered" if triggered else "normal"),
+            "severity": threshold.severity, "message": threshold.message,
+            "filters": result["filters"], "period": result["period"],
+        }
 
     async def import_history(self, request: Request) -> JSONResponse:
         try:

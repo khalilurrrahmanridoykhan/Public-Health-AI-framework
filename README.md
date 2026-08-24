@@ -133,6 +133,22 @@ dimensions:
 
 Apply a saved filter with `GET /api/indicators/total_cases?filter=confirmed_cases`. Dimension results are available from `GET /api/dimensions/{name}` and return each distinct value with its record count. Request fields can override saved filter values when an ad hoc refinement is needed.
 
+## Surveillance thresholds
+
+Attach alert levels to deterministic indicators:
+
+```yaml
+thresholds:
+  high_weekly_case_count:
+    indicator: total_cases
+    operator: gte
+    value: 10
+    severity: warning
+    message: Weekly case count has reached the surveillance alert level.
+```
+
+Evaluate rules with `GET /api/thresholds` or `GET /api/thresholds/{name}`. The endpoints accept the same `period`, `filter`, `start`, `end`, and field-filter parameters as indicators and return `normal`, `triggered`, or `no_data`. Supported operators are `gt`, `gte`, `lt`, `lte`, and `eq`.
+
 ## Schema migrations
 
 PHFrame tracks the configured dataset schemas in the project database. Preview safe changes with:

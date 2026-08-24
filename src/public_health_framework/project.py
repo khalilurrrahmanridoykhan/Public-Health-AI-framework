@@ -96,6 +96,15 @@ dimensions:
     field: district
     filter: confirmed_cases
 
+thresholds:
+  high_weekly_case_count:
+    label: High weekly case count
+    indicator: total_cases
+    operator: gte
+    value: 10
+    severity: warning
+    message: Weekly case count has reached the surveillance alert level.
+
 plugins: []
 """
 
@@ -120,6 +129,7 @@ Indicator results are available at `/api/indicators/{{name}}` and data-quality
 results at `/api/data-quality`.
 Saved filters are listed at `/api/filters`; grouped dimensions are available at
 `/api/dimensions/{{name}}`.
+Surveillance thresholds are evaluated at `/api/thresholds/{{name}}`.
 
 ## Import records
 
@@ -167,6 +177,7 @@ def check_project(config_path: str | Path = "phframe.yaml") -> tuple[ProjectConf
     messages.append(f"Data-quality rules: {len(config.data_quality_rules)}")
     messages.append(f"Saved filters: {len(config.saved_filters)}")
     messages.append(f"Dimensions: {len(config.dimensions)}")
+    messages.append(f"Thresholds: {len(config.thresholds)}")
     messages.append(f"Environment: {config.environment}")
     messages.append(f"Database: {config.database_display}")
     Storage(config).initialize()

@@ -15,6 +15,8 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Add data-quality metadata and evaluation APIs.
 - Add reusable saved filters for indicator and dimension queries.
 - Add declarative dimensions with grouped-count APIs.
+- Add declarative surveillance thresholds with severity and alert messages.
+- Add threshold evaluation APIs that support periods and saved filters.
 
 ## [0.2.0a1] - 2026-07-21
 

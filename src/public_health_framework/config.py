@@ -15,6 +15,7 @@ IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]*$")
 FIELD_TYPES = {"string", "integer", "number", "boolean", "date", "datetime", "location"}
 INDICATOR_OPERATIONS = {"count", "sum", "average", "rate", "ratio", "percentage"}
 DATA_QUALITY_CHECKS = {"required", "range", "allowed"}
+THRESHOLD_OPERATORS = {"gt", "gte", "lt", "lte", "eq"}
 
 
 @dataclass(frozen=True)
@@ -221,6 +222,39 @@ class DimensionSchema:
 
 
 @dataclass(frozen=True)
+class ThresholdSchema:
+    name: str
+    label: str
+    indicator: str
+    operator: str
+    value: float
+    severity: str = "warning"
+    message: str | None = None
+
+    @classmethod
+    def from_dict(
+        cls, name: str, value: dict[str, Any], indicators: dict[str, IndicatorSchema]
+    ) -> "ThresholdSchema":
+        _validate_identifier(name, "threshold")
+        indicator_name = str(value.get("indicator", ""))
+        if indicator_name not in indicators:
+            raise ValueError(f"Threshold '{name}' references unknown indicator '{indicator_name}'.")
+        operator = str(value.get("operator", "gte")).lower()
+        if operator not in THRESHOLD_OPERATORS:
+            raise ValueError(f"Threshold '{name}' has unsupported operator '{operator}'.")
+        if "value" not in value:
+            raise ValueError(f"Threshold '{name}' must define value.")
+        severity = str(value.get("severity", "warning")).lower()
+        if severity not in {"info", "warning", "critical"}:
+            raise ValueError(f"Threshold '{name}' severity must be info, warning, or critical.")
+        return cls(
+            name=name, label=str(value.get("label", name.replace("_", " ").title())),
+            indicator=indicator_name, operator=operator, value=float(value["value"]),
+            severity=severity, message=value.get("message"),
+        )
+
+
+@dataclass(frozen=True)
 class ProjectConfig:
     name: str
     database: str = "sqlite:///data/phframe.db"
@@ -229,6 +263,7 @@ class ProjectConfig:
     data_quality_rules: dict[str, DataQualityRuleSchema] = dataclass_field(default_factory=dict)
     saved_filters: dict[str, SavedFilterSchema] = dataclass_field(default_factory=dict)
     dimensions: dict[str, DimensionSchema] = dataclass_field(default_factory=dict)
+    thresholds: dict[str, ThresholdSchema] = dataclass_field(default_factory=dict)
     plugins: tuple[str, ...] = ()
     environment: str = "development"
     host: str = "127.0.0.1"
@@ -277,6 +312,13 @@ class ProjectConfig:
             name: DimensionSchema.from_dict(name, value or {}, datasets, saved_filters)
             for name, value in raw_dimensions.items()
         }
+        raw_thresholds = raw.get("thresholds", {})
+        if not isinstance(raw_thresholds, dict):
+            raise ValueError("Configuration 'thresholds' must be an object.")
+        thresholds = {
+            name: ThresholdSchema.from_dict(name, value or {}, indicators)
+            for name, value in raw_thresholds.items()
+        }
         plugins = tuple(str(item) for item in raw.get("plugins", []))
         database = os.environ.get("PHFRAME_DATABASE_URL") or _expand_env(
             str(project.get("database", "sqlite:///data/phframe.db"))
@@ -293,6 +335,7 @@ class ProjectConfig:
             data_quality_rules=data_quality_rules,
             saved_filters=saved_filters,
             dimensions=dimensions,
+            thresholds=thresholds,
             plugins=plugins,
             environment=environment,
             host=os.environ.get("PHFRAME_HOST", str(server.get("host", "127.0.0.1"))),
