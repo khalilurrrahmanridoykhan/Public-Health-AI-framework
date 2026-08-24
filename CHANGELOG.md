@@ -4,6 +4,24 @@ All notable changes to PHFrame will be documented here. The project intends to f
 
 ## [Unreleased]
 
+## [0.8.0a1] - 2026-08-24
+
+### Added
+
+- Add a privacy-aware AI workspace with local aggregate evidence synthesis as the safe default.
+- Add de-identification previews that remove protected/direct identifier fields and generalize dates and ages.
+- Add evidence-backed summaries with numbered source links, evidence snapshots, and SHA-256 evidence digests.
+- Add mandatory human approval or rejection with review notes and one-way draft decisions.
+- Add append-only audit events for AI generation and review decisions.
+- Add privacy receipts showing row-level records, protected fields, and external transfers used for each generation.
+- Add an explicitly enabled, HTTPS-only OpenAI-compatible provider using environment-based API keys.
+
+### Security
+
+- Keep external AI disabled by default and prevent API keys from being stored in project settings.
+- Send configured aggregate evidence only; protected fields and row-level records are excluded from summary generation.
+- Document that technical de-identification reduces exposure but does not certify legal compliance or eliminate re-identification risk.
+
 ## [0.7.0a6] - 2026-08-24
 
 ### Added
@@ -116,7 +134,8 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Import audit history.
 - Portable HTML dashboard export.
 
-[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a6...HEAD
+[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a1...HEAD
+[0.8.0a1]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a6...v0.8.0a1
 [0.7.0a6]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a5...v0.7.0a6
 [0.7.0a5]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a4...v0.7.0a5
 [0.7.0a4]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a3...v0.7.0a4

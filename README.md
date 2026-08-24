@@ -9,7 +9,7 @@
 
 PHFrame is an early-stage framework for building extensible public-health data systems. It combines generated projects, declarative health schemas, persistent storage, automatic APIs, a public-health engine, and a standards-based Web Component interface. The original CSV/Excel dashboard generator remains available as an export workflow.
 
-> Current version: `0.7.0a6` (custom page-builder preview)
+> Current version: `0.8.0a1` (privacy-aware AI assistance preview)
 
 ## Why PHFrame?
 
@@ -30,6 +30,8 @@ Current capabilities include:
 - Custom navigation pages with drag-and-drop text, table, and visualization blocks or external URL redirects
 - Safe rich-text footer and page content with bold, italic, underline, lists, and hyperlinks
 - Optional private mode with PBKDF2-hashed local user credentials and signed, HTTP-only login sessions
+- Privacy-aware AI summaries grounded in configured aggregate evidence, with human approval and append-only audit events
+- De-identification previews that remove protected/direct identifiers and generalize person-level dates and ages
 
 > [!IMPORTANT]
 > PHFrame is alpha software. Evaluate it with non-sensitive data before considering production use. Its optional local login is a preview and is not yet a complete production deployment security model.
@@ -69,6 +71,42 @@ The Phase 3 interface is served directly by PHFrame and has no React or external
 Use **Pages** in the application navigation to create an internal page or an external link. Internal pages have a drag-and-drop canvas where editors can add rich text, live dataset tables, and configured metrics or charts. Saving a page adds it to the navigation automatically. External pages redirect the visitor to the supplied HTTP or HTTPS URL.
 
 Use **Settings** to configure the header and dashboard titles, logo, favicon, navigation labels, access mode, theme, and primary color. The primary color is automatically adjusted for readable accents in dark mode while the selected color remains the header brand color. The footer editor supports formatted text and safe web links.
+
+## Privacy-aware AI assistance
+
+Phase 5 adds a responsible AI workspace at `/app#/ai`. Its default `local` provider produces conservative summaries from configured aggregate indicators, dimensions, threshold states, and data-quality results. It does not send row-level records or protected fields to a model. Every factual observation links to a numbered evidence item and its PHFrame API endpoint.
+
+Every generated summary begins in `draft` status. A human must provide a review note and explicitly approve or reject it. Generation and review decisions are stored as append-only audit events, while an SHA-256 digest binds the stored summary to the exact evidence snapshot used at generation time.
+
+The workspace also provides a de-identification preview. Fields marked `protected` and fields typed as `identifier` are removed, dates are reduced to years, and ages are placed in ten-year bands with `90+` top-coding. This is a technical exposure-reduction tool—not a determination of legal compliance or a guarantee against re-identification. HHS recognizes both Safe Harbor and Expert Determination approaches and warns that de-identified data retains some identification risk: [HHS de-identification guidance](https://www.hhs.gov/hipaa/for-professionals/special-topics/de-identification/index.html).
+
+PHFrame’s human approval, privacy receipt, evidence register, limitations, and audit history are informed by WHO guidance emphasizing autonomy, safety, transparency, accountability, inclusiveness, and sustainability for health AI: [WHO ethics and governance guidance](https://www.who.int/publications/i/item/9789240037403). They also align with the privacy-enhanced, accountable, transparent, explainable, safe, and reliable characteristics described by the [NIST AI Risk Management Framework](https://www.nist.gov/publications/artificial-intelligence-risk-management-framework-ai-rmf-10).
+
+### Optional external provider
+
+External AI is disabled by default. To use an OpenAI-compatible chat-completions service:
+
+1. Open **Settings → Responsible AI**.
+2. Select **External OpenAI-compatible API**.
+3. Provide an HTTPS endpoint, model name, and the name of an environment variable containing the API key.
+4. Explicitly enable aggregate evidence transfer, save, and restart PHFrame with that environment variable set.
+
+For example:
+
+```bash
+export PHFRAME_AI_API_KEY="replace-with-provider-key"
+phframe serve
+```
+
+The API key itself is never saved in `phframe-settings.json` or returned by PHFrame. Even for an external provider, the request contains aggregate evidence only. Administrators remain responsible for provider agreements, jurisdictional requirements, consent, data-protection impact assessment, retention settings, and organizational approval.
+
+Phase 5 endpoints:
+
+- `POST /api/ai/deidentify/{dataset}` — preview protected-field removal and generalization
+- `GET|POST /api/ai/summaries` — list or generate evidence-grounded drafts
+- `GET /api/ai/summaries/{id}` — retrieve a draft, evidence snapshot, and privacy receipt
+- `POST /api/ai/summaries/{id}/review` — approve or reject once with a required note
+- `GET /api/ai/audit` — list append-only generation and decision events
 
 Configure the interface and dashboard:
 

@@ -200,9 +200,15 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
         except ValueError as error:
             return _error(str(error), 422)
 
-    def _actor(self, request: Request) -> str:
+    def _actor(self, request: Request, declared: str = "") -> str:
         token = request.cookies.get("phframe_session", "")
-        return self.site_settings.verify_token(token) or "anonymous-local-user"
+        authenticated = self.site_settings.verify_token(token)
+        if authenticated:
+            return authenticated
+        clean = declared.strip()[:100]
+        if not clean:
+            raise ValueError("Your name is required for the AI audit history when the application is public.")
+        return f"public:{clean}"
 
     async def ai_deidentify(self, request: Request) -> Response:
         dataset = self.config.datasets.get(request.path_params["dataset"])
@@ -249,7 +255,7 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
             settings = self.site_settings.load()
             content, provider, model = await run_in_threadpool(generate_summary, title, evidence, purpose, settings)
             privacy = {"input_scope": "configured aggregate evidence only", "protected_fields_sent": [], "row_level_records_sent": 0, "external_transfer": provider != "local"}
-            summary = self.storage.create_ai_summary({"title": title, "purpose": purpose, "content": content, "provider": provider, "model": model, "evidence_json": json.dumps(evidence), "evidence_digest": evidence_digest(evidence), "privacy_json": json.dumps(privacy), "created_by": self._actor(request)})
+            summary = self.storage.create_ai_summary({"title": title, "purpose": purpose, "content": content, "provider": provider, "model": model, "evidence_json": json.dumps(evidence), "evidence_digest": evidence_digest(evidence), "privacy_json": json.dumps(privacy), "created_by": self._actor(request, str(payload.get("author", "")))})
             return JSONResponse({"data": summary}, status_code=201)
         except (json.JSONDecodeError, TypeError, ValueError) as error:
             return _error(str(error), 422)
@@ -266,7 +272,7 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
             decision = str(payload.get("decision", "")); note = str(payload.get("note", ""))[:2000]
             if not note.strip():
                 raise ValueError("A review note is required for approval or rejection.")
-            summary = self.storage.review_ai_summary(request.path_params["summary_id"], decision, self._actor(request), note)
+            summary = self.storage.review_ai_summary(request.path_params["summary_id"], decision, self._actor(request, str(payload.get("reviewer", ""))), note)
             return JSONResponse({"data": summary}) if summary else _error("AI summary not found.", 404)
         except (json.JSONDecodeError, TypeError, ValueError) as error:
             return _error(str(error), 422)

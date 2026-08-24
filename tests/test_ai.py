@@ -37,7 +37,7 @@ def test_deidentification_preview_explains_transformations(tmp_path: Path):
 def test_evidence_summary_requires_human_review_and_records_audit(tmp_path: Path):
     root, client = _app(tmp_path)
     client.post("/api/case_reports", json={"case_id": "secret", "disease": "malaria", "status": "confirmed", "report_date": "2026-08-24", "district": "Example", "country": "Example", "cases": 4, "population": 1000})
-    generated = client.post("/api/ai/summaries", json={"title": "Weekly briefing", "purpose": "Operations meeting"})
+    generated = client.post("/api/ai/summaries", json={"title": "Weekly briefing", "purpose": "Operations meeting", "author": "Analyst One"})
     assert generated.status_code == 201
     summary = generated.json()["data"]
     assert summary["status"] == "draft"
@@ -50,7 +50,7 @@ def test_evidence_summary_requires_human_review_and_records_audit(tmp_path: Path
 
     missing_note = client.post(f"/api/ai/summaries/{summary['id']}/review", json={"decision": "approved"})
     assert missing_note.status_code == 422
-    reviewed = client.post(f"/api/ai/summaries/{summary['id']}/review", json={"decision": "approved", "note": "Checked against the dashboard."})
+    reviewed = client.post(f"/api/ai/summaries/{summary['id']}/review", json={"decision": "approved", "note": "Checked against the dashboard.", "reviewer": "Reviewer One"})
     assert reviewed.status_code == 200
     assert reviewed.json()["data"]["status"] == "approved"
     assert client.post(f"/api/ai/summaries/{summary['id']}/review", json={"decision": "rejected", "note": "Again"}).status_code == 422
@@ -64,6 +64,6 @@ def test_external_ai_is_opt_in_and_https_only(tmp_path: Path):
     assert invalid.status_code == 422
     disabled = client.put("/api/settings", json={"ai_provider": "openai_compatible", "allow_external_ai": False, "ai_endpoint": "https://example.org/v1/chat", "ai_api_key_env": "AI_KEY"})
     assert disabled.status_code == 200
-    response = client.post("/api/ai/summaries", json={"title": "Draft"})
+    response = client.post("/api/ai/summaries", json={"title": "Draft", "author": "Analyst"})
     assert response.status_code == 422
     assert "disabled" in response.json()["error"]["message"]

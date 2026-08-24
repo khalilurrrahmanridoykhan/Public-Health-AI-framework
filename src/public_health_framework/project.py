@@ -191,6 +191,8 @@ and epidemiological-week field types.
 Organisation-unit hierarchy metadata is available at `/api/organisation-units`.
 Browser imports are available in the application at `/app#/import`, and configured
 connector synchronizations at `/app#/connectors`.
+Privacy-aware aggregate summaries, de-identification previews, human approval, and
+AI audit history are available at `/app#/ai`.
 
 ## Import records
 
