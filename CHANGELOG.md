@@ -4,6 +4,18 @@ All notable changes to PHFrame will be documented here. The project intends to f
 
 ## [Unreleased]
 
+## [0.8.0a6] - 2026-08-24
+
+### Added
+
+- Add a built-in Settings boundary manager for downloading country ADM0–ADM5 layers by ISO3 code.
+- Add project-local boundary storage and read APIs backed by simplified geoBoundaries gbOpen GeoJSON.
+- Add real SVG administrative polygon choropleths with name-based data matching, hover values, and attribution.
+
+### Changed
+
+- Use the newest installed country boundary layer for geographic dimension maps, retaining tile maps only as a fallback when no boundary is installed.
+
 ## [0.8.0a5] - 2026-08-24
 
 ### Fixed
@@ -183,7 +195,8 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Import audit history.
 - Portable HTML dashboard export.
 
-[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a5...HEAD
+[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a6...HEAD
+[0.8.0a6]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a5...v0.8.0a6
 [0.8.0a5]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a4...v0.8.0a5
 [0.8.0a4]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a3...v0.8.0a4
 [0.8.0a3]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a2...v0.8.0a3

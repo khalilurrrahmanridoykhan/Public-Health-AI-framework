@@ -94,6 +94,10 @@ def test_frontend_shell_and_assets(tmp_path: Path):
     assert 'this.querySelector(":scope > .ph-dashboard-manager > .ph-template-dialog")' in javascript.text
     assert "data-customize-form" in javascript.text
     assert "Create editable copy" in javascript.text
+    assert "Built-in country boundary downloads" in javascript.text
+    assert 'PHFrame.send("/api/boundaries", "POST"' in javascript.text
+    assert "renderBoundary" in javascript.text
+    assert ".ph-boundary-map" in css.text
 
 
 def test_frontend_metadata_includes_ui_configuration(tmp_path: Path):

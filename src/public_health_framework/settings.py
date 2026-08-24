@@ -9,10 +9,12 @@ from html.parser import HTMLParser
 import hmac
 import json
 from pathlib import Path
+import re
 import secrets
 import time
 from typing import Any
 from urllib.parse import urlparse
+from urllib.request import Request, urlopen
 
 
 DEFAULT_NAVIGATION = {
@@ -35,6 +37,7 @@ class SiteSettings:
         self.data_dir = root / "data"
         self.path = self.data_dir / "phframe-settings.json"
         self.branding_dir = self.data_dir / "branding"
+        self.boundary_dir = self.data_dir / "boundaries"
 
     def defaults(self) -> dict[str, Any]:
         return {
@@ -207,6 +210,48 @@ class SiteSettings:
     def asset(self, kind: str) -> Path | None:
         matches = list(self.branding_dir.glob(f"{kind}.*")) if self.branding_dir.exists() else []
         return matches[0] if matches else None
+
+    def boundaries(self) -> list[dict[str, Any]]:
+        if not self.boundary_dir.exists(): return []
+        items = []
+        for path in sorted(self.boundary_dir.glob("*.json")):
+            try:
+                data = json.loads(path.read_text(encoding="utf-8"))
+                items.append({key: data.get(key) for key in ("id", "country", "iso3", "level", "year", "source", "license", "feature_count")})
+            except (OSError, json.JSONDecodeError): continue
+        return items
+
+    def boundary(self, boundary_id: str) -> dict[str, Any] | None:
+        if not re.fullmatch(r"[A-Z]{3}-ADM[0-5]", boundary_id): return None
+        path = self.boundary_dir / f"{boundary_id}.json"
+        return json.loads(path.read_text(encoding="utf-8")) if path.exists() else None
+
+    def download_boundary(self, iso3: str, level: str) -> dict[str, Any]:
+        iso3, level = iso3.strip().upper(), level.strip().upper()
+        if not re.fullmatch(r"[A-Z]{3}", iso3) or not re.fullmatch(r"ADM[0-5]", level):
+            raise ValueError("Use a three-letter ISO country code and ADM0–ADM5 level.")
+        metadata_url = f"https://www.geoboundaries.org/api/current/gbOpen/{iso3}/{level}/"
+        metadata = self._download_json(metadata_url, 1_000_000)
+        download_url = str(metadata.get("simplifiedGeometryGeoJSON") or metadata.get("gjDownloadURL") or "")
+        if urlparse(download_url).scheme != "https": raise ValueError("Boundary provider returned an unsafe download URL.")
+        geojson = self._download_json(download_url, 20_000_000)
+        if geojson.get("type") != "FeatureCollection" or not isinstance(geojson.get("features"), list):
+            raise ValueError("Boundary provider did not return valid GeoJSON.")
+        boundary_id = f"{iso3}-{level}"
+        stored = {"id": boundary_id, "country": metadata.get("boundaryName", iso3), "iso3": iso3, "level": level, "year": metadata.get("boundaryYearRepresented", ""), "source": "geoBoundaries gbOpen", "license": "CC BY 4.0", "feature_count": len(geojson["features"]), "geojson": geojson}
+        self.boundary_dir.mkdir(parents=True, exist_ok=True)
+        destination = self.boundary_dir / f"{boundary_id}.json"
+        temporary = destination.with_suffix(".tmp"); temporary.write_text(json.dumps(stored), encoding="utf-8"); temporary.replace(destination)
+        return {key: stored[key] for key in ("id", "country", "iso3", "level", "year", "source", "license", "feature_count")}
+
+    @staticmethod
+    def _download_json(url: str, maximum: int) -> dict[str, Any]:
+        request = Request(url, headers={"User-Agent": "PHFrame-boundary-manager/1", "Accept": "application/json"})
+        with urlopen(request, timeout=30) as response:
+            content = response.read(maximum + 1)
+        if len(content) > maximum: raise ValueError("Boundary download is too large; choose a simplified or lower administrative level.")
+        try: return json.loads(content)
+        except json.JSONDecodeError as error: raise ValueError("Boundary provider returned invalid JSON.") from error
 
     def token(self, username: str) -> str:
         payload = f"{username}:{int(time.time())}"

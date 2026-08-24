@@ -52,6 +52,8 @@ class PHFrame:
             Route("/api/auth/logout", self.auth_logout, methods=["POST"]),
             Route("/api/settings", self.settings_api, methods=["GET", "PUT"]),
             Route("/api/settings/assets/{kind}", self.settings_asset_upload, methods=["POST"]),
+            Route("/api/boundaries", self.boundary_index, methods=["GET", "POST"]),
+            Route("/api/boundaries/{boundary_id}", self.boundary_detail, methods=["GET"]),
             Route("/api/ai/deidentify/{dataset}", self.ai_deidentify, methods=["POST"]),
             Route("/api/ai/chat", self.ai_chat, methods=["GET", "POST"]),
             Route("/api/ai/chat/{chat_id:int}/report", self.ai_chat_report, methods=["POST"]),
@@ -203,6 +205,20 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
             return JSONResponse({"data": {"url": url}})
         except ValueError as error:
             return _error(str(error), 422)
+
+    async def boundary_index(self, request: Request) -> Response:
+        if request.method == "GET": return JSONResponse({"data": self.site_settings.boundaries()})
+        try:
+            payload = await request.json()
+            item = await run_in_threadpool(self.site_settings.download_boundary, str(payload.get("iso3", "")), str(payload.get("level", "")))
+            return JSONResponse({"data": item}, status_code=201)
+        except (json.JSONDecodeError, TypeError, ValueError, OSError) as error:
+            return _error(str(error), 422)
+
+    async def boundary_detail(self, request: Request) -> Response:
+        item = self.site_settings.boundary(request.path_params["boundary_id"])
+        if not item: return _error("Boundary layer not found.", 404)
+        return JSONResponse({"data": item})
 
     def _actor(self, request: Request, declared: str = "") -> str:
         token = request.cookies.get("phframe_session", "")
