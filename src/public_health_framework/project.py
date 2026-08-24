@@ -25,11 +25,11 @@ datasets:
     label: Case Reports
     fields:
       case_id:
-        type: string
+        type: identifier
         required: true
         protected: true
       disease:
-        type: string
+        type: disease_code
         required: true
       status:
         type: string
@@ -47,6 +47,10 @@ datasets:
         required: true
       population:
         type: integer
+      patient_age:
+        type: age
+      epi_week:
+        type: epi_week
 
 indicators:
   total_cases:
@@ -130,6 +134,8 @@ results at `/api/data-quality`.
 Saved filters are listed at `/api/filters`; grouped dimensions are available at
 `/api/dimensions/{{name}}`.
 Surveillance thresholds are evaluated at `/api/thresholds/{{name}}`.
+Generated case reports use reusable public-health identifier, disease-code, age,
+and epidemiological-week field types.
 
 ## Import records
 

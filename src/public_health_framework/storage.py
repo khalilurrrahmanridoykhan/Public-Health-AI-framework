@@ -13,6 +13,7 @@ from sqlalchemy import (
 from sqlalchemy.schema import CreateColumn
 
 from .config import DataQualityRuleSchema, DatasetSchema, DimensionSchema, FieldSchema, IndicatorSchema, ProjectConfig
+from .periods import resolve_period
 
 
 TYPE_FACTORIES = {
@@ -23,6 +24,20 @@ TYPE_FACTORIES = {
     "boolean": Boolean,
     "date": Date,
     "datetime": DateTime,
+    "identifier": Text,
+    "disease_code": Text,
+    "age": Integer,
+    "sex": Text,
+    "case_classification": Text,
+    "epi_week": Text,
+    "reporting_period": Text,
+    "organisation_unit": Text,
+    "facility": Text,
+}
+
+TEXT_TYPES = {
+    "string", "location", "identifier", "disease_code", "sex", "case_classification",
+    "epi_week", "reporting_period", "organisation_unit", "facility",
 }
 
 
@@ -331,8 +346,15 @@ def _coerce(name: str, value: Any, schema: FieldSchema) -> Any:
             raise ValueError(f"Field '{name}' cannot be null.")
         return None
     try:
-        if schema.type == "integer":
-            return int(value)
+        if schema.type in {"integer", "age"}:
+            if isinstance(value, bool):
+                raise ValueError
+            if schema.type == "age" and isinstance(value, float) and not value.is_integer():
+                raise ValueError
+            result = int(value)
+            if schema.type == "age" and not 0 <= result <= 130:
+                raise ValueError
+            return result
         if schema.type == "number":
             return float(value)
         if schema.type == "boolean":
@@ -346,7 +368,26 @@ def _coerce(name: str, value: Any, schema: FieldSchema) -> Any:
             return date.fromisoformat(str(value)[:10])
         if schema.type == "datetime":
             return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-        return str(value)
+        result = str(value).strip()
+        if schema.type in {"identifier", "disease_code", "organisation_unit", "facility"} and not result:
+            raise ValueError
+        if schema.type == "sex" and result.lower() not in {"female", "male", "intersex", "unknown"}:
+            raise ValueError
+        if schema.type == "case_classification" and result.lower() not in {
+            "suspected", "probable", "confirmed", "discarded",
+        }:
+            raise ValueError
+        if schema.type in {"sex", "case_classification"}:
+            result = result.lower()
+        if schema.type == "epi_week":
+            if "-W" not in result:
+                raise ValueError
+            start, _ = resolve_period(result)
+            if start.isocalendar().weekday != 1:
+                raise ValueError
+        if schema.type == "reporting_period":
+            resolve_period(result)
+        return result
     except (TypeError, ValueError) as error:
         raise ValueError(f"Field '{name}' must be a valid {schema.type}.") from error
 
@@ -368,7 +409,8 @@ def _type_key(value: Any) -> str:
 
 
 def _compatible_type(configured: str, actual: str, dialect: str) -> bool:
-    if configured == actual or (configured == "location" and actual == "string"):
+    storage_type = "integer" if configured == "age" else ("string" if configured in TEXT_TYPES else configured)
+    if storage_type == actual:
         return True
     # PHFrame 0.2.0a1 stored temporal values as SQLite TEXT and booleans as INTEGER.
     legacy_sqlite = {
@@ -376,7 +418,7 @@ def _compatible_type(configured: str, actual: str, dialect: str) -> bool:
         "datetime": "string",
         "boolean": "integer",
     }
-    return dialect == "sqlite" and legacy_sqlite.get(configured) == actual
+    return dialect == "sqlite" and legacy_sqlite.get(storage_type) == actual
 
 
 def _serialize(value: Any) -> Any:

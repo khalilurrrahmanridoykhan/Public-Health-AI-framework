@@ -17,6 +17,8 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Add declarative dimensions with grouped-count APIs.
 - Add declarative surveillance thresholds with severity and alert messages.
 - Add threshold evaluation APIs that support periods and saved filters.
+- Add reusable identifier, disease-code, age, sex, case-classification, epidemiological-week, reporting-period, organisation-unit, and facility field types.
+- Add domain validation and portable storage mappings for public-health field types.
 
 ## [0.2.0a1] - 2026-07-21
 

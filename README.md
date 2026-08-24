@@ -58,7 +58,18 @@ curl -X POST http://127.0.0.1:8000/api/case_reports \
   }'
 ```
 
-The Phase 1 schema supports `string`, `integer`, `number`, `boolean`, `date`, `datetime`, and `location` fields, plus `required` and `protected` metadata.
+The schema supports generic `string`, `integer`, `number`, `boolean`, `date`, `datetime`, and `location` fields, plus `required` and `protected` metadata.
+
+Reusable public-health types add domain-aware storage and validation:
+
+- `identifier`, `disease_code`, `organisation_unit`, and `facility` require non-empty text.
+- `age` accepts whole years from 0 through 130.
+- `sex` accepts `female`, `male`, `intersex`, or `unknown`.
+- `case_classification` accepts `suspected`, `probable`, `confirmed`, or `discarded`.
+- `epi_week` accepts ISO week values such as `2026-W33`.
+- `reporting_period` accepts ISO weeks, calendar months, or quarters.
+
+These types use portable text or integer database columns, so applications retain SQLite and PostgreSQL compatibility.
 
 ## Indicators
 

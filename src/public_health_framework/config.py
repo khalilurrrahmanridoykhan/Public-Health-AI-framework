@@ -12,7 +12,11 @@ import yaml
 
 
 IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]*$")
-FIELD_TYPES = {"string", "integer", "number", "boolean", "date", "datetime", "location"}
+FIELD_TYPES = {
+    "string", "integer", "number", "boolean", "date", "datetime", "location",
+    "identifier", "disease_code", "age", "sex", "case_classification",
+    "epi_week", "reporting_period", "organisation_unit", "facility",
+}
 INDICATOR_OPERATIONS = {"count", "sum", "average", "rate", "ratio", "percentage"}
 DATA_QUALITY_CHECKS = {"required", "range", "allowed"}
 THRESHOLD_OPERATORS = {"gt", "gte", "lt", "lte", "eq"}
@@ -111,7 +115,7 @@ class IndicatorSchema:
         unknown = [item for item in referenced if item and item not in dataset.fields]
         if unknown:
             raise ValueError(f"Indicator '{name}' references unknown fields: {', '.join(unknown)}.")
-        numeric = {field_name for field_name, schema in dataset.fields.items() if schema.type in {"integer", "number"}}
+        numeric = {field_name for field_name, schema in dataset.fields.items() if schema.type in {"integer", "number", "age"}}
         measures = [item for item in [indicator.field, indicator.numerator, indicator.denominator] if item]
         if any(item not in numeric for item in measures):
             raise ValueError(f"Indicator '{name}' measure fields must be integer or number fields.")
@@ -150,7 +154,7 @@ class DataQualityRuleSchema:
         values = tuple(value.get("values", ()) or ())
         if check == "range" and minimum is None and maximum is None:
             raise ValueError(f"Data-quality rule '{name}' must define min or max.")
-        if check == "range" and datasets[dataset_name].fields[field_name].type not in {"integer", "number"}:
+        if check == "range" and datasets[dataset_name].fields[field_name].type not in {"integer", "number", "age"}:
             raise ValueError(f"Data-quality rule '{name}' requires a numeric field for range checks.")
         if check == "allowed" and not values:
             raise ValueError(f"Data-quality rule '{name}' must define values.")
