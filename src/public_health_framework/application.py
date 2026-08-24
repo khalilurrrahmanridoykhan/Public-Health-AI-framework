@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from html import escape
+import json
+from pathlib import Path
 from typing import Any
 
 from starlette.applications import Starlette
@@ -14,6 +16,7 @@ from . import __version__
 from .config import DatasetSchema, ProjectConfig
 from .plugins import load_plugins
 from .periods import resolve_period
+from .importer import import_frame, load_uploaded_frame, preview_frame
 from .storage import Storage
 from .ui import asset_text
 
@@ -33,6 +36,8 @@ class PHFrame:
             Route("/health", self.health, methods=["GET"]),
             Route("/api", self.api_index, methods=["GET"]),
             Route("/api/imports", self.import_history, methods=["GET"]),
+            Route("/api/browser-import/{dataset}/preview", self.browser_import_preview, methods=["POST"]),
+            Route("/api/browser-import/{dataset}", self.browser_import, methods=["POST"]),
             Route("/api/indicators", self.indicator_index, methods=["GET"]),
             Route("/api/indicators/{indicator}", self.indicator_result, methods=["GET"]),
             Route("/api/data-quality", self.data_quality_index, methods=["GET"]),
@@ -340,6 +345,46 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
         except ValueError:
             return _error("limit must be an integer.", 400)
         return JSONResponse({"data": self.storage.import_history(limit)})
+
+    async def browser_import_preview(self, request: Request) -> Response:
+        try:
+            frame, filename = await self._uploaded_frame(request)
+            return JSONResponse({"data": preview_frame(self.config, request.path_params["dataset"], frame)})
+        except ValueError as error:
+            return _error(str(error), 422)
+
+    async def browser_import(self, request: Request) -> Response:
+        try:
+            frame, filename = await self._uploaded_frame(request)
+            raw_mapping = request.query_params.get("mapping", "{}")
+            mapping = json.loads(raw_mapping)
+            if not isinstance(mapping, dict):
+                raise ValueError("mapping must be a JSON object.")
+            dry_run = request.query_params.get("dry_run", "false").lower() == "true"
+            result = import_frame(
+                self.config, request.path_params["dataset"], frame, f"browser:{filename}",
+                {str(key): str(value) for key, value in mapping.items()}, dry_run,
+            )
+            return JSONResponse({"data": {
+                "run_id": result.run_id, "dataset": result.dataset, "status": result.status,
+                "total_rows": result.total_rows, "imported_rows": result.imported_rows,
+                "errors": list(result.errors), "dry_run": result.dry_run,
+            }}, status_code=200 if not result.errors else 422)
+        except (json.JSONDecodeError, ValueError) as error:
+            return _error(str(error), 422)
+
+    async def _uploaded_frame(self, request: Request) -> tuple[Any, str]:
+        filename = request.query_params.get("filename", "")
+        if not filename:
+            raise ValueError("filename is required.")
+        content = await request.body()
+        if not content:
+            raise ValueError("The uploaded file is empty.")
+        if len(content) > 25 * 1024 * 1024:
+            raise ValueError("Browser imports are limited to 25 MB.")
+        sheet_value = request.query_params.get("sheet", "0")
+        sheet = int(sheet_value) if sheet_value.isdigit() else sheet_value
+        return load_uploaded_frame(content, filename, sheet), Path(filename).name
 
     def _dataset(self, request: Request) -> DatasetSchema | None:
         return self.config.datasets.get(request.path_params["dataset"])

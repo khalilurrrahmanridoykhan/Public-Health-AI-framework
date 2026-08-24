@@ -48,7 +48,7 @@ class PHAppShell extends PHElement {
   draw() {
     this.innerHTML = `<a class="ph-skip-link" href="#main">Skip to content</a>
       <div class="ph-shell"><header class="ph-header"><h1 class="ph-brand">PHFrame · ${PHFrame.escape(this.metadata.project)}</h1>
-      <nav class="ph-nav" aria-label="Primary"><a href="#/dashboard" data-route="dashboard">${PHFrame.t("dashboard")}</a><a href="#/records" data-route="records">${PHFrame.t("records")}</a><a href="#/quality" data-route="quality">${PHFrame.t("quality")}</a></nav>
+      <nav class="ph-nav" aria-label="Primary"><a href="#/dashboard" data-route="dashboard">${PHFrame.t("dashboard")}</a><a href="#/records" data-route="records">${PHFrame.t("records")}</a><a href="#/import" data-route="import">Import</a><a href="#/quality" data-route="quality">${PHFrame.t("quality")}</a></nav>
       <label>${PHFrame.t("theme")} <select class="ph-theme" aria-label="${PHFrame.t("theme")}"><option value="light">Light</option><option value="dark">Dark</option><option value="high-contrast">High contrast</option></select></label></header>
       <main class="ph-main" id="main" tabindex="-1"><div id="ph-view"></div></main><ph-notification-center></ph-notification-center></div>`;
     const theme = this.querySelector(".ph-theme");
@@ -70,6 +70,9 @@ class PHAppShell extends PHElement {
         const query = event.detail.filter ? `?filter=${encodeURIComponent(event.detail.filter)}` : "";
         view.querySelector("ph-case-table").load(query);
       });
+    } else if (route === "import") {
+      view.innerHTML = `<h2>Import data</h2><ph-import-wizard></ph-import-wizard>`;
+      view.querySelector("ph-import-wizard").metadata = this.metadata;
     } else if (route === "quality") {
       view.innerHTML = `<h2>Data quality</h2><ph-quality-panel></ph-quality-panel>`;
     } else {
@@ -265,6 +268,59 @@ class PHConfirm extends PHElement {
   }
 }
 
+class PHImportWizard extends PHElement {
+  set metadata(value) { this._metadata = value; if (this.isConnected) this.render(); }
+  render() {
+    if (!this._metadata) return;
+    const datasets = Object.entries(this._metadata.datasets).map(([name, item]) => `<option value="${name}">${PHFrame.escape(item.label)}</option>`).join("");
+    this.innerHTML = `<section class="ph-card ph-stack"><div class="ph-import-step"><h3>1. Choose a file</h3><div class="ph-actions"><div class="ph-field"><label for="ph-import-dataset">Dataset</label><select id="ph-import-dataset">${datasets}</select></div><div class="ph-field"><label for="ph-import-file">CSV or Excel file</label><input id="ph-import-file" type="file" accept=".csv,.xlsx,.xlsm"></div><button class="ph-button" type="button" data-preview>Preview</button></div></div><div data-workspace></div><p role="status" class="ph-status"></p></section>`;
+    this.querySelector("[data-preview]").addEventListener("click", () => this.preview());
+  }
+  async upload(path) {
+    const file = this.querySelector("input[type=file]").files[0];
+    if (!file) throw new Error("Choose a CSV or Excel file.");
+    const separator = path.includes("?") ? "&" : "?";
+    const response = await fetch(`${path}${separator}filename=${encodeURIComponent(file.name)}`, {
+      method: "POST", headers: { "content-type": "application/octet-stream", accept: "application/json" }, body: file
+    });
+    const payload = await response.json();
+    if (!response.ok) throw Object.assign(new Error(payload.error?.message || "Import failed."), { payload });
+    return payload;
+  }
+  async preview() {
+    const status = this.querySelector("[role=status]");
+    status.textContent = "Reading and validating file structure…";
+    try {
+      const dataset = this.querySelector("#ph-import-dataset").value;
+      const response = await this.upload(`/api/browser-import/${dataset}/preview`);
+      this.previewData = response.data;
+      const fields = response.data.fields;
+      const mappings = response.data.columns.map(column => `<div class="ph-field"><label>${PHFrame.escape(column)}</label><select data-source="${PHFrame.escape(column)}"><option value="">Skip column</option>${fields.map(field => `<option value="${field.name}" ${response.data.suggested_mapping[column] === field.name ? "selected" : ""}>${PHFrame.escape(field.label)} (${field.type})${field.required ? " *" : ""}</option>`).join("")}</select></div>`).join("");
+      const headers = response.data.columns.map(column => `<th>${PHFrame.escape(column)}</th>`).join("");
+      const rows = response.data.sample.map(row => `<tr>${response.data.columns.map(column => `<td>${PHFrame.escape(row[column] ?? "")}</td>`).join("")}</tr>`).join("");
+      this.querySelector("[data-workspace]").innerHTML = `<div class="ph-import-step"><h3>2. Map columns</h3><div class="ph-grid">${mappings}</div></div><div class="ph-import-step"><h3>3. Review ${response.data.total_rows} rows</h3><div class="ph-table-wrap"><table class="ph-table"><thead><tr>${headers}</tr></thead><tbody>${rows}</tbody></table></div><div class="ph-actions"><button class="ph-button" type="button" data-validate>Validate</button><button class="ph-button" type="button" data-import>Import atomically</button></div></div><div data-results></div>`;
+      this.querySelector("[data-validate]").addEventListener("click", () => this.execute(true));
+      this.querySelector("[data-import]").addEventListener("click", () => this.execute(false));
+      status.textContent = "Preview ready. Confirm the column mapping.";
+    } catch (error) { status.textContent = error.message; status.className = "ph-status ph-error"; }
+  }
+  async execute(dryRun) {
+    const dataset = this.querySelector("#ph-import-dataset").value;
+    const mapping = Object.fromEntries([...this.querySelectorAll("[data-source]")].map(select => [select.dataset.source, select.value]).filter(([, target]) => target));
+    const query = new URLSearchParams({ mapping: JSON.stringify(mapping), dry_run: String(dryRun) });
+    const results = this.querySelector("[data-results]");
+    try {
+      const response = await this.upload(`/api/browser-import/${dataset}?${query}`);
+      const item = response.data;
+      results.innerHTML = `<div class="ph-card" role="status"><h3>${dryRun ? "Validation passed" : "Import completed"}</h3><p>${item.imported_rows} imported / ${item.total_rows} total rows. Run ${item.run_id}.</p></div>`;
+      if (!dryRun) PHFrame.notify("Import completed.");
+    } catch (error) {
+      const errors = error.payload?.data?.errors || [];
+      results.innerHTML = `<div class="ph-error" role="alert"><h3>Import validation failed</h3><ul class="ph-error-list">${errors.map(item => `<li>Row ${item.row}: ${PHFrame.escape(item.message)}</li>`).join("") || `<li>${PHFrame.escape(error.message)}</li>`}</ul></div>`;
+    }
+  }
+}
+
 customElements.define("ph-app-shell", PHAppShell);
 customElements.define("ph-data-form", PHDataForm);
 customElements.define("ph-case-table", PHCaseTable);
@@ -279,4 +335,5 @@ customElements.define("ph-dashboard", PHDashboard);
 customElements.define("ph-notification-center", PHNotificationCenter);
 customElements.define("ph-modal", PHModal);
 customElements.define("ph-confirm", PHConfirm);
+customElements.define("ph-import-wizard", PHImportWizard);
 window.PHFrame = PHFrame;

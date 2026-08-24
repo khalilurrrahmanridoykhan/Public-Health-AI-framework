@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from io import BytesIO
 from pathlib import Path
 from typing import Any
 
@@ -57,10 +58,39 @@ def import_dataset(
 ) -> ImportResult:
     if dataset_name not in config.datasets:
         raise ValueError(f"Dataset not found: {dataset_name}")
+    frame = load_dataset(source, sheet=sheet)
+    return import_frame(config, dataset_name, frame, str(Path(source).resolve()), mapping, dry_run)
+
+
+def load_uploaded_frame(content: bytes, filename: str, sheet: str | int = 0) -> pd.DataFrame:
+    suffix = Path(filename).suffix.lower()
+    if suffix == ".csv":
+        frame = pd.read_csv(BytesIO(content))
+    elif suffix in {".xlsx", ".xlsm"}:
+        frame = pd.read_excel(BytesIO(content), sheet_name=sheet)
+    else:
+        raise ValueError("Browser imports support .csv, .xlsx, and .xlsm files.")
+    frame.columns = [str(column).strip() for column in frame.columns]
+    if frame.empty:
+        raise ValueError("The input file contains no data rows.")
+    if len(set(frame.columns)) != len(frame.columns):
+        raise ValueError("Column names must be unique after surrounding spaces are removed.")
+    return frame
+
+
+def import_frame(
+    config: ProjectConfig,
+    dataset_name: str,
+    frame: pd.DataFrame,
+    source: str,
+    mapping: dict[str, str] | None = None,
+    dry_run: bool = False,
+) -> ImportResult:
+    if dataset_name not in config.datasets:
+        raise ValueError(f"Dataset not found: {dataset_name}")
     dataset = config.datasets[dataset_name]
     storage = Storage(config)
     storage.initialize()
-    frame = load_dataset(source, sheet=sheet)
     mapping = mapping or {column: column for column in frame.columns if column in dataset.fields}
     unknown_sources = set(mapping) - set(frame.columns)
     unknown_targets = set(mapping.values()) - set(dataset.fields)
@@ -86,9 +116,30 @@ def import_dataset(
         imported = storage.bulk_create(dataset, payloads)
     status = "failed" if errors else ("validated" if dry_run else "completed")
     run_id = storage.record_import(
-        dataset_name, str(Path(source).resolve()), status, len(frame), imported, errors
+        dataset_name, source, status, len(frame), imported, errors
     )
     return ImportResult(run_id, dataset_name, len(frame), imported, tuple(errors), dry_run)
+
+
+def preview_frame(config: ProjectConfig, dataset_name: str, frame: pd.DataFrame) -> dict[str, Any]:
+    if dataset_name not in config.datasets:
+        raise ValueError(f"Dataset not found: {dataset_name}")
+    fields = config.datasets[dataset_name].fields
+    suggested = {column: column for column in frame.columns if column in fields}
+    sample = [
+        {str(name): _clean(value) for name, value in row.items()}
+        for row in frame.head(10).to_dict(orient="records")
+    ]
+    return {
+        "columns": [str(column) for column in frame.columns],
+        "fields": [
+            {"name": name, "type": schema.type, "required": schema.required, "label": schema.label or name}
+            for name, schema in fields.items()
+        ],
+        "suggested_mapping": suggested,
+        "sample": sample,
+        "total_rows": len(frame),
+    }
 
 
 def _clean(value: Any) -> Any:
@@ -99,4 +150,3 @@ def _clean(value: Any) -> Any:
     if hasattr(value, "item"):
         return value.item()
     return value
-

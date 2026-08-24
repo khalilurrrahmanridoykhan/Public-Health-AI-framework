@@ -84,5 +84,7 @@ button, a { touch-action: manipulation; }
 .ph-dialog::backdrop { background: rgb(0 0 0 / 55%); }
 .ph-toast-region { position: fixed; right: 1rem; bottom: 1rem; z-index: 50; display: grid; gap: .5rem; }
 .ph-toast { max-width: 28rem; padding: .8rem 1rem; color: var(--ph-color-text); background: var(--ph-color-surface); border: 2px solid var(--ph-color-primary); border-radius: var(--ph-radius); box-shadow: var(--ph-shadow); }
+.ph-import-step { border-left: 4px solid var(--ph-color-primary); padding-left: var(--ph-space-4); }
+.ph-error-list { max-height: 18rem; overflow: auto; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: .01ms !important; animation-duration: .01ms !important; } }
 @media (max-width: 680px) { .ph-header { align-items: flex-start; flex-direction: column; } .ph-main { padding: 1rem; } }

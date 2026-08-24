@@ -34,6 +34,7 @@ def test_frontend_shell_and_assets(tmp_path: Path):
     assert "prefers-reduced-motion" in css.text
     assert ':root[data-theme="dark"]' in css.text
     assert ':root[data-theme="high-contrast"]' in css.text
+    assert 'customElements.define("ph-import-wizard"' in javascript.text
 
 
 def test_frontend_metadata_includes_ui_configuration(tmp_path: Path):
