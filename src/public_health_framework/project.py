@@ -170,7 +170,7 @@ phframe migrate
 phframe serve
 ```
 
-Open <http://127.0.0.1:8000> and inspect API metadata at
+Open <http://127.0.0.1:8000/app> and inspect API metadata at
 <http://127.0.0.1:8000/api>.
 
 Edit `phframe.yaml` to customize datasets and fields.

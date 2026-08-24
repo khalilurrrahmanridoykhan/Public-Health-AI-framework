@@ -5,9 +5,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Status: Alpha](https://img.shields.io/badge/status-alpha-orange.svg)](CHANGELOG.md)
 
-PHFrame is an early-stage framework for building extensible public-health data systems. Phase 1 introduces generated projects, declarative dataset schemas, persistent storage, and automatic APIs. The original CSV/Excel dashboard generator remains available as an export workflow.
+PHFrame is an early-stage framework for building extensible public-health data systems. It combines generated projects, declarative health schemas, persistent storage, automatic APIs, a public-health engine, and a standards-based Web Component interface. The original CSV/Excel dashboard generator remains available as an export workflow.
 
-> Current version: `0.2.0a1` (Phase 1 foundation preview)
+> Current version: `0.5.0a1` (Phase 3 frontend preview)
 
 ## Why PHFrame?
 
@@ -21,6 +21,7 @@ Current capabilities include:
 - Import audit history and safe schema migration checks
 - Portable HTML dashboards for offline sharing
 - Declarative indicators with count, sum, average, rate, ratio, and percentage calculations
+- Configurable Web Component dashboards, forms, tables, filters, charts, maps, and epidemiological curves
 
 > [!IMPORTANT]
 > PHFrame is alpha software. Evaluate it with non-sensitive data before considering production use. It does not yet provide authentication or a complete deployment security model.
@@ -34,7 +35,7 @@ phframe check
 phframe serve
 ```
 
-Open <http://127.0.0.1:8000>. The generated project includes:
+Open <http://127.0.0.1:8000/app> for the application interface. The generated project includes:
 
 - `phframe.yaml` — project, database, dataset, field, and plugin configuration
 - `data/phframe.db` — local SQLite database
@@ -42,6 +43,48 @@ Open <http://127.0.0.1:8000>. The generated project includes:
 - `/api` — discoverable dataset metadata
 - `/api/case_reports` — generated collection API
 - `/api/case_reports/{id}` — generated record API
+- `/app` — responsive Web Component application
+
+## Web Component application
+
+The Phase 3 interface is served directly by PHFrame and has no React or external CDN dependency. It includes:
+
+- Hash-based application routing and a responsive application shell
+- Metadata-driven record forms and protected-field-aware tables
+- Saved filters and organisation-unit selection
+- KPI cards, grouped SVG charts, epidemiological curves, and offline tile choropleths
+- Declarative dashboard composition in `phframe.yaml`
+- Light, dark, and high-contrast themes using CSS design tokens
+- English and Bengali localization foundations with project-specific translation overrides
+- Keyboard focus styling, skip navigation, reduced-motion support, live notifications, modal dialogs, and confirmations
+
+Configure the interface and dashboard:
+
+```yaml
+ui:
+  theme: light
+  locale: en
+  translations: {}
+
+dashboards:
+  main:
+    label: Malaria Surveillance Dashboard
+    widgets:
+      - type: kpi
+        title: Total cases
+        indicator: total_cases
+      - type: chart
+        title: Cases by district
+        dimension: cases_by_district
+      - type: map
+        title: Geographic distribution
+        dimension: cases_by_district
+      - type: epi_curve
+        title: Cases over time
+        dataset: case_reports
+        date_field: report_date
+        value_field: cases
+```
 
 Example request:
 

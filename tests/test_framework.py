@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from public_health_framework import __version__
 from public_health_framework.cli import main
 from public_health_framework.data import DashboardConfig, load_dataset, prepare_dataset
 from public_health_framework.report import build_dashboard
@@ -60,3 +61,7 @@ def test_load_rejects_unsupported_file(tmp_path: Path):
     else:
         raise AssertionError("Expected an unsupported-file error")
 
+
+def test_package_version_matches_project_metadata():
+    pyproject = Path(__file__).parents[1] / "pyproject.toml"
+    assert f'version = "{__version__}"' in pyproject.read_text(encoding="utf-8")

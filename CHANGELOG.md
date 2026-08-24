@@ -4,6 +4,10 @@ All notable changes to PHFrame will be documented here. The project intends to f
 
 ## [Unreleased]
 
+## [0.5.0a1] - 2026-08-24
+
+### Added
+
 - Add continuous integration across Python 3.10–3.12.
 - Add contribution and security guidance.
 - Improve package metadata and project documentation.
@@ -21,6 +25,12 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Add domain validation and portable storage mappings for public-health field types.
 - Add declarative organisation-unit hierarchies with parent and cycle validation.
 - Add hierarchy discovery APIs and organisation-unit referential validation for record writes and imports.
+- Add a packaged Web Component application shell with client-side routing.
+- Add metadata-driven record forms, tables, saved filters, and organisation-unit selection.
+- Add declarative dashboards with KPI, grouped chart, epidemiological curve, and tile choropleth components.
+- Add light, dark, and high-contrast design-token themes.
+- Add English and Bengali localization foundations with project translation overrides.
+- Add accessible skip navigation, data-table chart fallbacks, live notifications, modal dialogs, confirmations, and reduced-motion support.
 
 ## [0.2.0a1] - 2026-07-21
 
@@ -34,5 +44,6 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Import audit history.
 - Portable HTML dashboard export.
 
-[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.2.0a1...HEAD
+[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.5.0a1...HEAD
+[0.5.0a1]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.2.0a1...v0.5.0a1
 [0.2.0a1]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/releases/tag/v0.2.0a1

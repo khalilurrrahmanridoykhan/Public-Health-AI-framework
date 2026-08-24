@@ -518,6 +518,8 @@ Deliverables:
 
 Success criterion: a complete dashboard can be declared through configuration and extended with custom components.
 
+**Status: Completed in the 0.5.0 alpha preview.** Delivered components include the application shell and routing, metadata-driven forms, record tables and filters, KPI cards, grouped charts, epidemiological curves, an offline tile choropleth, dashboard configuration, design-token themes, localization foundations, notifications, dialogs, and confirmations.
+
 ### Phase 4: Connectors
 
 **Estimated scope:** 6–10 weeks
@@ -587,7 +589,7 @@ This application will function as:
 - A demonstration for public-health organizations
 - A basis for discovering stable framework APIs
 
-## Current Release: PHFrame 0.2 Alpha
+## Delivered Foundation: PHFrame 0.2 Alpha
 
 PHFrame 0.2.0a1 delivers the Phase 1 foundation: a persistent, customizable application while retaining the one-time HTML dashboard workflow.
 
@@ -605,9 +607,9 @@ PHFrame 0.2.0a1 delivers the Phase 1 foundation: a persistent, customizable appl
 - Preserve the current HTML dashboard as an export feature
 - Add framework-level unit and integration tests
 
-## Immediate Next Release: PHFrame 0.3 Alpha
+## Delivered Public-Health Engine: PHFrame 0.3 Alpha
 
-The 0.3 series delivers the planned Phase 2 public-health engine scope. The next development phase is the Web Component frontend system.
+The 0.3 series delivers the planned Phase 2 public-health engine scope. Phase 3 is delivered in the `0.5.0a1` frontend preview.
 
 ### Implemented Scope
 
@@ -665,6 +667,4 @@ PHFrame should be considered successful when:
 
 ## Current Priority
 
-The next engineering priority is **PHFrame 0.2: create and run a customizable malaria surveillance application with a persistent backend, API, and development server**.
-
-New features should be accepted when they strengthen this vertical slice or establish a clearly required framework interface. Features unrelated to the reference application should wait until the foundation is stable.
+Phases 1–3 are implemented in the `0.5.0a1` preview. The next engineering priority is **Phase 4: connectors and synchronization**, beginning with the improved browser import wizard and reusable connector interfaces before external DHIS2, KoboToolbox, and ODK integrations.
