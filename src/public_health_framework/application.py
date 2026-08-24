@@ -57,6 +57,7 @@ class PHFrame:
             Route("/api/ai/chat/{chat_id:int}/report", self.ai_chat_report, methods=["POST"]),
             Route("/api/ai/summaries", self.ai_summaries, methods=["GET", "POST"]),
             Route("/api/ai/summaries/{summary_id:int}", self.ai_summary_detail, methods=["GET"]),
+            Route("/api/ai/summaries/{summary_id:int}/export", self.ai_summary_export, methods=["GET"]),
             Route("/api/ai/summaries/{summary_id:int}/review", self.ai_summary_review, methods=["POST"]),
             Route("/api/ai/audit", self.ai_audit, methods=["GET"]),
             Route("/api", self.api_index, methods=["GET"]),
@@ -317,6 +318,17 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
     async def ai_summary_detail(self, request: Request) -> Response:
         summary = self.storage.ai_summary(request.path_params["summary_id"])
         return JSONResponse({"data": summary}) if summary else _error("AI summary not found.", 404)
+
+    async def ai_summary_export(self, request: Request) -> Response:
+        summary = self.storage.ai_summary(request.path_params["summary_id"])
+        if not summary:
+            return _error("AI summary not found.", 404)
+        evidence = "\n".join(f"- {item.get('label', item.get('name'))}: {item.get('endpoint')}" for item in summary["evidence"])
+        review = f"Status: {summary['status']}\nReviewed by: {summary.get('reviewed_by') or 'Not reviewed'}\nReview note: {summary.get('review_note') or 'None'}"
+        warning = "> **DRAFT — NOT APPROVED FOR PUBLICATION**\n\n" if summary["status"] == "draft" else ""
+        content = f"# {summary['title']}\n\n{warning}{summary['content']}\n\n---\n\n## Governance record\n\n{review}\nEvidence digest: `{summary['evidence_digest']}`\n\n## Source endpoints\n\n{evidence}\n"
+        filename = re.sub(r"[^a-z0-9]+", "-", summary["title"].lower()).strip("-") or "phframe-report"
+        return Response(content, media_type="text/markdown", headers={"content-disposition": f'attachment; filename="{filename}.md"'})
 
     async def ai_summary_review(self, request: Request) -> Response:
         try:

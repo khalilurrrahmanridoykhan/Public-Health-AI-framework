@@ -4,6 +4,22 @@ All notable changes to PHFrame will be documented here. The project intends to f
 
 ## [Unreleased]
 
+## [0.8.0a2] - 2026-08-24
+
+### Added
+
+- Add a chat-first Public Health AI Analyst with persistent browser conversation sessions and follow-up context.
+- Add question intent routing for overviews, trends, anomalies, location comparisons, data quality, alerts, and causal-explanation requests.
+- Add aggregate time-trend calculations, first-to-latest percentage change, and latest-point z-score anomaly flags.
+- Add targeted evidence selection so analyst answers respond to the question instead of repeating the dashboard.
+- Add suggested investigation steps while clearly separating observed associations from unproven causes.
+- Add one-click promotion of analyst answers into human-reviewable situation-report drafts.
+- Add governed Markdown report downloads containing status, review notes, evidence digest, and source endpoints.
+
+### Changed
+
+- Make the AI workspace conversational by default while retaining summaries, de-identification, approvals, and audit tools in an expandable area.
+
 ## [0.8.0a1] - 2026-08-24
 
 ### Added
@@ -134,7 +150,8 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Import audit history.
 - Portable HTML dashboard export.
 
-[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a1...HEAD
+[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a2...HEAD
+[0.8.0a2]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a1...v0.8.0a2
 [0.8.0a1]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a6...v0.8.0a1
 [0.7.0a6]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a5...v0.7.0a6
 [0.7.0a5]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a4...v0.7.0a5

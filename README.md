@@ -9,7 +9,7 @@
 
 PHFrame is an early-stage framework for building extensible public-health data systems. It combines generated projects, declarative health schemas, persistent storage, automatic APIs, a public-health engine, and a standards-based Web Component interface. The original CSV/Excel dashboard generator remains available as an export workflow.
 
-> Current version: `0.8.0a1` (privacy-aware AI assistance preview)
+> Current version: `0.8.0a2` (conversational public-health analyst preview)
 
 ## Why PHFrame?
 
@@ -76,6 +76,10 @@ Use **Settings** to configure the header and dashboard titles, logo, favicon, na
 
 Phase 5 adds a responsible AI workspace at `/app#/ai`. Its default `local` provider produces conservative summaries from configured aggregate indicators, dimensions, threshold states, and data-quality results. It does not send row-level records or protected fields to a model. Every factual observation links to a numbered evidence item and its PHFrame API endpoint.
 
+The workspace is chat-first. Users can ask plain-language questions such as “Are cases increasing over time?”, “Which locations have the highest counts?”, “Is the latest value unusual?”, “What data-quality problems should I check?”, or “Why might this alert be triggered?”. PHFrame selects relevant aggregate evidence instead of repeating the whole dashboard, calculates first-to-latest change, flags latest-point anomalies using the prior-point baseline, retains evidence context for follow-up questions, and clearly separates observed signals from unproven causes.
+
+Any analyst answer can become a situation-report draft. Reports enter the same human approval queue and can be downloaded as Markdown with draft status, reviewer information, evidence digest, and source endpoints embedded in the file.
+
 Every generated summary begins in `draft` status. A human must provide a review note and explicitly approve or reject it. Generation and review decisions are stored as append-only audit events, while an SHA-256 digest binds the stored summary to the exact evidence snapshot used at generation time.
 
 The workspace also provides a de-identification preview. Fields marked `protected` and fields typed as `identifier` are removed, dates are reduced to years, and ages are placed in ten-year bands with `90+` top-coding. This is a technical exposure-reduction tool—not a determination of legal compliance or a guarantee against re-identification. HHS recognizes both Safe Harbor and Expert Determination approaches and warns that de-identified data retains some identification risk: [HHS de-identification guidance](https://www.hhs.gov/hipaa/for-professionals/special-topics/de-identification/index.html).
@@ -103,8 +107,11 @@ The API key itself is never saved in `phframe-settings.json` or returned by PHFr
 Phase 5 endpoints:
 
 - `POST /api/ai/deidentify/{dataset}` — preview protected-field removal and generalization
+- `GET|POST /api/ai/chat` — retrieve a conversation or ask an evidence-targeted analyst question
+- `POST /api/ai/chat/{id}/report` — promote an analyst answer into a reviewable report draft
 - `GET|POST /api/ai/summaries` — list or generate evidence-grounded drafts
 - `GET /api/ai/summaries/{id}` — retrieve a draft, evidence snapshot, and privacy receipt
+- `GET /api/ai/summaries/{id}/export` — download a governed Markdown report
 - `POST /api/ai/summaries/{id}/review` — approve or reject once with a required note
 - `GET /api/ai/audit` — list append-only generation and decision events
 

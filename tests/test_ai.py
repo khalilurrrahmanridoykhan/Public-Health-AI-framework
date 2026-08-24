@@ -101,6 +101,11 @@ def test_conversational_analyst_answers_targeted_questions_and_keeps_context(tmp
     assert report.status_code == 201
     assert report.json()["data"]["status"] == "draft"
     assert report.json()["data"]["privacy"]["source_chat_id"] == answer["id"]
+    exported = client.get(f"/api/ai/summaries/{report.json()['data']['id']}/export")
+    assert exported.status_code == 200
+    assert "DRAFT — NOT APPROVED" in exported.text
+    assert "Evidence digest" in exported.text
+    assert exported.headers["content-disposition"].endswith('"weekly-situation-report.md"')
 
 
 def test_ai_chat_validates_session_and_actor(tmp_path: Path):
