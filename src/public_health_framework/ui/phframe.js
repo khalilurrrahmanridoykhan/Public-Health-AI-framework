@@ -272,10 +272,13 @@ class PHConfirm extends PHElement {
 
 class PHImportWizard extends PHElement {
   set metadata(value) { this._metadata = value; if (this.isConnected) this.render(); }
-  render() {
+  async render() {
     if (!this._metadata) return;
     const datasets = Object.entries(this._metadata.datasets).map(([name, item]) => `<option value="${name}">${PHFrame.escape(item.label)}</option>`).join("");
-    this.innerHTML = `<section class="ph-card ph-stack"><div class="ph-import-step"><h3>1. Choose a file</h3><div class="ph-actions"><div class="ph-field"><label for="ph-import-dataset">Dataset</label><select id="ph-import-dataset">${datasets}</select></div><div class="ph-field"><label for="ph-import-file">CSV or Excel file</label><input id="ph-import-file" type="file" accept=".csv,.xlsx,.xlsm"></div><button class="ph-button" type="button" data-preview>Preview</button></div></div><div data-workspace></div><p role="status" class="ph-status"></p></section>`;
+    const templates = await PHFrame.get("/api/import-mappings");
+    this.templates = Object.fromEntries(templates.data.map(item => [item.name, item]));
+    const templateOptions = templates.data.map(item => `<option value="${item.name}">${PHFrame.escape(item.name)}</option>`).join("");
+    this.innerHTML = `<section class="ph-card ph-stack"><div class="ph-import-step"><h3>1. Choose a file</h3><div class="ph-actions"><div class="ph-field"><label for="ph-import-dataset">Dataset</label><select id="ph-import-dataset">${datasets}</select></div><div class="ph-field"><label for="ph-import-template">Saved mapping</label><select id="ph-import-template"><option value="">Automatic mapping</option>${templateOptions}</select></div><div class="ph-field"><label for="ph-import-file">CSV or Excel file</label><input id="ph-import-file" type="file" accept=".csv,.xlsx,.xlsm"></div><button class="ph-button" type="button" data-preview>Preview</button></div></div><div data-workspace></div><p role="status" class="ph-status"></p></section>`;
     this.querySelector("[data-preview]").addEventListener("click", () => this.preview());
   }
   async upload(path) {
@@ -296,11 +299,14 @@ class PHImportWizard extends PHElement {
       const dataset = this.querySelector("#ph-import-dataset").value;
       const response = await this.upload(`/api/browser-import/${dataset}/preview`);
       this.previewData = response.data;
+      const template = this.templates[this.querySelector("#ph-import-template").value];
+      const initialMapping = template?.dataset === dataset ? template.mapping : response.data.suggested_mapping;
       const fields = response.data.fields;
-      const mappings = response.data.columns.map(column => `<div class="ph-field"><label>${PHFrame.escape(column)}</label><select data-source="${PHFrame.escape(column)}"><option value="">Skip column</option>${fields.map(field => `<option value="${field.name}" ${response.data.suggested_mapping[column] === field.name ? "selected" : ""}>${PHFrame.escape(field.label)} (${field.type})${field.required ? " *" : ""}</option>`).join("")}</select></div>`).join("");
+      const mappings = response.data.columns.map(column => `<div class="ph-field"><label>${PHFrame.escape(column)}</label><select data-source="${PHFrame.escape(column)}"><option value="">Skip column</option>${fields.map(field => `<option value="${field.name}" ${initialMapping[column] === field.name ? "selected" : ""}>${PHFrame.escape(field.label)} (${field.type})${field.required ? " *" : ""}</option>`).join("")}</select></div>`).join("");
       const headers = response.data.columns.map(column => `<th>${PHFrame.escape(column)}</th>`).join("");
       const rows = response.data.sample.map(row => `<tr>${response.data.columns.map(column => `<td>${PHFrame.escape(row[column] ?? "")}</td>`).join("")}</tr>`).join("");
-      this.querySelector("[data-workspace]").innerHTML = `<div class="ph-import-step"><h3>2. Map columns</h3><div class="ph-grid">${mappings}</div></div><div class="ph-import-step"><h3>3. Review ${response.data.total_rows} rows</h3><div class="ph-table-wrap"><table class="ph-table"><thead><tr>${headers}</tr></thead><tbody>${rows}</tbody></table></div><div class="ph-actions"><button class="ph-button" type="button" data-validate>Validate</button><button class="ph-button" type="button" data-import>Import atomically</button></div></div><div data-results></div>`;
+      this.querySelector("[data-workspace]").innerHTML = `<div class="ph-import-step"><h3>2. Map columns</h3><div class="ph-grid">${mappings}</div><div class="ph-actions"><div class="ph-field"><label for="ph-mapping-name">Save mapping as</label><input id="ph-mapping-name" pattern="[a-z][a-z0-9_]*" placeholder="monthly_cases"></div><button type="button" data-save-mapping>Save mapping</button></div></div><div class="ph-import-step"><h3>3. Review ${response.data.total_rows} rows</h3><div class="ph-table-wrap"><table class="ph-table"><thead><tr>${headers}</tr></thead><tbody>${rows}</tbody></table></div><div class="ph-actions"><button class="ph-button" type="button" data-validate>Validate</button><button class="ph-button" type="button" data-import>Import atomically</button></div></div><div data-results></div>`;
+      this.querySelector("[data-save-mapping]").addEventListener("click", () => this.saveMapping());
       this.querySelector("[data-validate]").addEventListener("click", () => this.execute(true));
       this.querySelector("[data-import]").addEventListener("click", () => this.execute(false));
       status.textContent = "Preview ready. Confirm the column mapping.";
@@ -308,7 +314,7 @@ class PHImportWizard extends PHElement {
   }
   async execute(dryRun) {
     const dataset = this.querySelector("#ph-import-dataset").value;
-    const mapping = Object.fromEntries([...this.querySelectorAll("[data-source]")].map(select => [select.dataset.source, select.value]).filter(([, target]) => target));
+    const mapping = this.currentMapping();
     const query = new URLSearchParams({ mapping: JSON.stringify(mapping), dry_run: String(dryRun) });
     const results = this.querySelector("[data-results]");
     try {
@@ -320,6 +326,19 @@ class PHImportWizard extends PHElement {
       const errors = error.payload?.data?.errors || [];
       results.innerHTML = `<div class="ph-error" role="alert"><h3>Import validation failed</h3><ul class="ph-error-list">${errors.map(item => `<li>Row ${item.row}: ${PHFrame.escape(item.message)}</li>`).join("") || `<li>${PHFrame.escape(error.message)}</li>`}</ul></div>`;
     }
+  }
+  currentMapping() {
+    return Object.fromEntries([...this.querySelectorAll("[data-source]")].map(select => [select.dataset.source, select.value]).filter(([, target]) => target));
+  }
+  async saveMapping() {
+    const name = this.querySelector("#ph-mapping-name").value;
+    if (!name) return PHFrame.notify("Enter a mapping name.");
+    try {
+      await PHFrame.send(`/api/import-mappings/${name}`, "PUT", {
+        dataset: this.querySelector("#ph-import-dataset").value, mapping: this.currentMapping()
+      });
+      PHFrame.notify(`Mapping ${name} saved.`);
+    } catch (error) { PHFrame.notify(error.message); }
   }
 }
 

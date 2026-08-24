@@ -77,6 +77,13 @@ class Storage:
             Column("errors_json", Text, nullable=False),
             Column("created_at", DateTime(timezone=True), nullable=False),
         )
+        self.mappings_table = Table(
+            "_phframe_mappings", self.metadata,
+            Column("name", String(255), primary_key=True),
+            Column("dataset", String(255), nullable=False),
+            Column("mapping_json", Text, nullable=False),
+            Column("updated_at", DateTime(timezone=True), nullable=False),
+        )
 
     def initialize(self) -> None:
         self.migrate()
@@ -98,7 +105,9 @@ class Storage:
 
     def migrate(self, check_only: bool = False) -> list[str]:
         """Create metadata/tables and apply safe additive schema changes."""
-        self.metadata.create_all(self.engine, tables=[self.schema_table, self.imports_table, self.syncs_table])
+        self.metadata.create_all(
+            self.engine, tables=[self.schema_table, self.imports_table, self.syncs_table, self.mappings_table]
+        )
         actions: list[str] = []
         inspector = inspect(self.engine)
         for dataset in self.config.datasets.values():
@@ -253,6 +262,38 @@ class Storage:
         for row in rows:
             item = _serialize(dict(row))
             item["errors"] = json.loads(item.pop("errors_json"))
+            result.append(item)
+        return result
+
+    def import_run(self, run_id: int) -> dict[str, Any] | None:
+        with self.engine.connect() as connection:
+            row = connection.execute(
+                select(self.imports_table).where(self.imports_table.c.id == run_id)
+            ).mappings().first()
+        if not row:
+            return None
+        item = _serialize(dict(row))
+        item["errors"] = json.loads(item.pop("errors_json"))
+        return item
+
+    def save_mapping(self, name: str, dataset: str, mapping: dict[str, str]) -> None:
+        with self.engine.begin() as connection:
+            connection.execute(delete(self.mappings_table).where(self.mappings_table.c.name == name))
+            connection.execute(insert(self.mappings_table).values(
+                name=name, dataset=dataset, mapping_json=json.dumps(mapping), updated_at=_now(),
+            ))
+
+    def mappings(self, dataset: str | None = None) -> list[dict[str, Any]]:
+        statement = select(self.mappings_table)
+        if dataset:
+            statement = statement.where(self.mappings_table.c.dataset == dataset)
+        statement = statement.order_by(self.mappings_table.c.name)
+        with self.engine.connect() as connection:
+            rows = connection.execute(statement).mappings().all()
+        result = []
+        for row in rows:
+            item = _serialize(dict(row))
+            item["mapping"] = json.loads(item.pop("mapping_json"))
             result.append(item)
         return result
 

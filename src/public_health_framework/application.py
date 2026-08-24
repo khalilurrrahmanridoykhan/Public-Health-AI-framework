@@ -5,6 +5,7 @@ from __future__ import annotations
 from html import escape
 import json
 from pathlib import Path
+import re
 from typing import Any
 
 from starlette.applications import Starlette
@@ -38,6 +39,9 @@ class PHFrame:
             Route("/health", self.health, methods=["GET"]),
             Route("/api", self.api_index, methods=["GET"]),
             Route("/api/imports", self.import_history, methods=["GET"]),
+            Route("/api/imports/{run_id:int}/errors", self.import_errors, methods=["GET"]),
+            Route("/api/import-mappings", self.import_mapping_index, methods=["GET"]),
+            Route("/api/import-mappings/{name}", self.import_mapping_save, methods=["PUT"]),
             Route("/api/browser-import/{dataset}/preview", self.browser_import_preview, methods=["POST"]),
             Route("/api/browser-import/{dataset}", self.browser_import, methods=["POST"]),
             Route("/api/indicators", self.indicator_index, methods=["GET"]),
@@ -385,6 +389,39 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
         except ValueError:
             return _error("limit must be an integer.", 400)
         return JSONResponse({"data": self.storage.import_history(limit)})
+
+    async def import_errors(self, request: Request) -> Response:
+        run = self.storage.import_run(request.path_params["run_id"])
+        if run is None:
+            return _error("Import run not found.", 404)
+        return JSONResponse({"data": {
+            "run_id": run["id"], "dataset": run["dataset"], "status": run["status"],
+            "errors": run["errors"], "error_rows": run["error_rows"],
+        }})
+
+    async def import_mapping_index(self, request: Request) -> JSONResponse:
+        return JSONResponse({"data": self.storage.mappings(request.query_params.get("dataset"))})
+
+    async def import_mapping_save(self, request: Request) -> Response:
+        name = request.path_params["name"]
+        if not re.fullmatch(r"[a-z][a-z0-9_]*", name):
+            return _error("Mapping name must use lowercase letters, numbers, and underscores.", 422)
+        try:
+            payload = await request.json()
+            dataset_name = str(payload.get("dataset", ""))
+            if dataset_name not in self.config.datasets:
+                raise ValueError("Dataset not found.")
+            mapping = payload.get("mapping")
+            if not isinstance(mapping, dict) or not mapping:
+                raise ValueError("mapping must be a non-empty object.")
+            unknown = set(mapping.values()) - set(self.config.datasets[dataset_name].fields)
+            if unknown:
+                raise ValueError(f"Mapped dataset fields not found: {', '.join(sorted(unknown))}")
+            clean_mapping = {str(key): str(value) for key, value in mapping.items()}
+            self.storage.save_mapping(name, dataset_name, clean_mapping)
+            return JSONResponse({"data": {"name": name, "dataset": dataset_name, "mapping": clean_mapping}})
+        except ValueError as error:
+            return _error(str(error), 422)
 
     async def browser_import_preview(self, request: Request) -> Response:
         try:

@@ -56,4 +56,23 @@ def test_browser_excel_preview_and_error_report(tmp_path: Path):
         f"/api/browser-import/case_reports?filename=cases.xlsx&mapping={json.dumps(MAPPING)}", content=content
     )
     assert response.status_code == 422
-    assert response.json()["data"]["errors"][0]["row"] == 2
+    data = response.json()["data"]
+    assert data["errors"][0]["row"] == 2
+    report = client.get(f"/api/imports/{data['run_id']}/errors")
+    assert report.status_code == 200
+    assert report.json()["data"]["error_rows"] == 1
+
+
+def test_browser_saved_mapping_api(tmp_path: Path):
+    root = create_project("Saved Browser Mapping", tmp_path / "saved-browser-mapping")
+    client = TestClient(PHFrame.from_file(str(root / "phframe.yaml")))
+    saved = client.put("/api/import-mappings/monthly_cases", json={
+        "dataset": "case_reports", "mapping": MAPPING,
+    })
+    assert saved.status_code == 200
+    listing = client.get("/api/import-mappings?dataset=case_reports").json()["data"]
+    assert listing[0]["name"] == "monthly_cases"
+    assert listing[0]["mapping"] == MAPPING
+    assert client.put("/api/import-mappings/Invalid Name", json={
+        "dataset": "case_reports", "mapping": MAPPING,
+    }).status_code == 422
