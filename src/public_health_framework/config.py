@@ -347,6 +347,65 @@ class UIConfig:
 
 
 @dataclass(frozen=True)
+class ConnectorSchema:
+    name: str
+    type: str
+    dataset: str
+    base_url: str
+    resource: str
+    mapping: dict[str, str]
+    token_env: str | None = None
+    username_env: str | None = None
+    password_env: str | None = None
+    parameters: dict[str, str] = dataclass_field(default_factory=dict)
+    timeout: int = 30
+    schedule_minutes: int | None = None
+
+    @classmethod
+    def from_dict(
+        cls, name: str, value: dict[str, Any], datasets: dict[str, DatasetSchema]
+    ) -> "ConnectorSchema":
+        _validate_identifier(name, "connector")
+        connector_type = str(value.get("type", "")).lower()
+        if connector_type not in {"dhis2", "kobo", "odk"}:
+            raise ValueError(f"Connector '{name}' has unsupported type '{connector_type}'.")
+        dataset_name = str(value.get("dataset", ""))
+        if dataset_name not in datasets:
+            raise ValueError(f"Connector '{name}' references unknown dataset '{dataset_name}'.")
+        base_url = str(value.get("base_url", "")).rstrip("/")
+        if not base_url.startswith(("https://", "http://")):
+            raise ValueError(f"Connector '{name}' base_url must use http or https.")
+        resource = str(value.get("resource", "")).strip("/")
+        if not resource:
+            raise ValueError(f"Connector '{name}' must define resource.")
+        mapping = {str(source): str(target) for source, target in dict(value.get("mapping", {}) or {}).items()}
+        if not mapping:
+            raise ValueError(f"Connector '{name}' must define mapping.")
+        unknown = set(mapping.values()) - set(datasets[dataset_name].fields)
+        if unknown:
+            raise ValueError(f"Connector '{name}' maps unknown dataset fields: {', '.join(sorted(unknown))}.")
+        timeout = int(value.get("timeout", 30))
+        if not 1 <= timeout <= 300:
+            raise ValueError(f"Connector '{name}' timeout must be between 1 and 300 seconds.")
+        schedule = value.get("schedule_minutes")
+        if schedule is not None and int(schedule) < 1:
+            raise ValueError(f"Connector '{name}' schedule_minutes must be positive.")
+        auth = value.get("auth", {}) or {}
+        if not isinstance(auth, dict):
+            raise ValueError(f"Connector '{name}' auth must be an object.")
+        parameters = value.get("parameters", {}) or {}
+        if not isinstance(parameters, dict):
+            raise ValueError(f"Connector '{name}' parameters must be an object.")
+        return cls(
+            name=name, type=connector_type, dataset=dataset_name, base_url=base_url,
+            resource=resource, mapping=mapping, token_env=auth.get("token_env"),
+            username_env=auth.get("username_env"), password_env=auth.get("password_env"),
+            parameters={str(key): str(item) for key, item in parameters.items()}, timeout=timeout,
+            schedule_minutes=int(schedule) if schedule is not None else None,
+        )
+
+
+@dataclass(frozen=True)
 class ProjectConfig:
     name: str
     database: str = "sqlite:///data/phframe.db"
@@ -359,6 +418,7 @@ class ProjectConfig:
     organisation_units: dict[str, OrganisationUnitSchema] = dataclass_field(default_factory=dict)
     dashboards: dict[str, DashboardSchema] = dataclass_field(default_factory=dict)
     ui: UIConfig = dataclass_field(default_factory=UIConfig)
+    connectors: dict[str, ConnectorSchema] = dataclass_field(default_factory=dict)
     plugins: tuple[str, ...] = ()
     environment: str = "development"
     host: str = "127.0.0.1"
@@ -444,6 +504,13 @@ class ProjectConfig:
         if not isinstance(raw_ui, dict):
             raise ValueError("Configuration 'ui' must be an object.")
         ui = UIConfig.from_dict(raw_ui)
+        raw_connectors = raw.get("connectors", {}) or {}
+        if not isinstance(raw_connectors, dict):
+            raise ValueError("Configuration 'connectors' must be an object.")
+        connectors = {
+            name: ConnectorSchema.from_dict(name, value or {}, datasets)
+            for name, value in raw_connectors.items()
+        }
         plugins = tuple(str(item) for item in raw.get("plugins", []))
         database = os.environ.get("PHFRAME_DATABASE_URL") or _expand_env(
             str(project.get("database", "sqlite:///data/phframe.db"))
@@ -464,6 +531,7 @@ class ProjectConfig:
             organisation_units=organisation_units,
             dashboards=dashboards,
             ui=ui,
+            connectors=connectors,
             plugins=plugins,
             environment=environment,
             host=os.environ.get("PHFRAME_HOST", str(server.get("host", "127.0.0.1"))),
