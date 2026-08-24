@@ -24,7 +24,7 @@ def test_frontend_shell_and_assets(tmp_path: Path):
         assert f'customElements.define("{component}"' in javascript.text
     assert "fields[name].protected" in javascript.text
     assert 'role="status"' in javascript.text
-    for component in ["ph-kpi", "ph-indicator-chart", "ph-epi-curve", "ph-dashboard"]:
+    for component in ["ph-kpi", "ph-indicator-chart", "ph-epi-curve", "ph-map", "ph-dashboard"]:
         assert f'customElements.define("{component}"' in javascript.text
     assert 'role="img"' in javascript.text
     for component in ["ph-notification-center", "ph-modal", "ph-confirm"]:

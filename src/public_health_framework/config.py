@@ -294,7 +294,7 @@ class DashboardWidgetSchema:
         indicators: dict[str, IndicatorSchema], dimensions: dict[str, DimensionSchema],
     ) -> "DashboardWidgetSchema":
         widget_type = str(value.get("type", ""))
-        if widget_type not in {"kpi", "chart", "epi_curve"}:
+        if widget_type not in {"kpi", "chart", "map", "epi_curve"}:
             raise ValueError(f"Unsupported dashboard widget type '{widget_type}'.")
         widget = cls(
             type=widget_type, title=str(value.get("title", widget_type.replace("_", " ").title())),
@@ -304,8 +304,8 @@ class DashboardWidgetSchema:
         )
         if widget_type == "kpi" and widget.indicator not in indicators:
             raise ValueError(f"Dashboard KPI references unknown indicator '{widget.indicator}'.")
-        if widget_type == "chart" and widget.dimension not in dimensions:
-            raise ValueError(f"Dashboard chart references unknown dimension '{widget.dimension}'.")
+        if widget_type in {"chart", "map"} and widget.dimension not in dimensions:
+            raise ValueError(f"Dashboard {widget_type} references unknown dimension '{widget.dimension}'.")
         if widget_type == "epi_curve":
             if widget.dataset not in datasets:
                 raise ValueError(f"Dashboard epidemiological curve references unknown dataset '{widget.dataset}'.")

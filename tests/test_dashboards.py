@@ -13,7 +13,7 @@ def test_dashboard_configuration_api(tmp_path: Path):
     assert response.status_code == 200
     dashboard = response.json()["data"]
     assert dashboard["label"] == "Malaria Surveillance Dashboard"
-    assert [item["type"] for item in dashboard["widgets"]] == ["kpi", "kpi", "chart", "epi_curve"]
+    assert [item["type"] for item in dashboard["widgets"]] == ["kpi", "kpi", "chart", "map", "epi_curve"]
     assert client.get("/api/dashboards/missing").status_code == 404
 
 

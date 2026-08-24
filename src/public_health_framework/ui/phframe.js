@@ -197,6 +197,24 @@ class PHEpiCurve extends PHElement {
   }
 }
 
+class PHMap extends PHElement {
+  async render() {
+    try {
+      const response = await PHFrame.get(`/api/dimensions/${this.getAttribute("dimension")}`);
+      const values = response.data.values;
+      const maximum = Math.max(1, ...values.map(item => item.count));
+      const columns = Math.max(1, Math.ceil(Math.sqrt(values.length)));
+      const tiles = values.map((item, index) => {
+        const x = (index % columns) * 150, y = Math.floor(index / columns) * 105;
+        const opacity = .2 + item.count / maximum * .8;
+        return `<g transform="translate(${x} ${y})"><rect class="ph-map-tile" width="140" height="95" rx="8" fill="var(--ph-color-primary)" fill-opacity="${opacity}"><title>${PHFrame.escape(item.value)}: ${item.count}</title></rect><text class="ph-map-label" x="70" y="44" text-anchor="middle">${PHFrame.escape(item.value)}</text><text class="ph-map-label" x="70" y="65" text-anchor="middle">${item.count}</text></g>`;
+      }).join("");
+      const rows = Math.max(1, Math.ceil(values.length / columns));
+      this.innerHTML = `<article class="ph-card ph-widget-wide"><h3>${PHFrame.escape(this.getAttribute("title") || "Geographic distribution")}</h3><svg class="ph-chart" viewBox="0 0 ${columns * 150} ${rows * 105}" role="img" aria-label="Geographic tile map">${tiles}</svg><table class="ph-sr-only"><caption>Geographic distribution data</caption><thead><tr><th>Location</th><th>Count</th></tr></thead><tbody>${values.map(item => `<tr><td>${PHFrame.escape(item.value)}</td><td>${item.count}</td></tr>`).join("")}</tbody></table></article>`;
+    } catch (error) { this.innerHTML = `<p class="ph-error" role="alert">${PHFrame.escape(error.message)}</p>`; }
+  }
+}
+
 class PHDashboard extends PHElement {
   async render() {
     try {
@@ -204,6 +222,7 @@ class PHDashboard extends PHElement {
       const widgets = response.data.widgets.map(widget => {
         if (widget.type === "kpi") return `<ph-kpi title="${PHFrame.escape(widget.title)}" indicator="${widget.indicator}"></ph-kpi>`;
         if (widget.type === "chart") return `<ph-indicator-chart title="${PHFrame.escape(widget.title)}" dimension="${widget.dimension}"></ph-indicator-chart>`;
+        if (widget.type === "map") return `<ph-map title="${PHFrame.escape(widget.title)}" dimension="${widget.dimension}"></ph-map>`;
         return `<ph-epi-curve title="${PHFrame.escape(widget.title)}" dataset="${widget.dataset}" date-field="${widget.date_field}" value-field="${widget.value_field || ""}"></ph-epi-curve>`;
       }).join("");
       this.innerHTML = `<h2>${PHFrame.escape(response.data.label)}</h2><div class="ph-grid">${widgets}</div>`;
@@ -255,6 +274,7 @@ customElements.define("ph-quality-panel", PHQualityPanel);
 customElements.define("ph-kpi", PHKPI);
 customElements.define("ph-indicator-chart", PHIndicatorChart);
 customElements.define("ph-epi-curve", PHEpiCurve);
+customElements.define("ph-map", PHMap);
 customElements.define("ph-dashboard", PHDashboard);
 customElements.define("ph-notification-center", PHNotificationCenter);
 customElements.define("ph-modal", PHModal);

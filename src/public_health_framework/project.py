@@ -141,6 +141,9 @@ dashboards:
       - type: chart
         title: Cases by district
         dimension: cases_by_district
+      - type: map
+        title: Geographic distribution
+        dimension: cases_by_district
       - type: epi_curve
         title: Cases over time
         dataset: case_reports
