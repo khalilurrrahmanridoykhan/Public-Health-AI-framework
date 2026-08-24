@@ -69,8 +69,8 @@ def test_project_connector_configuration_validation(tmp_path: Path):
 @pytest.mark.parametrize(
     ("connector_type", "resource", "payload", "expected_path"),
     [
-        ("dhis2", "MALARIA", {"dataValues": [{"dataElement": "cases", "value": "4"}]}, "api/dataValueSets.json"),
-        ("kobo", "asset123", {"results": [{"case": {"id": "K-1"}}], "next": None}, "api/v2/assets/asset123/data.json"),
+        ("dhis2", "MALARIA", {"dataValues": [{"dataElement": "cases", "value": "4"}]}, "api/dataValueSets"),
+        ("kobo", "asset123", {"results": [{"case": {"id": "K-1"}}], "next": None}, "api/v2/assets/asset123/data/"),
         ("odk", "7/malaria", {"value": [{"case": {"id": "O-1"}}]}, "v1/projects/7/forms/malaria.svc/Submissions"),
     ],
 )
@@ -87,7 +87,7 @@ def test_builtin_connector_adapters(connector_type, resource, payload, expected_
 
 def test_kobo_and_odk_pagination():
     pages = {
-        "https://example.test/api/v2/assets/asset/data.json": {
+        "https://example.test/api/v2/assets/asset/data/": {
             "results": [{"id": "1"}], "next": "https://example.test/page/2"
         },
         "https://example.test/page/2": {"results": [{"id": "2"}], "next": None},
@@ -96,3 +96,17 @@ def test_kobo_and_odk_pagination():
     assert create_connector(schema, lambda url, headers, timeout: pages[url]).pull() == [
         {"case_id": "1"}, {"case_id": "2"}
     ]
+
+
+@pytest.mark.parametrize(("connector_type", "expected"), [
+    ("dhis2", "ApiToken connector-token"),
+    ("kobo", "Token connector-token"),
+    ("odk", "Bearer connector-token"),
+])
+def test_builtin_token_auth_schemes(monkeypatch, connector_type, expected):
+    monkeypatch.setenv("CONNECTOR_TOKEN", "connector-token")
+    resource = "7/form" if connector_type == "odk" else "resource"
+    connector = create_connector(_schema(
+        type=connector_type, resource=resource, token_env="CONNECTOR_TOKEN"
+    ))
+    assert connector.headers()["authorization"] == expected

@@ -112,7 +112,12 @@ class DHIS2Connector(Connector):
     """Pull data values from the DHIS2 Web API."""
 
     def endpoint(self) -> str:
-        return self.url("api/dataValueSets.json", {"dataSet": self.config.resource})
+        return self.url("api/dataValueSets", {"dataSet": self.config.resource})
+
+    def headers(self) -> dict[str, str]:
+        if self.config.token_env:
+            return {"authorization": f"ApiToken {_required_env(self.config.token_env)}"}
+        return super().headers()
 
     def extract(self, payload: Any) -> list[dict[str, Any]]:
         if not isinstance(payload, dict) or not isinstance(payload.get("dataValues"), list):
@@ -125,7 +130,12 @@ class KoboConnector(Connector):
     """Pull submissions from the KoboToolbox v2 API."""
 
     def endpoint(self) -> str:
-        return self.url(f"api/v2/assets/{self.config.resource}/data.json")
+        return self.url(f"api/v2/assets/{self.config.resource}/data/")
+
+    def headers(self) -> dict[str, str]:
+        if self.config.token_env:
+            return {"authorization": f"Token {_required_env(self.config.token_env)}"}
+        return super().headers()
 
     def extract(self, payload: Any) -> list[dict[str, Any]]:
         if not isinstance(payload, dict) or not isinstance(payload.get("results"), list):
