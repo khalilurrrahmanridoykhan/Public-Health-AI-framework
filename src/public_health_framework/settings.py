@@ -23,6 +23,7 @@ DEFAULT_NAVIGATION = {
     "connectors": {"label": "Connectors", "visible": True},
     "quality": {"label": "Data quality", "visible": True},
     "pages": {"label": "Pages", "visible": True},
+    "ai": {"label": "AI assistance", "visible": True},
     "settings": {"label": "Settings", "visible": True},
 }
 
@@ -48,6 +49,11 @@ class SiteSettings:
             "show_footer": True,
             "navigation": DEFAULT_NAVIGATION,
             "pages": [],
+            "ai_provider": "local",
+            "ai_model": "phframe-evidence-v1",
+            "ai_endpoint": "",
+            "ai_api_key_env": "",
+            "allow_external_ai": False,
             "access_mode": "public",
             "users": [],
         }
@@ -76,6 +82,7 @@ class SiteSettings:
         allowed = {
             "brand_name", "header_title", "dashboard_title", "primary_color",
             "default_theme", "footer_html", "show_footer", "navigation", "pages", "access_mode",
+            "ai_provider", "ai_model", "ai_endpoint", "ai_api_key_env", "allow_external_ai",
         }
         settings.update({key: value for key, value in values.items() if key in allowed})
         if settings["access_mode"] not in {"public", "private"}:
@@ -87,6 +94,16 @@ class SiteSettings:
             raise ValueError("primary_color must be a six-digit hex color.")
         settings["footer_html"] = sanitize_html(str(settings.get("footer_html", "")))
         settings["pages"] = self._validate_pages(settings.get("pages", []))
+        if settings["ai_provider"] not in {"local", "openai_compatible"}:
+            raise ValueError("ai_provider must be local or openai_compatible.")
+        settings["ai_model"] = str(settings.get("ai_model", ""))[:255]
+        settings["ai_endpoint"] = str(settings.get("ai_endpoint", ""))[:1000]
+        settings["ai_api_key_env"] = str(settings.get("ai_api_key_env", ""))[:255]
+        if settings["ai_provider"] != "local" and settings.get("allow_external_ai"):
+            if urlparse(settings["ai_endpoint"]).scheme != "https":
+                raise ValueError("External AI endpoints must use HTTPS.")
+            if not settings["ai_api_key_env"]:
+                raise ValueError("External AI requires an API-key environment variable name.")
         if username or password:
             if not username or not password or len(password) < 10:
                 raise ValueError("A username and password of at least 10 characters are required.")

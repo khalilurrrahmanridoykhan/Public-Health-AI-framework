@@ -27,6 +27,7 @@ from .storage import Storage
 from .ui import asset_bytes, asset_text
 from .settings import SiteSettings
 from .sync import connector_due, sync_connector
+from .ai import deidentify_records, evidence_digest, generate_summary
 
 
 class PHFrame:
@@ -51,6 +52,11 @@ class PHFrame:
             Route("/api/auth/logout", self.auth_logout, methods=["POST"]),
             Route("/api/settings", self.settings_api, methods=["GET", "PUT"]),
             Route("/api/settings/assets/{kind}", self.settings_asset_upload, methods=["POST"]),
+            Route("/api/ai/deidentify/{dataset}", self.ai_deidentify, methods=["POST"]),
+            Route("/api/ai/summaries", self.ai_summaries, methods=["GET", "POST"]),
+            Route("/api/ai/summaries/{summary_id:int}", self.ai_summary_detail, methods=["GET"]),
+            Route("/api/ai/summaries/{summary_id:int}/review", self.ai_summary_review, methods=["POST"]),
+            Route("/api/ai/audit", self.ai_audit, methods=["GET"]),
             Route("/api", self.api_index, methods=["GET"]),
             Route("/api/imports", self.import_history, methods=["GET"]),
             Route("/api/imports/{run_id:int}/errors", self.import_errors, methods=["GET"]),
@@ -193,6 +199,80 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
             return JSONResponse({"data": {"url": url}})
         except ValueError as error:
             return _error(str(error), 422)
+
+    def _actor(self, request: Request) -> str:
+        token = request.cookies.get("phframe_session", "")
+        return self.site_settings.verify_token(token) or "anonymous-local-user"
+
+    async def ai_deidentify(self, request: Request) -> Response:
+        dataset = self.config.datasets.get(request.path_params["dataset"])
+        if not dataset:
+            return _error("Dataset not found.", 404)
+        try:
+            payload = await request.json()
+            limit = max(1, min(int(payload.get("limit", 20)), 100))
+            result = deidentify_records(dataset, self.storage.list(dataset, limit=limit))
+            return JSONResponse({"data": {"records": result.records, "source_rows": result.source_rows, "removed_fields": result.removed_fields, "transformed_fields": result.transformed_fields, "notice": "This technical transformation reduces exposure but is not a legal certification of de-identification."}})
+        except (TypeError, ValueError) as error:
+            return _error(str(error), 422)
+
+    def _ai_evidence(self) -> list[dict[str, Any]]:
+        evidence: list[dict[str, Any]] = []
+        for item in self.config.indicators.values():
+            result = self.storage.indicator(item)
+            evidence.append({"kind": "indicator", **result, "endpoint": f"/api/indicators/{item.name}"})
+        for item in self.config.dimensions.values():
+            filters = self.config.saved_filters[item.saved_filter].values if item.saved_filter else None
+            result = self.storage.dimension(item, filters)
+            evidence.append({"kind": "dimension", **result, "endpoint": f"/api/dimensions/{item.name}"})
+        for item in self.config.data_quality_rules.values():
+            result = self.storage.data_quality(item)
+            evidence.append({"kind": "quality", **result, "endpoint": f"/api/data-quality/{item.name}"})
+        for item in self.config.thresholds.values():
+            indicator = self.storage.indicator(self.config.indicators[item.indicator])
+            actual = indicator["value"]
+            comparisons = {"gt": lambda a, b: a > b, "gte": lambda a, b: a >= b, "lt": lambda a, b: a < b, "lte": lambda a, b: a <= b, "eq": lambda a, b: a == b}
+            triggered = comparisons[item.operator](actual, item.value) if actual is not None else None
+            evidence.append({"kind": "threshold", "name": item.name, "label": item.label, "actual": actual, "threshold": item.value, "status": "no_data" if actual is None else ("triggered" if triggered else "normal"), "endpoint": f"/api/thresholds/{item.name}"})
+        return evidence
+
+    async def ai_summaries(self, request: Request) -> Response:
+        if request.method == "GET":
+            return JSONResponse({"data": self.storage.ai_summaries()})
+        try:
+            payload = await request.json()
+            title = str(payload.get("title", "Public health situation summary")).strip()[:255]
+            purpose = str(payload.get("purpose", "")).strip()[:2000]
+            if not title:
+                raise ValueError("title is required.")
+            evidence = self._ai_evidence()
+            settings = self.site_settings.load()
+            content, provider, model = await run_in_threadpool(generate_summary, title, evidence, purpose, settings)
+            privacy = {"input_scope": "configured aggregate evidence only", "protected_fields_sent": [], "row_level_records_sent": 0, "external_transfer": provider != "local"}
+            summary = self.storage.create_ai_summary({"title": title, "purpose": purpose, "content": content, "provider": provider, "model": model, "evidence_json": json.dumps(evidence), "evidence_digest": evidence_digest(evidence), "privacy_json": json.dumps(privacy), "created_by": self._actor(request)})
+            return JSONResponse({"data": summary}, status_code=201)
+        except (json.JSONDecodeError, TypeError, ValueError) as error:
+            return _error(str(error), 422)
+        except Exception as error:
+            return _error(f"AI provider request failed: {error}", 502)
+
+    async def ai_summary_detail(self, request: Request) -> Response:
+        summary = self.storage.ai_summary(request.path_params["summary_id"])
+        return JSONResponse({"data": summary}) if summary else _error("AI summary not found.", 404)
+
+    async def ai_summary_review(self, request: Request) -> Response:
+        try:
+            payload = await request.json()
+            decision = str(payload.get("decision", "")); note = str(payload.get("note", ""))[:2000]
+            if not note.strip():
+                raise ValueError("A review note is required for approval or rejection.")
+            summary = self.storage.review_ai_summary(request.path_params["summary_id"], decision, self._actor(request), note)
+            return JSONResponse({"data": summary}) if summary else _error("AI summary not found.", 404)
+        except (json.JSONDecodeError, TypeError, ValueError) as error:
+            return _error(str(error), 422)
+
+    async def ai_audit(self, request: Request) -> JSONResponse:
+        return JSONResponse({"data": self.storage.ai_audit()})
 
     async def api_index(self, request: Request) -> JSONResponse:
         return JSONResponse(

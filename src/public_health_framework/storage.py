@@ -84,6 +84,33 @@ class Storage:
             Column("mapping_json", Text, nullable=False),
             Column("updated_at", DateTime(timezone=True), nullable=False),
         )
+        self.ai_summaries_table = Table(
+            "_phframe_ai_summaries", self.metadata,
+            Column("id", Integer, primary_key=True, autoincrement=True),
+            Column("title", String(255), nullable=False),
+            Column("purpose", Text, nullable=False),
+            Column("status", String(32), nullable=False),
+            Column("content", Text, nullable=False),
+            Column("provider", String(64), nullable=False),
+            Column("model", String(255), nullable=False),
+            Column("evidence_json", Text, nullable=False),
+            Column("evidence_digest", String(64), nullable=False),
+            Column("privacy_json", Text, nullable=False),
+            Column("created_by", String(255), nullable=False),
+            Column("reviewed_by", String(255)),
+            Column("review_note", Text),
+            Column("created_at", DateTime(timezone=True), nullable=False),
+            Column("reviewed_at", DateTime(timezone=True)),
+        )
+        self.ai_audit_table = Table(
+            "_phframe_ai_audit", self.metadata,
+            Column("id", Integer, primary_key=True, autoincrement=True),
+            Column("summary_id", Integer),
+            Column("event", String(64), nullable=False),
+            Column("actor", String(255), nullable=False),
+            Column("details_json", Text, nullable=False),
+            Column("created_at", DateTime(timezone=True), nullable=False),
+        )
 
     def initialize(self) -> None:
         self.migrate()
@@ -106,7 +133,7 @@ class Storage:
     def migrate(self, check_only: bool = False) -> list[str]:
         """Create metadata/tables and apply safe additive schema changes."""
         self.metadata.create_all(
-            self.engine, tables=[self.schema_table, self.imports_table, self.syncs_table, self.mappings_table]
+            self.engine, tables=[self.schema_table, self.imports_table, self.syncs_table, self.mappings_table, self.ai_summaries_table, self.ai_audit_table]
         )
         actions: list[str] = []
         inspector = inspect(self.engine)
@@ -295,6 +322,52 @@ class Storage:
             item = _serialize(dict(row))
             item["mapping"] = json.loads(item.pop("mapping_json"))
             result.append(item)
+        return result
+
+    def create_ai_summary(self, values: dict[str, Any]) -> dict[str, Any]:
+        now = _now()
+        with self.engine.begin() as connection:
+            result = connection.execute(insert(self.ai_summaries_table).values(**values, status="draft", created_at=now))
+            summary_id = int(result.inserted_primary_key[0])
+            connection.execute(insert(self.ai_audit_table).values(summary_id=summary_id, event="generated", actor=values["created_by"], details_json=json.dumps({"provider": values["provider"], "model": values["model"], "evidence_digest": values["evidence_digest"]}), created_at=now))
+        return self.ai_summary(summary_id) or {}
+
+    def ai_summary(self, summary_id: int) -> dict[str, Any] | None:
+        with self.engine.connect() as connection:
+            row = connection.execute(select(self.ai_summaries_table).where(self.ai_summaries_table.c.id == summary_id)).mappings().first()
+        return self._ai_summary_row(row) if row else None
+
+    def ai_summaries(self, limit: int = 50) -> list[dict[str, Any]]:
+        with self.engine.connect() as connection:
+            rows = connection.execute(select(self.ai_summaries_table).order_by(self.ai_summaries_table.c.id.desc()).limit(max(1, min(limit, 200)))).mappings().all()
+        return [self._ai_summary_row(row) for row in rows]
+
+    @staticmethod
+    def _ai_summary_row(row: Any) -> dict[str, Any]:
+        item = _serialize(dict(row))
+        item["evidence"] = json.loads(item.pop("evidence_json")); item["privacy"] = json.loads(item.pop("privacy_json"))
+        return item
+
+    def review_ai_summary(self, summary_id: int, decision: str, actor: str, note: str) -> dict[str, Any] | None:
+        if decision not in {"approved", "rejected"}:
+            raise ValueError("decision must be approved or rejected.")
+        current = self.ai_summary(summary_id)
+        if not current:
+            return None
+        if current["status"] != "draft":
+            raise ValueError("Only draft summaries can be reviewed.")
+        now = _now()
+        with self.engine.begin() as connection:
+            connection.execute(update(self.ai_summaries_table).where(self.ai_summaries_table.c.id == summary_id).values(status=decision, reviewed_by=actor, review_note=note, reviewed_at=now))
+            connection.execute(insert(self.ai_audit_table).values(summary_id=summary_id, event=decision, actor=actor, details_json=json.dumps({"note": note}), created_at=now))
+        return self.ai_summary(summary_id)
+
+    def ai_audit(self, limit: int = 100) -> list[dict[str, Any]]:
+        with self.engine.connect() as connection:
+            rows = connection.execute(select(self.ai_audit_table).order_by(self.ai_audit_table.c.id.desc()).limit(max(1, min(limit, 500)))).mappings().all()
+        result = []
+        for row in rows:
+            item = _serialize(dict(row)); item["details"] = json.loads(item.pop("details_json")); result.append(item)
         return result
 
     def record_sync(
