@@ -120,8 +120,8 @@ class PHAppShell extends PHElement {
       view.innerHTML = `<ph-custom-page slug="${PHFrame.escape(slug)}"></ph-custom-page>`;
       view.querySelector("ph-custom-page").settings = PHFrame.siteSettings;
     } else {
-      const dashboard = Object.keys(this.metadata.dashboards || {})[0];
-      view.innerHTML = dashboard ? `<ph-dashboard name="${PHFrame.escape(dashboard)}"></ph-dashboard>` : `<h2>Dashboard</h2><p class="ph-muted">No dashboard configured.</p>`;
+      view.innerHTML = `<ph-dashboard-manager></ph-dashboard-manager>`;
+      view.querySelector("ph-dashboard-manager").metadata = this.metadata;
     }
     this.dispatchEvent(new CustomEvent("ph-route", { detail: { route, view, metadata: this.metadata } }));
   }
@@ -297,19 +297,94 @@ class PHMap extends PHElement {
   }
 }
 
-class PHDashboard extends PHElement {
+class PHGeoMap extends PHElement {
   async render() {
     try {
-      const [response, metadata] = await Promise.all([PHFrame.get(`/api/dashboards/${this.getAttribute("name")}`), PHFrame.get("/api")]);
-      this.dashboard = response.data;
-      this.metadata = metadata;
-      this.storageKey = `ph-dashboard-layout:${this.getAttribute("name")}`;
+      const dataset = this.getAttribute("dataset"), latitude = this.getAttribute("latitude-field"), longitude = this.getAttribute("longitude-field");
+      const response = await PHFrame.get(`/api/geospatial/${dataset}?latitude=${encodeURIComponent(latitude)}&longitude=${encodeURIComponent(longitude)}`), points = response.data.points;
+      if (!points.length) { this.innerHTML = `<div class="ph-empty-state"><span>◎</span><p>No valid coordinates yet. Add numeric latitude and longitude columns, then import coordinate data.</p></div>`; return; }
+      const maximum = Math.max(...points.map(point => point.count));
+      const grid = [-120, -60, 0, 60, 120].map(lon => `<line x1="${lon + 180}" y1="0" x2="${lon + 180}" y2="180"></line>`).join("") + [-60, -30, 0, 30, 60].map(lat => `<line x1="0" y1="${90 - lat}" x2="360" y2="${90 - lat}"></line>`).join("");
+      const marks = points.map(point => { const x = point.longitude + 180, y = 90 - point.latitude, radius = 3 + Math.sqrt(point.count / maximum) * 10; return `<circle cx="${x}" cy="${y}" r="${radius}"><title>${point.latitude}, ${point.longitude}: ${point.count}</title></circle>`; }).join("");
+      this.innerHTML = `<div class="ph-widget-body ph-world-map"><svg class="ph-chart" viewBox="0 0 360 180" role="img" aria-label="Worldwide coordinate distribution"><rect width="360" height="180" rx="8"></rect><g class="ph-map-grid">${grid}</g><g class="ph-map-points">${marks}</g></svg><p class="ph-muted">${points.length} coordinate area(s) · coordinates privacy-rounded to 0.01°</p></div>`;
+    } catch (error) { this.innerHTML = `<p class="ph-error" role="alert">${PHFrame.escape(error.message)}</p>`; }
+  }
+}
+
+class PHDashboardManager extends PHElement {
+  set metadata(value) { this._metadata = value; if (this.isConnected) this.render(); }
+  async render() {
+    if (!this._metadata) return;
+    const configured = await Promise.all(Object.entries(this._metadata.dashboards || {}).map(async ([id, item]) => ({ id: `configured-${id}`, configured: true, ...(await PHFrame.get(item.endpoint)).data })));
+    this.dashboards = [...configured.map(item => ({ ...item, title: item.label, description: "Configured project dashboard" })), ...(PHFrame.siteSettings.dashboards || [])];
+    const selected = localStorage.getItem("ph-active-dashboard"), active = this.dashboards.find(item => item.id === selected) || this.dashboards[0];
+    const options = this.dashboards.map(item => `<option value="${PHFrame.escape(item.id)}" ${item === active ? "selected" : ""}>${PHFrame.escape(item.title)}</option>`).join("");
+    this.innerHTML = `<section class="ph-dashboard-manager"><div class="ph-dashboard-switcher"><div class="ph-field"><label>Dashboard</label><select data-dashboard-select>${options}</select></div><button class="ph-button" data-new-dashboard>+ Create new</button>${active && !active.configured ? `<button class="ph-button ph-button-secondary" data-edit-dashboard>Edit name</button><button class="ph-icon-danger" data-delete-dashboard title="Delete dashboard">×</button>` : ""}</div><div data-dashboard-host></div>${this.createDialog()}</section>`;
+    if (active) this.show(active); else this.querySelector("[data-dashboard-host]").innerHTML = `<div class="ph-empty-state"><span>▦</span><p>Create your first dashboard from a professional template.</p></div>`;
+    this.querySelector("[data-dashboard-select]").addEventListener("change", event => { localStorage.setItem("ph-active-dashboard", event.target.value); this.render(); });
+    const dialog = this.querySelector("dialog"); this.querySelector("[data-new-dashboard]").addEventListener("click", () => { dialog.showModal(); this.updateTemplateRecommendations(); });
+    dialog.querySelector('[name="dataset"]').addEventListener("change", () => this.updateTemplateRecommendations());
+    dialog.querySelectorAll("[data-template]").forEach(button => button.addEventListener("click", () => this.createDashboard(button.dataset.template)));
+    this.querySelector("[data-edit-dashboard]")?.addEventListener("click", () => this.editDashboard(active));
+    this.querySelector("[data-delete-dashboard]")?.addEventListener("click", () => this.deleteDashboard(active));
+  }
+  show(dashboard) { const component = document.createElement("ph-dashboard"); component.definition = dashboard; component.metadata = this._metadata; component.addEventListener("ph-dashboard-definition", event => this.updateDefinition(event.detail)); this.querySelector("[data-dashboard-host]").replaceChildren(component); }
+  createDialog() {
+    const datasets = Object.entries(this._metadata.datasets).map(([name, item]) => `<option value="${name}">${PHFrame.escape(item.label)}</option>`).join("");
+    return `<dialog class="ph-dialog ph-template-dialog"><form method="dialog" class="ph-stack"><div class="ph-widget-header"><div><p class="ph-eyebrow">Dashboard templates</p><h2>Create a professional dashboard</h2></div><button value="cancel" class="ph-dialog-close">×</button></div><div class="ph-form-grid"><div class="ph-field"><label>Dashboard name</label><input name="title" required placeholder="National programme overview"></div><div class="ph-field"><label>Primary dataset</label><select name="dataset">${datasets}</select></div></div><div class="ph-template-grid"><button type="button" data-template="overview"><b>Executive overview</b><span>Headline metric, categories, and trend</span></button><button type="button" data-template="surveillance"><b>Surveillance operations</b><span>Indicators, alerts, locations, and time</span></button><button type="button" data-template="programme"><b>Programme monitoring</b><span>Coverage-style metrics and disaggregation</span></button><button type="button" data-template="dhis2"><b>DHIS2 aggregate</b><span>Data values, elements, and category combinations</span></button><button type="button" data-template="geospatial"><b>Worldwide geospatial</b><span>Coordinate map and geographic breakdown</span></button><button type="button" data-template="blank"><b>Blank canvas</b><span>Add text, links, tables, maps, and charts yourself</span></button></div><p class="ph-muted" data-template-advice></p></form></dialog>`;
+  }
+  capabilities(dataset) {
+    const fields = this._metadata.datasets[dataset].fields, entries = Object.entries(fields);
+    const numeric = entries.filter(([, field]) => ["integer", "number", "age"].includes(field.type)).map(([name]) => name), dates = entries.filter(([, field]) => ["date", "datetime"].includes(field.type)).map(([name]) => name), categories = entries.filter(([, field]) => !["integer", "number", "age", "date", "datetime"].includes(field.type) && !field.protected).map(([name]) => name);
+    const latitude = numeric.find(name => /^(lat|latitude|y_coordinate)$/i.test(name)), longitude = numeric.find(name => /^(lon|lng|longitude|x_coordinate)$/i.test(name));
+    return { numeric, dates, categories, latitude, longitude, dhis2: "data_element" in fields || dataset.toLowerCase().includes("dhis2") };
+  }
+  updateTemplateRecommendations() {
+    const dataset = this.querySelector('.ph-template-dialog [name="dataset"]').value, caps = this.capabilities(dataset);
+    this.querySelectorAll("[data-template]").forEach(button => button.classList.remove("ph-template-recommended"));
+    const recommended = caps.dhis2 ? "dhis2" : (caps.latitude && caps.longitude ? "geospatial" : (caps.dates.length ? "surveillance" : "overview"));
+    this.querySelector(`[data-template="${recommended}"]`).classList.add("ph-template-recommended");
+    this.querySelector("[data-template-advice]").textContent = `Recommended: ${this.querySelector(`[data-template="${recommended}"] b`).textContent}. Based on ${caps.numeric.length} numeric, ${caps.categories.length} categorical, and ${caps.dates.length} date columns${caps.dhis2 ? ", including DHIS2 aggregate fields" : ""}.`;
+  }
+  templateWidgets(template, dataset) {
+    const caps = this.capabilities(dataset), label = this._metadata.datasets[dataset].label, widgets = [{ _id: `content-${Date.now()}`, type: "content", title: "About this dashboard", html: `<p><strong>${PHFrame.escape(label)}</strong></p><p>Edit this text to explain the programme, reporting period, and audience. Add <a href="https://www.who.int">supporting links</a> as needed.</p>` }];
+    if (caps.numeric[0]) widgets.push({ _id: `metric-${Date.now()}`, type: "field_kpi", title: `Total ${caps.numeric[0].replaceAll("_", " ")}`, dataset, field: caps.numeric[0], operation: "sum" });
+    if (caps.categories[0]) widgets.push({ _id: `groups-${Date.now()}`, type: "field_chart", title: `${caps.categories[0].replaceAll("_", " ")} distribution`, dataset, field: caps.categories[0] });
+    if (caps.dates[0] && caps.numeric[0]) widgets.push({ _id: `trend-${Date.now()}`, type: "epi_curve", title: `${caps.numeric[0].replaceAll("_", " ")} over time`, dataset, date_field: caps.dates[0], value_field: caps.numeric[0] });
+    if (template === "dhis2") caps.categories.slice(0, 2).forEach((field, index) => widgets.push({ _id: `dhis2-${index}-${Date.now()}`, type: "field_chart", title: `${field.replaceAll("_", " ")} breakdown`, dataset, field }));
+    if (template === "surveillance") Object.entries(this._metadata.indicators || {}).filter(([, item]) => item.dataset === dataset).slice(0, 3).forEach(([indicator, item]) => widgets.push({ _id: `indicator-${indicator}-${Date.now()}`, type: "kpi", title: item.label, indicator }));
+    if (template === "geospatial" && caps.latitude && caps.longitude) widgets.push({ _id: `map-${Date.now()}`, type: "geo_map", title: "Geographic distribution", dataset, latitude_field: caps.latitude, longitude_field: caps.longitude });
+    return template === "blank" ? [] : widgets;
+  }
+  async createDashboard(template) {
+    const form = this.querySelector(".ph-template-dialog form"), title = form.elements.title.value.trim(), dataset = form.elements.dataset.value;
+    if (!title) { form.elements.title.reportValidity(); return; }
+    const dashboard = { id: `dashboard-${Date.now()}`, title, description: `${this._metadata.datasets[dataset].label} · ${template.replaceAll("_", " ")} template`, dataset, template, widgets: this.templateWidgets(template, dataset) };
+    await this.persist([...(PHFrame.siteSettings.dashboards || []), dashboard]); localStorage.setItem("ph-active-dashboard", dashboard.id); this.querySelector("dialog").close(); this.render();
+  }
+  async persist(dashboards) { const response = await PHFrame.send("/api/settings", "PUT", { dashboards }); PHFrame.siteSettings.dashboards = response.data.dashboards; }
+  async updateDefinition(dashboard) { if (dashboard.configured) return; await this.persist(PHFrame.siteSettings.dashboards.map(item => item.id === dashboard.id ? dashboard : item)); }
+  async editDashboard(dashboard) { const title = prompt("Dashboard name", dashboard.title); if (!title?.trim()) return; const description = prompt("Dashboard description", dashboard.description || "") ?? dashboard.description; await this.updateDefinition({ ...dashboard, title: title.trim(), description }); this.render(); }
+  async deleteDashboard(dashboard) { if (!confirm(`Delete ${dashboard.title}?`)) return; await this.persist(PHFrame.siteSettings.dashboards.filter(item => item.id !== dashboard.id)); localStorage.removeItem("ph-active-dashboard"); this.render(); }
+}
+
+class PHDashboard extends PHElement {
+  set definition(value) { this._definition = value; if (this.isConnected && this._metadata) this.render(); }
+  get metadata() { return this._metadata; }
+  set metadata(value) { this._metadata = value; if (this.isConnected && this._definition) this.render(); }
+  async render() {
+    try {
+      if (this._definition) { this.dashboard = this._definition; this.metadata = this._metadata; }
+      else { const [response, metadata] = await Promise.all([PHFrame.get(`/api/dashboards/${this.getAttribute("name")}`), PHFrame.get("/api")]); this.dashboard = response.data; this.metadata = metadata; }
+      this.storageKey = `ph-dashboard-layout:${this.dashboard.id || this.getAttribute("name") || this.dashboard.name}`;
       this.settings = this.loadSettings();
       this.draw();
     } catch (error) { this.innerHTML = `<p class="ph-error" role="alert">${PHFrame.escape(error.message)}</p>`; }
   }
   widgetId(widget, index) { return widget._id || `${widget.type}-${widget.indicator || widget.dimension || widget.dataset || index}-${index}`; }
   defaults(widget) {
+    if (widget.type === "content") return { visualization: "text", size: "wide", choices: [["text", "Rich text"]] };
+    if (widget.type === "geo_map") return { visualization: "coordinates", size: "wide", choices: [["coordinates", "Coordinate map"]] };
     if (widget.type === "kpi" || widget.type === "field_kpi") return { visualization: "number", size: "compact", choices: [["number", "Number"], ["gauge", "Gauge"]] };
     if (widget.type === "chart" || widget.type === "field_chart") return { visualization: "bar", size: "medium", choices: [["bar", "Bar chart"], ["donut", "Donut chart"], ["table", "Data table"]] };
     if (widget.type === "map") return { visualization: "tiles", size: "medium", choices: [["tiles", "Tile map"], ["bar", "Bar chart"], ["donut", "Donut chart"], ["table", "Data table"]] };
@@ -330,8 +405,8 @@ class PHDashboard extends PHElement {
     const order = this.settings.order || [];
     indexed.sort((a, b) => { const ai = order.indexOf(a.id), bi = order.indexOf(b.id); return (ai < 0 ? 999 + a.index : ai) - (bi < 0 ? 999 + b.index : bi); });
     const cards = indexed.map(item => this.card(item.widget, item.index, item.id)).join("");
-    const title = PHFrame.siteSettings?.dashboard_title || this.dashboard.label;
-    this.innerHTML = `<section class="ph-dashboard-heading"><div><p class="ph-eyebrow">Data overview</p><h2>${PHFrame.escape(title)}</h2><p class="ph-muted">Live metrics and trends from your configured datasets</p></div><div class="ph-dashboard-actions"><button class="ph-button" type="button" data-add-widget>+ Add visualization</button><button class="ph-button ph-button-secondary" type="button" data-reset>Reset layout</button><span class="ph-save-state" role="status">Changes save automatically</span></div></section><div class="ph-dashboard-grid" aria-label="Customizable dashboard">${cards}</div>${this.widgetDialog()}`;
+    const title = this.dashboard.title || this.dashboard.label, description = this.dashboard.description || "Live metrics, content, maps, and trends from your selected data";
+    this.innerHTML = `<section class="ph-dashboard-heading"><div><p class="ph-eyebrow">${PHFrame.escape(this.dashboard.template || "Data overview")}</p><h2>${PHFrame.escape(title)}</h2><p class="ph-muted">${PHFrame.escape(description)}</p></div><div class="ph-dashboard-actions"><button class="ph-button" type="button" data-add-widget>+ Add visualization</button><button class="ph-button ph-button-secondary" type="button" data-add-content>+ Add text</button><button class="ph-button ph-button-secondary" type="button" data-reset>Reset layout</button><span class="ph-save-state" role="status">Changes save automatically</span></div></section><div class="ph-dashboard-grid" aria-label="Customizable dashboard">${cards || `<div class="ph-empty-state"><span>＋</span><p>Blank dashboard. Add text, a table, chart, metric, trend, or map.</p></div>`}</div>${this.widgetDialog()}${this.contentDialog()}`;
     this.bind();
   }
   widgetDialog() {
@@ -344,15 +419,19 @@ class PHDashboard extends PHElement {
       const numbers = Object.entries(item.fields).filter(([, field]) => ["integer", "number", "age"].includes(field.type));
       return dates.flatMap(([date]) => numbers.map(([value]) => `<option value="epi_curve|${dataset}|${date}|${value}">Trend · ${PHFrame.escape(item.label)} · ${PHFrame.escape(value)}</option>`));
     }).join("");
-    return `<dialog class="ph-dialog ph-widget-dialog"><form method="dialog" class="ph-stack" data-widget-form><div class="ph-widget-header"><div><p class="ph-eyebrow">Dashboard builder</p><h2>Add visualization</h2></div><button value="cancel" class="ph-dialog-close" aria-label="Close">×</button></div><div class="ph-field"><label for="ph-widget-title">Title</label><input id="ph-widget-title" name="title" required placeholder="My visualization"></div><div class="ph-field"><label for="ph-widget-source">Data source</label><select id="ph-widget-source" name="source" required>${indicators}${numericFields}${dimensions}${fields}${trends}</select></div><div class="ph-actions"><button class="ph-button" value="default" data-create-widget>Add to dashboard</button><button value="cancel">Cancel</button></div></form></dialog>`;
+    const maps = Object.entries(this.metadata.datasets || {}).flatMap(([dataset, item]) => { const numeric = Object.entries(item.fields).filter(([, field]) => ["integer", "number"].includes(field.type)).map(([name]) => name), lat = numeric.find(name => /^(lat|latitude|y_coordinate)$/i.test(name)), lon = numeric.find(name => /^(lon|lng|longitude|x_coordinate)$/i.test(name)); return lat && lon ? [`<option value="geo_map|${dataset}|${lat}|${lon}">Map · ${PHFrame.escape(item.label)} · coordinates</option>`] : []; }).join("");
+    return `<dialog class="ph-dialog ph-widget-dialog"><form method="dialog" class="ph-stack" data-widget-form><div class="ph-widget-header"><div><p class="ph-eyebrow">Dashboard builder</p><h2>Add visualization</h2></div><button value="cancel" class="ph-dialog-close" aria-label="Close">×</button></div><div class="ph-field"><label for="ph-widget-title">Title</label><input id="ph-widget-title" name="title" required placeholder="My visualization"></div><div class="ph-field"><label for="ph-widget-source">Data source</label><select id="ph-widget-source" name="source" required>${indicators}${numericFields}${dimensions}${fields}${trends}${maps}</select></div><div class="ph-actions"><button class="ph-button" value="default" data-create-widget>Add to dashboard</button><button value="cancel">Cancel</button></div></form></dialog>`;
   }
+  contentDialog() { return `<dialog class="ph-dialog ph-content-dialog"><form method="dialog" class="ph-stack" data-content-form><div class="ph-widget-header"><div><p class="ph-eyebrow">Dashboard content</p><h2>Add text, heading, paragraph, or link</h2></div><button value="cancel" class="ph-dialog-close">×</button></div><div class="ph-field"><label>Block title</label><input name="title" required placeholder="About this dashboard"></div><ph-rich-editor data-dashboard-editor></ph-rich-editor><div class="ph-actions"><button class="ph-button" value="default">Add content</button><button value="cancel">Cancel</button></div></form></dialog>`; }
   card(widget, index, id) {
     const defaults = this.defaults(widget), saved = this.settings[id] || {};
     const visualization = saved.visualization || defaults.visualization, size = saved.size || defaults.size;
     const options = defaults.choices.map(([value, label]) => `<option value="${value}" ${value === visualization ? "selected" : ""}>${label}</option>`).join("");
     const sizeOptions = [["compact", "Small"], ["medium", "Medium"], ["wide", "Wide"]].map(([value, label]) => `<option value="${value}" ${value === size ? "selected" : ""}>${label}</option>`).join("");
     let component;
-    if (widget.type === "kpi") component = `<ph-kpi indicator="${widget.indicator}" visualization="${visualization}"></ph-kpi>`;
+    if (widget.type === "content") component = `<div class="ph-dashboard-content ph-prose">${widget.html || ""}</div>`;
+    else if (widget.type === "geo_map") component = `<ph-geo-map dataset="${widget.dataset}" latitude-field="${widget.latitude_field}" longitude-field="${widget.longitude_field}"></ph-geo-map>`;
+    else if (widget.type === "kpi") component = `<ph-kpi indicator="${widget.indicator}" visualization="${visualization}"></ph-kpi>`;
     else if (widget.type === "field_kpi") component = `<ph-kpi dataset="${widget.dataset}" field="${widget.field}" operation="${widget.operation || "sum"}" visualization="${visualization}"></ph-kpi>`;
     else if (widget.type === "chart") component = `<ph-indicator-chart dimension="${widget.dimension}" visualization="${visualization}"></ph-indicator-chart>`;
     else if (widget.type === "field_chart") component = `<ph-indicator-chart dataset="${widget.dataset}" field="${widget.field}" visualization="${visualization}"></ph-indicator-chart>`;
@@ -360,18 +439,23 @@ class PHDashboard extends PHElement {
     else component = `<ph-epi-curve dataset="${widget.dataset}" date-field="${widget.date_field}" value-field="${widget.value_field || ""}" visualization="${visualization}"></ph-epi-curve>`;
     const span = saved.span || { compact: 3, medium: 6, wide: 12 }[size], height = saved.height || 285;
     const handles = ["n", "e", "s", "w", "ne", "se", "sw", "nw"].map(direction => `<button class="ph-resize-handle ph-resize-${direction}" data-resize="${direction}" type="button" aria-label="Resize ${PHFrame.escape(widget.title)} ${direction}" title="Drag to resize"></button>`).join("");
-    return `<article class="ph-card ph-dashboard-card ph-size-${size}" style="--ph-widget-span:${span};--ph-widget-height:${height}px" data-widget-id="${id}" draggable="true"><header class="ph-widget-header"><div><p class="ph-widget-kind">${PHFrame.escape(widget.type === "epi_curve" ? "Trend" : widget.type)}</p><h3>${PHFrame.escape(widget.title)}</h3></div><div class="ph-card-actions"><button class="ph-drag-handle" type="button" aria-label="Drag ${PHFrame.escape(widget.title)}" title="Drag to reorder">⠿</button><button class="ph-remove-widget" type="button" aria-label="Remove ${PHFrame.escape(widget.title)}" title="Remove visualization">×</button></div></header><div class="ph-widget-controls"><label>View<select data-visualization>${options}</select></label><label>Size<select data-size>${sizeOptions}</select></label><button type="button" data-move="up" aria-label="Move ${PHFrame.escape(widget.title)} earlier">←</button><button type="button" data-move="down" aria-label="Move ${PHFrame.escape(widget.title)} later">→</button></div><div class="ph-widget-content">${component}</div>${handles}</article>`;
+    const edit = widget.type === "content" ? `<button class="ph-edit-content" type="button" aria-label="Edit ${PHFrame.escape(widget.title)}" title="Edit content">✎</button>` : "";
+    return `<article class="ph-card ph-dashboard-card ph-size-${size}" style="--ph-widget-span:${span};--ph-widget-height:${height}px" data-widget-id="${id}" draggable="true"><header class="ph-widget-header"><div><p class="ph-widget-kind">${PHFrame.escape(widget.type === "epi_curve" ? "Trend" : widget.type)}</p><h3>${PHFrame.escape(widget.title)}</h3></div><div class="ph-card-actions"><button class="ph-drag-handle" type="button" aria-label="Drag ${PHFrame.escape(widget.title)}" title="Drag to reorder">⠿</button>${edit}<button class="ph-remove-widget" type="button" aria-label="Remove ${PHFrame.escape(widget.title)}" title="Remove visualization">×</button></div></header><div class="ph-widget-controls"><label>View<select data-visualization>${options}</select></label><label>Size<select data-size>${sizeOptions}</select></label><button type="button" data-move="up" aria-label="Move ${PHFrame.escape(widget.title)} earlier">←</button><button type="button" data-move="down" aria-label="Move ${PHFrame.escape(widget.title)} later">→</button></div><div class="ph-widget-content">${component}</div>${handles}</article>`;
   }
   bind() {
     this.querySelector("[data-reset]").addEventListener("click", () => { localStorage.removeItem(this.storageKey); this.settings = {}; this.draw(); PHFrame.notify("Dashboard layout reset."); });
     const dialog = this.querySelector(".ph-widget-dialog");
+    const contentDialog = this.querySelector(".ph-content-dialog"); contentDialog.querySelector("ph-rich-editor").value = "<h3>Heading</h3><p>Write your dashboard explanation here. Select text and use the toolbar to add formatting or a hyperlink.</p>";
     this.querySelector("[data-add-widget]").addEventListener("click", () => dialog.showModal());
+    this.querySelector("[data-add-content]").addEventListener("click", () => contentDialog.showModal());
     this.querySelector("[data-widget-form]").addEventListener("submit", event => { if (event.submitter?.value === "cancel") return; event.preventDefault(); this.addWidget(event.currentTarget); dialog.close(); });
+    this.querySelector("[data-content-form]").addEventListener("submit", event => { if (event.submitter?.value === "cancel") return; event.preventDefault(); const form = event.currentTarget, editing = form.dataset.editing, widget = { _id: editing || `content-${Date.now()}`, type: "content", title: form.elements.title.value, html: form.querySelector("ph-rich-editor").value }; editing ? this.updateContent(widget) : this.addManagedWidget(widget); delete form.dataset.editing; contentDialog.close(); });
     this.querySelectorAll(".ph-dashboard-card").forEach(card => {
       card.querySelector("[data-visualization]").addEventListener("change", event => this.updateCard(card, "visualization", event.target.value));
       card.querySelector("[data-size]").addEventListener("change", event => this.updateCard(card, "size", event.target.value));
       card.querySelectorAll("[data-move]").forEach(button => button.addEventListener("click", () => this.move(card, button.dataset.move)));
       card.querySelector(".ph-remove-widget").addEventListener("click", () => this.removeWidget(card.dataset.widgetId));
+      card.querySelector(".ph-edit-content")?.addEventListener("click", () => this.editContent(card.dataset.widgetId, contentDialog));
       card.querySelectorAll("[data-resize]").forEach(handle => handle.addEventListener("pointerdown", event => this.startResize(event, card, handle.dataset.resize)));
       card.addEventListener("dragstart", event => { card.classList.add("ph-dragging"); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", card.dataset.widgetId); });
       card.addEventListener("dragend", () => { card.classList.remove("ph-dragging"); this.querySelectorAll(".ph-drag-over").forEach(item => item.classList.remove("ph-drag-over")); });
@@ -384,7 +468,7 @@ class PHDashboard extends PHElement {
     const id = card.dataset.widgetId;
     this.settings[id] = { ...(this.settings[id] || {}), [property]: value };
     if (property === "size") { const span = { compact: 3, medium: 6, wide: 12 }[value]; this.settings[id].span = span; card.className = `ph-card ph-dashboard-card ph-size-${value}`; card.style.setProperty("--ph-widget-span", span); }
-    else { const visualization = card.querySelector("[data-visualization]").value; const component = card.querySelector("ph-kpi, ph-indicator-chart, ph-map, ph-epi-curve"); component.setAttribute("visualization", visualization); component.render(); }
+    else { const visualization = card.querySelector("[data-visualization]").value; const component = card.querySelector("ph-kpi, ph-indicator-chart, ph-map, ph-epi-curve"); if (component) { component.setAttribute("visualization", visualization); component.render(); } }
     this.saveSettings();
   }
   move(card, direction) {
@@ -400,13 +484,17 @@ class PHDashboard extends PHElement {
     else if (widget.type === "field_kpi") { widget.dataset = parts[1]; widget.field = parts[2]; widget.operation = "sum"; }
     else if (widget.type === "chart") widget.dimension = parts[1];
     else if (widget.type === "field_chart") { widget.dataset = parts[1]; widget.field = parts[2]; }
+    else if (widget.type === "geo_map") { widget.dataset = parts[1]; widget.latitude_field = parts[2]; widget.longitude_field = parts[3]; }
     else { widget.dataset = parts[1]; widget.date_field = parts[2]; widget.value_field = parts[3]; }
-    this.settings.customWidgets = [...(this.settings.customWidgets || []), widget];
-    localStorage.setItem(this.storageKey, JSON.stringify(this.settings)); this.draw(); PHFrame.notify("Visualization added.");
+    this.addManagedWidget(widget);
   }
+  addManagedWidget(widget) { if (this.dashboard.configured) { this.settings.customWidgets = [...(this.settings.customWidgets || []), widget]; localStorage.setItem(this.storageKey, JSON.stringify(this.settings)); } else { this.dashboard = { ...this.dashboard, widgets: [...this.dashboard.widgets, widget] }; this.dispatchEvent(new CustomEvent("ph-dashboard-definition", { bubbles: true, detail: this.dashboard })); } this.draw(); PHFrame.notify(`${widget.type === "content" ? "Content" : "Visualization"} added.`); }
+  editContent(id, dialog) { const widgets = [...this.dashboard.widgets, ...(this.settings.customWidgets || [])], widget = widgets.find((item, index) => this.widgetId(item, index) === id || item._id === id); if (!widget) return; const form = dialog.querySelector("form"); form.dataset.editing = widget._id; form.elements.title.value = widget.title; form.querySelector("ph-rich-editor").value = widget.html; dialog.showModal(); }
+  updateContent(widget) { if (this.dashboard.configured) { this.settings.customWidgets = (this.settings.customWidgets || []).map(item => item._id === widget._id ? widget : item); localStorage.setItem(this.storageKey, JSON.stringify(this.settings)); } else { this.dashboard = { ...this.dashboard, widgets: this.dashboard.widgets.map(item => item._id === widget._id ? widget : item) }; this.dispatchEvent(new CustomEvent("ph-dashboard-definition", { bubbles: true, detail: this.dashboard })); } this.draw(); PHFrame.notify("Dashboard content updated."); }
   removeWidget(id) {
-    this.settings.hidden = [...new Set([...(this.settings.hidden || []), id])];
-    this.saveSettings(); this.draw(); PHFrame.notify("Visualization removed. Reset layout to restore it.");
+    if (!this.dashboard.configured) { this.dashboard = { ...this.dashboard, widgets: this.dashboard.widgets.filter((widget, index) => this.widgetId(widget, index) !== id) }; this.dispatchEvent(new CustomEvent("ph-dashboard-definition", { bubbles: true, detail: this.dashboard })); }
+    else { this.settings.hidden = [...new Set([...(this.settings.hidden || []), id])]; this.saveSettings(); }
+    this.draw(); PHFrame.notify("Dashboard item removed.");
   }
   startResize(event, card, direction) {
     event.preventDefault(); event.stopPropagation(); card.setAttribute("draggable", "false");
@@ -561,8 +649,9 @@ class PHRichEditor extends PHElement {
   set value(value) { this._value = value || ""; if (this.isConnected) this.render(); }
   get value() { return this.querySelector("[contenteditable]")?.innerHTML || ""; }
   render() {
-    this.innerHTML = `<div class="ph-editor-toolbar" aria-label="Text formatting"><button type="button" data-command="bold"><b>B</b></button><button type="button" data-command="italic"><i>I</i></button><button type="button" data-command="underline"><u>U</u></button><button type="button" data-command="insertUnorderedList">• List</button><button type="button" data-link>Link</button></div><div class="ph-rich-editor" contenteditable="true" role="textbox" aria-multiline="true">${this._value || ""}</div>`;
+    this.innerHTML = `<div class="ph-editor-toolbar" aria-label="Text formatting"><button type="button" data-block="h2">Heading</button><button type="button" data-block="p">Paragraph</button><button type="button" data-command="bold"><b>B</b></button><button type="button" data-command="italic"><i>I</i></button><button type="button" data-command="underline"><u>U</u></button><button type="button" data-command="insertUnorderedList">• List</button><button type="button" data-link>Link</button></div><div class="ph-rich-editor" contenteditable="true" role="textbox" aria-multiline="true">${this._value || ""}</div>`;
     this.querySelectorAll("[data-command]").forEach(button => button.addEventListener("click", () => { document.execCommand(button.dataset.command); this.querySelector("[contenteditable]").focus(); }));
+    this.querySelectorAll("[data-block]").forEach(button => button.addEventListener("click", () => { document.execCommand("formatBlock", false, button.dataset.block); this.querySelector("[contenteditable]").focus(); }));
     this.querySelector("[data-link]").addEventListener("click", () => { const url = prompt("Enter an https:// link"); if (url && /^https?:\/\//i.test(url)) document.execCommand("createLink", false, url); });
   }
 }
@@ -800,6 +889,8 @@ customElements.define("ph-kpi", PHKPI);
 customElements.define("ph-indicator-chart", PHIndicatorChart);
 customElements.define("ph-epi-curve", PHEpiCurve);
 customElements.define("ph-map", PHMap);
+customElements.define("ph-geo-map", PHGeoMap);
+customElements.define("ph-dashboard-manager", PHDashboardManager);
 customElements.define("ph-dashboard", PHDashboard);
 customElements.define("ph-notification-center", PHNotificationCenter);
 customElements.define("ph-modal", PHModal);

@@ -86,3 +86,21 @@ def test_external_pages_require_web_urls(tmp_path: Path):
     }]})
     assert response.status_code == 422
     assert "http or https" in response.json()["error"]["message"]
+
+
+def test_user_dashboards_are_persisted_and_rich_content_is_sanitized(tmp_path: Path):
+    root = create_project("Dashboard App", tmp_path / "dashboard-app")
+    client = TestClient(PHFrame.from_file(str(root / "phframe.yaml")))
+    response = client.put("/api/settings", json={"dashboards": [{
+        "id": "programme-overview", "title": "Programme Overview", "description": "Worldwide programme",
+        "dataset": "case_reports", "template": "overview", "widgets": [
+            {"_id": "intro", "type": "content", "title": "Introduction", "html": '<h2>Heading</h2><p>Read <a href="https://example.org">more</a><script>bad()</script></p>'},
+            {"_id": "metric", "type": "field_kpi", "title": "Cases", "dataset": "case_reports", "field": "cases", "operation": "sum"},
+        ],
+    }]})
+    assert response.status_code == 200
+    dashboard = response.json()["data"]["dashboards"][0]
+    assert dashboard["title"] == "Programme Overview"
+    assert "<h2>Heading</h2>" in dashboard["widgets"][0]["html"]
+    assert "<script" not in dashboard["widgets"][0]["html"]
+    assert 'target="_blank"' in dashboard["widgets"][0]["html"]

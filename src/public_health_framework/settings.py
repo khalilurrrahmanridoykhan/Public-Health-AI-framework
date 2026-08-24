@@ -49,6 +49,7 @@ class SiteSettings:
             "show_footer": True,
             "navigation": DEFAULT_NAVIGATION,
             "pages": [],
+            "dashboards": [],
             "ai_provider": "local",
             "ai_model": "phframe-evidence-v1",
             "ai_endpoint": "",
@@ -83,6 +84,7 @@ class SiteSettings:
             "brand_name", "header_title", "dashboard_title", "primary_color",
             "default_theme", "footer_html", "show_footer", "navigation", "pages", "access_mode",
             "ai_provider", "ai_model", "ai_endpoint", "ai_api_key_env", "allow_external_ai",
+            "dashboards",
         }
         settings.update({key: value for key, value in values.items() if key in allowed})
         if settings["access_mode"] not in {"public", "private"}:
@@ -94,6 +96,7 @@ class SiteSettings:
             raise ValueError("primary_color must be a six-digit hex color.")
         settings["footer_html"] = sanitize_html(str(settings.get("footer_html", "")))
         settings["pages"] = self._validate_pages(settings.get("pages", []))
+        settings["dashboards"] = self._validate_dashboards(settings.get("dashboards", []))
         if settings["ai_provider"] not in {"local", "openai_compatible"}:
             raise ValueError("ai_provider must be local or openai_compatible.")
         settings["ai_model"] = str(settings.get("ai_model", ""))[:255]
@@ -112,6 +115,27 @@ class SiteSettings:
             raise ValueError("Create a login user before enabling private mode.")
         self._save(settings)
         return self.public()
+
+    def _validate_dashboards(self, dashboards: Any) -> list[dict[str, Any]]:
+        if not isinstance(dashboards, list) or len(dashboards) > 50:
+            raise ValueError("dashboards must contain at most 50 dashboards.")
+        clean, ids = [], set()
+        allowed_types = {"kpi", "field_kpi", "chart", "field_chart", "epi_curve", "map", "geo_map", "content"}
+        for dashboard in dashboards:
+            if not isinstance(dashboard, dict): raise ValueError("Each dashboard must be an object.")
+            dashboard_id = str(dashboard.get("id", ""))
+            if not dashboard_id or not dashboard_id.replace("-", "").isalnum() or dashboard_id in ids:
+                raise ValueError("Dashboard IDs must be unique and contain letters, numbers, or hyphens.")
+            ids.add(dashboard_id); widgets = dashboard.get("widgets", [])
+            if not isinstance(widgets, list) or len(widgets) > 100: raise ValueError("A dashboard can contain at most 100 widgets.")
+            clean_widgets = []
+            for widget in widgets:
+                if not isinstance(widget, dict) or widget.get("type") not in allowed_types: raise ValueError("Dashboard widget type is invalid.")
+                item = {str(key): value for key, value in widget.items() if key in {"_id", "type", "title", "indicator", "dimension", "dataset", "field", "operation", "date_field", "value_field", "latitude_field", "longitude_field", "html"}}
+                if item["type"] == "content": item["html"] = sanitize_html(str(item.get("html", "")))
+                clean_widgets.append(item)
+            clean.append({"id": dashboard_id, "title": str(dashboard.get("title", dashboard_id))[:200], "description": str(dashboard.get("description", ""))[:500], "dataset": str(dashboard.get("dataset", ""))[:255], "template": str(dashboard.get("template", "blank"))[:100], "widgets": clean_widgets})
+        return clean
 
     def _validate_pages(self, pages: Any) -> list[dict[str, Any]]:
         if not isinstance(pages, list) or len(pages) > 50:
@@ -215,7 +239,7 @@ class SiteSettings:
 
 
 class _SafeHTMLParser(HTMLParser):
-    allowed = {"a", "b", "strong", "em", "i", "u", "p", "br", "ul", "ol", "li"}
+    allowed = {"a", "b", "strong", "em", "i", "u", "p", "br", "ul", "ol", "li", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote"}
 
     def __init__(self):
         super().__init__(convert_charrefs=True); self.parts: list[str] = []

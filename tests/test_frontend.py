@@ -76,6 +76,15 @@ def test_frontend_shell_and_assets(tmp_path: Path):
     assert "Are cases increasing over time?" in javascript.text
     assert ".ph-ai-transcript" in css.text
     assert ".ph-ai-composer" in css.text
+    for component in ["ph-dashboard-manager", "ph-geo-map"]:
+        assert f'customElements.define("{component}"' in javascript.text
+    assert "Dashboard templates" in javascript.text
+    assert "Executive overview" in javascript.text
+    assert "DHIS2 aggregate" in javascript.text
+    assert "Worldwide geospatial" in javascript.text
+    assert "data-add-content" in javascript.text
+    assert "latitude-field" in javascript.text
+    assert ".ph-template-grid" in css.text
 
 
 def test_frontend_metadata_includes_ui_configuration(tmp_path: Path):

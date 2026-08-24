@@ -83,6 +83,7 @@ class PHFrame:
             Route("/api/dashboards/{dashboard}", self.dashboard, methods=["GET"]),
             Route("/api/epi-curve/{dataset}", self.epi_curve, methods=["GET"]),
             Route("/api/visualize/{dataset}", self.visualize_field, methods=["GET"]),
+            Route("/api/geospatial/{dataset}", self.geospatial, methods=["GET"]),
             Route("/api/connectors", self.connector_index, methods=["GET", "POST"]),
             Route("/api/connectors/{connector}/sync", self.connector_sync, methods=["POST"]),
             Route("/api/connectors/{connector}", self.connector_delete, methods=["DELETE"]),
@@ -619,6 +620,20 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
             counts[value] = counts.get(value, 0) + 1
         values = [{"value": value, "count": count} for value, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))]
         return JSONResponse({"data": {"label": dataset.fields[field].label or field.replace("_", " ").title(), "values": values, "total": len(records)}})
+
+    async def geospatial(self, request: Request) -> Response:
+        dataset = self._dataset(request)
+        if dataset is None: return _error("Dataset not found.", 404)
+        latitude, longitude = request.query_params.get("latitude", ""), request.query_params.get("longitude", "")
+        if latitude not in dataset.fields or longitude not in dataset.fields: return _error("Latitude and longitude fields were not found.", 422)
+        if dataset.fields[latitude].type not in {"integer", "number"} or dataset.fields[longitude].type not in {"integer", "number"}: return _error("Coordinates must use numeric fields.", 422)
+        buckets: dict[tuple[float, float], int] = {}
+        for record in self.storage.list(dataset, limit=1000):
+            if record.get(latitude) is None or record.get(longitude) is None: continue
+            lat, lon = round(float(record[latitude]), 2), round(float(record[longitude]), 2)
+            if -90 <= lat <= 90 and -180 <= lon <= 180: buckets[(lat, lon)] = buckets.get((lat, lon), 0) + 1
+        points = [{"latitude": lat, "longitude": lon, "count": count} for (lat, lon), count in sorted(buckets.items())]
+        return JSONResponse({"data": {"dataset": dataset.name, "latitude_field": latitude, "longitude_field": longitude, "precision": 2, "points": points, "source_rows": sum(item["count"] for item in points), "privacy": "Coordinates are aggregated into rounded 0.01-degree buckets."}})
 
     async def connector_index(self, request: Request) -> JSONResponse:
         if request.method == "POST":
