@@ -70,12 +70,18 @@ def test_frontend_shell_and_assets(tmp_path: Path):
     assert "Human-controlled assistance" in javascript.text
     assert "0 protected fields sent" in javascript.text
     assert ".ph-ai-layout" in css.text
-    assert "Public Health AI Analyst" in javascript.text
+    assert "Evidence-aware assistant" in javascript.text
     assert "data-chat-form" in javascript.text
     assert "data-chat-report" in javascript.text
     assert "Are cases increasing over time?" in javascript.text
     assert ".ph-ai-transcript" in css.text
     assert ".ph-ai-composer" in css.text
+    assert 'customElements.define("ph-ai-assistant"' in javascript.text
+    assert "ph-ai-launcher" in javascript.text
+    assert "ph-ai-popup-close" in javascript.text
+    assert "<b>Me</b>" in javascript.text
+    assert 'author: "Me"' in javascript.text
+    assert ".ph-ai-popup" in css.text
     for component in ["ph-dashboard-manager", "ph-geo-map"]:
         assert f'customElements.define("{component}"' in javascript.text
     assert "Dashboard templates" in javascript.text

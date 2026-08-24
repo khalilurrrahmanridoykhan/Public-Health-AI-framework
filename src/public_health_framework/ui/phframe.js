@@ -81,11 +81,12 @@ class PHAppShell extends PHElement {
       <div class="ph-shell"><header class="ph-header"><a class="ph-brand" href="#/dashboard"><img src="${PHFrame.escape(PHFrame.siteSettings.logo_url)}" alt=""><span><b>${PHFrame.escape(PHFrame.siteSettings.brand_name)}</b><small>${PHFrame.escape(PHFrame.siteSettings.header_title)}</small></span></a>
       <nav class="ph-nav" aria-label="Primary">${links}</nav>
       <div class="ph-header-tools"><label>${PHFrame.t("theme")} <select class="ph-theme" aria-label="${PHFrame.t("theme")}"><option value="light">Light</option><option value="dark">Dark</option><option value="high-contrast">High contrast</option></select></label>${PHFrame.siteSettings.access_mode === "private" ? `<button class="ph-logout" type="button">Sign out</button>` : ""}</div></header>
-      <main class="ph-main" id="main" tabindex="-1"><div id="ph-view"></div></main>${PHFrame.siteSettings.show_footer ? `<footer class="ph-footer">${PHFrame.siteSettings.footer_html}</footer>` : ""}<ph-notification-center></ph-notification-center></div>`;
+      <main class="ph-main" id="main" tabindex="-1"><div id="ph-view"></div></main>${PHFrame.siteSettings.show_footer ? `<footer class="ph-footer">${PHFrame.siteSettings.footer_html}</footer>` : ""}<ph-ai-assistant></ph-ai-assistant><ph-notification-center></ph-notification-center></div>`;
     const theme = this.querySelector(".ph-theme");
     theme.value = document.documentElement.dataset.theme;
     theme.addEventListener("change", () => { document.documentElement.dataset.theme = theme.value; localStorage.setItem("ph-theme", theme.value); PHFrame.applyColor(PHFrame.siteSettings.primary_color); });
     this.querySelector(".ph-logout")?.addEventListener("click", async () => { await PHFrame.send("/api/auth/logout", "POST", {}); location.href = "/login"; });
+    this.querySelector("ph-ai-assistant").metadata = this.metadata;
     this.route();
   }
   route() {
@@ -904,6 +905,21 @@ class PHConnectorConsole extends PHElement {
   }
 }
 
+class PHAIAssistant extends PHElement {
+  set metadata(value) { this._metadata = value; if (this.isConnected) this.render(); }
+  render() {
+    if (!this._metadata) return;
+    this.innerHTML = `<button class="ph-ai-launcher" type="button" aria-label="Open AI assistance" aria-expanded="false"><span class="ph-ai-launcher-spark">✦</span><span class="ph-ai-launcher-label"><b>Ask PHFrame</b><small>AI data assistant</small></span></button><div class="ph-ai-backdrop" hidden></div><aside class="ph-ai-popup" role="dialog" aria-modal="false" aria-labelledby="ph-ai-popup-title" hidden><header><div class="ph-ai-popup-brand"><span>✦</span><div><h2 id="ph-ai-popup-title">AI assistance</h2><p><i></i> Ready · aggregate evidence only</p></div></div><button class="ph-ai-popup-close" type="button" aria-label="Close AI assistance">×</button></header><ph-ai-workspace compact></ph-ai-workspace><footer><span>◈ Privacy protected</span><span>Answers include evidence</span></footer></aside>`;
+    this.querySelector("ph-ai-workspace").metadata = this._metadata;
+    this.querySelector(".ph-ai-launcher").addEventListener("click", () => this.open());
+    this.querySelector(".ph-ai-popup-close").addEventListener("click", () => this.close());
+    this.querySelector(".ph-ai-backdrop").addEventListener("click", () => this.close());
+    this.addEventListener("keydown", event => { if (event.key === "Escape") this.close(); });
+  }
+  open() { clearTimeout(this._closeTimer); const popup = this.querySelector(".ph-ai-popup"), backdrop = this.querySelector(".ph-ai-backdrop"), launcher = this.querySelector(".ph-ai-launcher"); popup.hidden = false; backdrop.hidden = false; launcher.setAttribute("aria-expanded", "true"); document.body.classList.add("ph-ai-popup-open"); requestAnimationFrame(() => { popup.classList.add("ph-ai-popup-visible"); this.querySelector('textarea[name="question"]')?.focus(); }); }
+  close() { const popup = this.querySelector(".ph-ai-popup"), backdrop = this.querySelector(".ph-ai-backdrop"), launcher = this.querySelector(".ph-ai-launcher"); if (!popup || popup.hidden) return; popup.classList.remove("ph-ai-popup-visible"); launcher.setAttribute("aria-expanded", "false"); document.body.classList.remove("ph-ai-popup-open"); this._closeTimer = setTimeout(() => { popup.hidden = true; backdrop.hidden = true; launcher.focus(); }, 180); }
+}
+
 class PHAIWorkspace extends PHElement {
   set metadata(value) { this._metadata = value; if (this.isConnected) this.render(); }
   sessionId() {
@@ -913,35 +929,37 @@ class PHAIWorkspace extends PHElement {
   }
   async render() {
     if (!this._metadata) return;
+    const compact = this.hasAttribute("compact");
     this.innerHTML = `<p class="ph-muted" role="status">Loading responsible AI workspace…</p>`;
     try {
       const session = this.sessionId();
-      const [summaries, audit, chats] = await Promise.all([PHFrame.get("/api/ai/summaries"), PHFrame.get("/api/ai/audit"), PHFrame.get(`/api/ai/chat?session_id=${encodeURIComponent(session)}`)]);
+      const [summaries, audit, chats] = compact ? [{ data: [] }, { data: [] }, await PHFrame.get(`/api/ai/chat?session_id=${encodeURIComponent(session)}`)] : await Promise.all([PHFrame.get("/api/ai/summaries"), PHFrame.get("/api/ai/audit"), PHFrame.get(`/api/ai/chat?session_id=${encodeURIComponent(session)}`)]);
       const datasets = Object.entries(this._metadata.datasets).map(([name, item]) => `<option value="${name}">${PHFrame.escape(item.label)}</option>`).join("");
       const cards = summaries.data.map(item => this.summaryCard(item)).join("") || `<div class="ph-empty-state"><span>AI</span><p>No AI-assisted drafts yet.</p></div>`;
       const events = audit.data.map(item => `<tr><td>${PHFrame.escape(item.created_at)}</td><td>${PHFrame.escape(item.event)}</td><td>${PHFrame.escape(item.actor)}</td><td>${item.summary_id ?? "—"}</td></tr>`).join("") || `<tr><td colspan="4">No AI activity yet.</td></tr>`;
       const transcript = chats.data.map(item => this.chatTurn(item)).join("") || `<div class="ph-ai-welcome"><span>✦</span><h3>Ask your public-health data</h3><p>I can compare locations, analyze trends, flag unusual changes, explain alerts, inspect data quality, and draft a cited situation report.</p></div>`;
-      this.innerHTML = `<div class="ph-ai-notice"><b>Human-controlled assistance</b><span>PHFrame uses aggregate evidence only. Output is a draft until a person approves it; do not use it as diagnosis or clinical advice.</span></div><section class="ph-ai-chat"><header><div><p class="ph-eyebrow">Public Health AI Analyst</p><h3>Conversational evidence analysis</h3></div><button class="ph-button ph-button-secondary" type="button" data-new-chat>New conversation</button></header><div class="ph-ai-prompts"><button>Are cases increasing over time?</button><button>Is there an unusual spike?</button><button>Compare the highest reporting locations</button><button>What data-quality issues should I check?</button><button>Why might the alert be triggered?</button></div><div class="ph-ai-transcript" data-chat-transcript>${transcript}</div><form class="ph-ai-composer" data-chat-form><input name="author" required value="${PHFrame.escape(localStorage.getItem("ph-ai-author") || "")}" placeholder="Your name"><textarea name="question" required rows="2" placeholder="Ask a follow-up question about your data…"></textarea><button class="ph-button">Ask analyst</button><p role="status" class="ph-status"></p></form></section><details class="ph-ai-tools"><summary>Reports, de-identification, approvals, and audit</summary><div class="ph-ai-layout"><section class="ph-card ph-stack"><div><p class="ph-eyebrow">Evidence summary</p><h3>Create a full briefing draft</h3></div><form class="ph-stack" data-ai-form><div class="ph-field"><label>Your name (public mode audit)</label><input name="author" required value="${PHFrame.escape(localStorage.getItem("ph-ai-author") || "")}" placeholder="Amina Rahman"></div><div class="ph-field"><label>Briefing title</label><input name="title" required value="Public health situation summary"></div><div class="ph-field"><label>Purpose and audience</label><textarea name="purpose" rows="4" placeholder="Weekly surveillance meeting for programme managers"></textarea></div><button class="ph-button">Generate evidence-backed draft</button><p role="status" class="ph-status"></p></form></section><section class="ph-card ph-stack"><div><p class="ph-eyebrow">De-identification</p><h3>Preview a safer dataset view</h3></div><form class="ph-actions" data-deid-form><div class="ph-field"><label>Dataset</label><select name="dataset">${datasets}</select></div><div class="ph-field"><label>Rows</label><input name="limit" type="number" min="1" max="100" value="10"></div><button class="ph-button ph-button-secondary">Preview</button></form><p class="ph-muted">Protected identifiers are removed; dates become years and ages become bands. This reduces exposure but is not a legal certification.</p><div data-deid-result></div></section></div><section><div class="ph-widget-header"><div><p class="ph-eyebrow">Human approval queue</p><h3>Drafts and decisions</h3></div></div><div class="ph-ai-summaries">${cards}</div></section><section class="ph-card"><p class="ph-eyebrow">Audit history</p><h3>Immutable AI events</h3><div class="ph-table-wrap"><table class="ph-table"><thead><tr><th>Time</th><th>Event</th><th>Actor</th><th>Summary</th></tr></thead><tbody>${events}</tbody></table></div></section></details>`;
+      const notice = compact ? "" : `<div class="ph-ai-notice"><b>Human-controlled assistance</b><span>PHFrame uses aggregate evidence only. Output is a draft until a person approves it; do not use it as diagnosis or clinical advice.</span></div>`;
+      const tools = compact ? "" : `<details class="ph-ai-tools"><summary>Reports, de-identification, approvals, and audit</summary><div class="ph-ai-layout"><section class="ph-card ph-stack"><div><p class="ph-eyebrow">Evidence summary</p><h3>Create a full briefing draft</h3></div><form class="ph-stack" data-ai-form><input type="hidden" name="author" value="Me"><div class="ph-field"><label>Briefing title</label><input name="title" required value="Public health situation summary"></div><div class="ph-field"><label>Purpose and audience</label><textarea name="purpose" rows="4" placeholder="Weekly surveillance meeting for programme managers"></textarea></div><button class="ph-button">Generate evidence-backed draft</button><p role="status" class="ph-status"></p></form></section><section class="ph-card ph-stack"><div><p class="ph-eyebrow">De-identification</p><h3>Preview a safer dataset view</h3></div><form class="ph-actions" data-deid-form><div class="ph-field"><label>Dataset</label><select name="dataset">${datasets}</select></div><div class="ph-field"><label>Rows</label><input name="limit" type="number" min="1" max="100" value="10"></div><button class="ph-button ph-button-secondary">Preview</button></form><p class="ph-muted">Protected identifiers are removed; dates become years and ages become bands. This reduces exposure but is not a legal certification.</p><div data-deid-result></div></section></div><section><div class="ph-widget-header"><div><p class="ph-eyebrow">Human approval queue</p><h3>Drafts and decisions</h3></div></div><div class="ph-ai-summaries">${cards}</div></section><section class="ph-card"><p class="ph-eyebrow">Audit history</p><h3>Immutable AI events</h3><div class="ph-table-wrap"><table class="ph-table"><thead><tr><th>Time</th><th>Event</th><th>Actor</th><th>Summary</th></tr></thead><tbody>${events}</tbody></table></div></section></details>`;
+      this.innerHTML = `${notice}<section class="ph-ai-chat"><header><div><p class="ph-eyebrow">Evidence-aware assistant</p><h3>Ask your public-health data</h3></div><button class="ph-button ph-button-secondary" type="button" data-new-chat>New conversation</button></header><div class="ph-ai-prompts"><button>Summarize the latest situation</button><button>Are cases increasing over time?</button><button>Is there an unusual spike?</button><button>Compare reporting locations</button><button>Check data quality</button><button>Explain current alerts</button></div><div class="ph-ai-transcript" data-chat-transcript>${transcript}</div><form class="ph-ai-composer" data-chat-form><textarea name="question" required rows="2" placeholder="Ask a question about trends, locations, alerts, or data quality…"></textarea><button class="ph-button" aria-label="Send question">Send <span>↑</span></button><p role="status" class="ph-status"></p></form></section>${tools}`;
       this.querySelector("[data-chat-form]").addEventListener("submit", event => this.ask(event));
       this.querySelectorAll(".ph-ai-prompts button").forEach(button => button.addEventListener("click", () => { this.querySelector('[name="question"]').value = button.textContent; this.querySelector('[name="question"]').focus(); }));
       this.querySelectorAll("[data-chat-report]").forEach(button => button.addEventListener("click", () => this.makeReport(button.dataset.chatReport)));
       this.querySelector("[data-new-chat]").addEventListener("click", () => { localStorage.removeItem("ph-ai-session"); this.render(); });
-      this.querySelector("[data-ai-form]").addEventListener("submit", event => this.generate(event));
-      this.querySelector("[data-deid-form]").addEventListener("submit", event => this.preview(event));
+      this.querySelector("[data-ai-form]")?.addEventListener("submit", event => this.generate(event));
+      this.querySelector("[data-deid-form]")?.addEventListener("submit", event => this.preview(event));
       this.querySelectorAll("[data-review]").forEach(button => button.addEventListener("click", () => this.review(button.dataset.id, button.dataset.review)));
     } catch (error) { this.innerHTML = `<p class="ph-error" role="alert">${PHFrame.escape(error.message)}</p>`; }
   }
   chatTurn(item) {
-    return `<article class="ph-chat-turn"><div class="ph-chat-question"><b>You</b><p>${PHFrame.escape(item.question)}</p></div><div class="ph-chat-answer"><div class="ph-chat-avatar">AI</div><div><div class="ph-chat-meta"><b>Analyst · ${PHFrame.escape(item.intent)}</b><span>${PHFrame.escape(item.created_at)}</span></div><div class="ph-ai-copy"><p>${PHFrame.markdown(item.answer)}</p></div><div class="ph-ai-privacy"><span>Aggregate evidence only</span><span>${item.evidence.length} sources</span><span>${PHFrame.escape(item.evidence_digest.slice(0, 10))}…</span></div><div class="ph-actions"><button class="ph-button ph-button-secondary" data-chat-report="${item.id}">Create report draft</button><details><summary>View evidence</summary><ol>${item.evidence.map(source => `<li><a href="${PHFrame.escape(source.endpoint)}" target="_blank">${PHFrame.escape(source.label || source.name)}</a></li>`).join("")}</ol></details></div></div></div></article>`;
+    return `<article class="ph-chat-turn"><div class="ph-chat-question"><b>Me</b><p>${PHFrame.escape(item.question)}</p></div><div class="ph-chat-answer"><div class="ph-chat-avatar">✦</div><div><div class="ph-chat-meta"><b>AI assistance · ${PHFrame.escape(item.intent)}</b><time>${PHFrame.escape(new Date(item.created_at).toLocaleString())}</time></div><div class="ph-ai-copy"><p>${PHFrame.markdown(item.answer)}</p></div><div class="ph-ai-privacy"><span>Aggregate evidence only</span><span>${item.evidence.length} sources</span><span>Trace ${PHFrame.escape(item.evidence_digest.slice(0, 8))}</span></div><div class="ph-actions"><button class="ph-button ph-button-secondary" data-chat-report="${item.id}">Create report draft</button><details><summary>View evidence</summary><ol>${item.evidence.map(source => `<li><a href="${PHFrame.escape(source.endpoint)}" target="_blank">${PHFrame.escape(source.label || source.name)}</a></li>`).join("")}</ol></details></div></div></div></article>`;
   }
   async ask(event) {
-    event.preventDefault(); const form = event.currentTarget, data = Object.fromEntries(new FormData(form)), status = form.querySelector("[role=status]"); status.textContent = "Analyzing relevant aggregate evidence…"; localStorage.setItem("ph-ai-author", data.author);
-    try { await PHFrame.send("/api/ai/chat", "POST", { ...data, session_id: this.sessionId() }); this.render(); } catch (error) { status.textContent = error.message; status.className = "ph-status ph-error"; }
+    event.preventDefault(); const form = event.currentTarget, data = Object.fromEntries(new FormData(form)), status = form.querySelector("[role=status]"), button = form.querySelector("button"); status.textContent = "Analyzing relevant aggregate evidence…"; button.disabled = true;
+    try { await PHFrame.send("/api/ai/chat", "POST", { ...data, author: "Me", session_id: this.sessionId() }); await this.render(); this.querySelector("[data-chat-transcript]")?.scrollTo({ top: 999999, behavior: "smooth" }); } catch (error) { status.textContent = error.message; status.className = "ph-status ph-error"; button.disabled = false; }
   }
   async makeReport(chatId) {
     const title = prompt("Situation report title", "Public health situation report"); if (!title) return;
-    const author = localStorage.getItem("ph-ai-author") || prompt("Your name for the audit history"); if (!author) return;
-    try { await PHFrame.send(`/api/ai/chat/${chatId}/report`, "POST", { title, author }); PHFrame.notify("Report draft created. Open Reports and approvals below to review it."); this.render(); } catch (error) { PHFrame.notify(error.message); }
+    try { await PHFrame.send(`/api/ai/chat/${chatId}/report`, "POST", { title, author: "Me" }); PHFrame.notify("Report draft created. Open Reports and approvals to review it."); this.render(); } catch (error) { PHFrame.notify(error.message); }
   }
   summaryCard(item) {
     const review = item.status === "draft" ? `<div class="ph-actions"><button class="ph-button" data-review="approved" data-id="${item.id}">Approve</button><button class="ph-button ph-button-secondary" data-review="rejected" data-id="${item.id}">Reject</button><a class="ph-button ph-button-secondary" href="/api/ai/summaries/${item.id}/export">Download draft</a></div>` : `<p class="ph-review-note"><b>Reviewed by ${PHFrame.escape(item.reviewed_by)}</b><br>${PHFrame.escape(item.review_note)}</p><a class="ph-button ph-button-secondary" href="/api/ai/summaries/${item.id}/export">Download report</a>`;
@@ -958,9 +976,7 @@ class PHAIWorkspace extends PHElement {
   async review(id, decision) {
     const note = prompt(`Explain why this draft is ${decision}. This note becomes part of the audit history.`);
     if (!note?.trim()) return;
-    const reviewer = prompt("Your name for the audit history (public mode)");
-    if (!reviewer?.trim()) return;
-    try { await PHFrame.send(`/api/ai/summaries/${id}/review`, "POST", { decision, note, reviewer }); PHFrame.notify(`Draft ${decision}.`); this.render(); } catch (error) { PHFrame.notify(error.message); }
+    try { await PHFrame.send(`/api/ai/summaries/${id}/review`, "POST", { decision, note, reviewer: "Me" }); PHFrame.notify(`Draft ${decision}.`); this.render(); } catch (error) { PHFrame.notify(error.message); }
   }
 }
 
@@ -987,6 +1003,7 @@ customElements.define("ph-rich-editor", PHRichEditor);
 customElements.define("ph-page-table", PHPageTable);
 customElements.define("ph-custom-page", PHCustomPage);
 customElements.define("ph-page-builder", PHPageBuilder);
+customElements.define("ph-ai-assistant", PHAIAssistant);
 customElements.define("ph-ai-workspace", PHAIWorkspace);
 customElements.define("ph-connector-console", PHConnectorConsole);
 window.PHFrame = PHFrame;

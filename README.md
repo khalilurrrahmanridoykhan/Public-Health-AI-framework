@@ -9,7 +9,7 @@
 
 PHFrame is an early-stage framework for building extensible public-health data systems. It combines generated projects, declarative health schemas, persistent storage, automatic APIs, a public-health engine, and a standards-based Web Component interface. The original CSV/Excel dashboard generator remains available as an export workflow.
 
-> Current version: `0.8.0a10` (professional tabbed settings workspace)
+> Current version: `0.8.0a11` (global floating AI assistant)
 
 ## Why PHFrame?
 
@@ -76,7 +76,7 @@ Use **Settings** to configure the header and dashboard titles, logo, favicon, na
 
 Phase 5 adds a responsible AI workspace at `/app#/ai`. Its default `local` provider produces conservative summaries from configured aggregate indicators, dimensions, threshold states, and data-quality results. It does not send row-level records or protected fields to a model. Every factual observation links to a numbered evidence item and its PHFrame API endpoint.
 
-The workspace is chat-first. Users can ask plain-language questions such as “Are cases increasing over time?”, “Which locations have the highest counts?”, “Is the latest value unusual?”, “What data-quality problems should I check?”, or “Why might this alert be triggered?”. PHFrame selects relevant aggregate evidence instead of repeating the whole dashboard, calculates first-to-latest change, flags latest-point anomalies using the prior-point baseline, retains evidence context for follow-up questions, and clearly separates observed signals from unproven causes.
+The workspace is chat-first. A floating **Ask PHFrame** control is available on every application page and opens a responsive, closable assistant without interrupting the current task. Users can ask plain-language questions such as “Are cases increasing over time?”, “Which locations have the highest counts?”, “Is the latest value unusual?”, “What data-quality problems should I check?”, or “Why might this alert be triggered?”. PHFrame selects relevant aggregate evidence instead of repeating the whole dashboard, calculates first-to-latest change, flags latest-point anomalies using the prior-point baseline, retains evidence context for follow-up questions, and clearly separates observed signals from unproven causes. Messages are labeled **Me** automatically; no chat-name field is required.
 
 Any analyst answer can become a situation-report draft. Reports enter the same human approval queue and can be downloaded as Markdown with draft status, reviewer information, evidence digest, and source endpoints embedded in the file.
 

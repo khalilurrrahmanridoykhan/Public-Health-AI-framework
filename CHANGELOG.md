@@ -4,6 +4,19 @@ All notable changes to PHFrame will be documented here. The project intends to f
 
 ## [Unreleased]
 
+## [0.8.0a11] - 2026-08-24
+
+### Added
+
+- Add a floating AI-assistance launcher on every application page with a closable responsive popup.
+- Add a professional assistant header, ready/privacy status, suggested questions, evidence badges, trace identifiers, loading state, and mobile full-screen presentation.
+
+### Changed
+
+- Preserve chat sessions while navigating the application and load only conversation data in compact mode.
+- Label user messages and public-mode audit actions as `Me`, removing the chat name field and extra identity prompts.
+- Refine conversational answer cards, timestamps, composer controls, report actions, and evidence access.
+
 ## [0.8.0a10] - 2026-08-24
 
 ### Changed
@@ -235,7 +248,8 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Import audit history.
 - Portable HTML dashboard export.
 
-[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a10...HEAD
+[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a11...HEAD
+[0.8.0a11]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a10...v0.8.0a11
 [0.8.0a10]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a9...v0.8.0a10
 [0.8.0a9]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a8...v0.8.0a9
 [0.8.0a8]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a7...v0.8.0a8
