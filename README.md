@@ -9,7 +9,7 @@
 
 PHFrame is an early-stage framework for building extensible public-health data systems. It combines generated projects, declarative health schemas, persistent storage, automatic APIs, a public-health engine, and a standards-based Web Component interface. The original CSV/Excel dashboard generator remains available as an export workflow.
 
-> Current version: `0.8.0a3` (multi-dashboard and template workspace preview)
+> Current version: `0.8.0a4` (dashboard loading-performance hotfix)
 
 ## Why PHFrame?
 

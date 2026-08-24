@@ -1,12 +1,17 @@
 const PHFrame = {
+  pendingGets: new Map(),
   messages: {
     en: { dashboard: "Dashboard", records: "Records", quality: "Data quality", theme: "Theme", saved: "Record saved." },
     bn: { dashboard: "ড্যাশবোর্ড", records: "রেকর্ড", quality: "ডেটার গুণমান", theme: "থিম", saved: "রেকর্ড সংরক্ষিত হয়েছে।" }
   },
   async get(path) {
-    const response = await fetch(path, { headers: { accept: "application/json" } });
-    if (!response.ok) throw new Error((await response.json()).error?.message || `Request failed (${response.status})`);
-    return response.json();
+    if (this.pendingGets.has(path)) return this.pendingGets.get(path);
+    const request = fetch(path, { headers: { accept: "application/json" } }).then(async response => {
+      if (!response.ok) throw new Error((await response.json()).error?.message || `Request failed (${response.status})`);
+      return response.json();
+    }).finally(() => this.pendingGets.delete(path));
+    this.pendingGets.set(path, request);
+    return request;
   },
   async send(path, method, body) {
     const response = await fetch(path, {
@@ -20,6 +25,9 @@ const PHFrame = {
     const span = document.createElement("span");
     span.textContent = value == null ? "" : String(value);
     return span.innerHTML;
+  },
+  loading(message = "Loading…", compact = false) {
+    return `<div class="ph-loader ${compact ? "ph-loader-compact" : ""}" role="status" aria-live="polite"><span class="ph-spinner" aria-hidden="true"></span><span>${this.escape(message)}</span></div>`;
   },
   markdown(value) {
     return this.escape(value).replace(/^### (.+)$/gm, "<h4>$1</h4>").replace(/^## (.+)$/gm, "<h3>$1</h3>").replace(/^# (.+)$/gm, "<h2>$1</h2>").replace(/^[-] (.+)$/gm, "<li>$1</li>").replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").replace(/\n\n/g, "</p><p>").replace(/\n/g, "<br>");
@@ -45,7 +53,7 @@ class PHElement extends HTMLElement {
 
 class PHAppShell extends PHElement {
   async render() {
-    this.innerHTML = `<p class="ph-muted" role="status">Loading PHFrame…</p>`;
+    this.innerHTML = `<main class="ph-boot-screen">${PHFrame.loading("Preparing your PHFrame workspace")}</main>`;
     try {
       const [metadata, settings] = await Promise.all([PHFrame.get("/api"), PHFrame.get("/api/settings")]);
       this.metadata = metadata;
@@ -60,7 +68,8 @@ class PHAppShell extends PHElement {
       this.draw();
       addEventListener("hashchange", () => this.route());
     } catch (error) {
-      this.innerHTML = `<p class="ph-error" role="alert">${PHFrame.escape(error.message)}</p>`;
+      this.innerHTML = `<main class="ph-boot-screen"><div class="ph-load-error" role="alert"><h2>PHFrame could not load</h2><p>${PHFrame.escape(error.message)}</p><button class="ph-button" type="button">Try again</button></div></main>`;
+      this.querySelector("button").addEventListener("click", () => this.render());
     }
   }
   draw() {
@@ -205,6 +214,7 @@ class PHQualityPanel extends PHElement {
 
 class PHKPI extends PHElement {
   async render() {
+    this.innerHTML = PHFrame.loading("Loading metric", true);
     try {
       const endpoint = this.getAttribute("field") ? `/api/visualize/${this.getAttribute("dataset")}?field=${encodeURIComponent(this.getAttribute("field"))}&operation=${this.getAttribute("operation") || "sum"}` : `/api/indicators/${this.getAttribute("indicator")}`;
       const response = await PHFrame.get(endpoint);
@@ -223,6 +233,7 @@ class PHKPI extends PHElement {
 
 class PHIndicatorChart extends PHElement {
   async render() {
+    this.innerHTML = PHFrame.loading("Loading chart", true);
     try {
       const endpoint = this.getAttribute("field") ? `/api/visualize/${this.getAttribute("dataset")}?field=${encodeURIComponent(this.getAttribute("field"))}` : `/api/dimensions/${this.getAttribute("dimension")}`;
       const response = await PHFrame.get(endpoint);
@@ -254,6 +265,7 @@ class PHIndicatorChart extends PHElement {
 
 class PHEpiCurve extends PHElement {
   async render() {
+    this.innerHTML = PHFrame.loading("Loading trend", true);
     const query = new URLSearchParams({ date_field: this.getAttribute("date-field") });
     if (this.getAttribute("value-field")) query.set("value_field", this.getAttribute("value-field"));
     try {
@@ -275,6 +287,7 @@ class PHEpiCurve extends PHElement {
 
 class PHMap extends PHElement {
   async render() {
+    this.innerHTML = PHFrame.loading("Loading map", true);
     try {
       const response = await PHFrame.get(`/api/dimensions/${this.getAttribute("dimension")}`);
       const values = response.data.values;
@@ -299,6 +312,7 @@ class PHMap extends PHElement {
 
 class PHGeoMap extends PHElement {
   async render() {
+    this.innerHTML = PHFrame.loading("Loading map", true);
     try {
       const dataset = this.getAttribute("dataset"), latitude = this.getAttribute("latitude-field"), longitude = this.getAttribute("longitude-field");
       const response = await PHFrame.get(`/api/geospatial/${dataset}?latitude=${encodeURIComponent(latitude)}&longitude=${encodeURIComponent(longitude)}`), points = response.data.points;
@@ -315,7 +329,15 @@ class PHDashboardManager extends PHElement {
   set metadata(value) { this._metadata = value; if (this.isConnected) this.render(); }
   async render() {
     if (!this._metadata) return;
-    const configured = await Promise.all(Object.entries(this._metadata.dashboards || {}).map(async ([id, item]) => ({ id: `configured-${id}`, configured: true, ...(await PHFrame.get(item.endpoint)).data })));
+    this.innerHTML = `<section class="ph-dashboard-loading">${PHFrame.loading("Loading dashboard and visualizations")}</section>`;
+    let configured;
+    try {
+      configured = await Promise.all(Object.entries(this._metadata.dashboards || {}).map(async ([id, item]) => ({ id: `configured-${id}`, configured: true, ...(await PHFrame.get(item.endpoint)).data })));
+    } catch (error) {
+      this.innerHTML = `<div class="ph-load-error" role="alert"><h2>Dashboard could not load</h2><p>${PHFrame.escape(error.message)}</p><button class="ph-button" type="button">Try again</button></div>`;
+      this.querySelector("button").addEventListener("click", () => this.render());
+      return;
+    }
     this.dashboards = [...configured.map(item => ({ ...item, title: item.label, description: "Configured project dashboard" })), ...(PHFrame.siteSettings.dashboards || [])];
     const selected = localStorage.getItem("ph-active-dashboard"), active = this.dashboards.find(item => item.id === selected) || this.dashboards[0];
     const options = this.dashboards.map(item => `<option value="${PHFrame.escape(item.id)}" ${item === active ? "selected" : ""}>${PHFrame.escape(item.title)}</option>`).join("");
@@ -376,7 +398,7 @@ class PHDashboard extends PHElement {
   set metadata(value) { this._metadata = value; if (this.isConnected && this._definition) this.render(); }
   async render() {
     try {
-      if (this._definition) { this.dashboard = this._definition; this.metadata = this._metadata; }
+      if (this._definition) { this.dashboard = this._definition; }
       else { const [response, metadata] = await Promise.all([PHFrame.get(`/api/dashboards/${this.getAttribute("name")}`), PHFrame.get("/api")]); this.dashboard = response.data; this.metadata = metadata; }
       this.storageKey = `ph-dashboard-layout:${this.dashboard.id || this.getAttribute("name") || this.dashboard.name}`;
       this.settings = this.loadSettings();

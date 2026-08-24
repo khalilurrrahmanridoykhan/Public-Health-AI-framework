@@ -63,6 +63,14 @@ button, a { touch-action: manipulation; }
 .ph-header-tools { display: flex; align-items: center; gap: .65rem; white-space: nowrap; }
 .ph-logout { padding: .4rem .6rem; color: inherit; background: transparent; border: 1px solid currentColor; border-radius: .4rem; cursor: pointer; }
 .ph-main { width: min(1440px, 100%); margin: auto; padding: clamp(1rem, 3vw, 2.5rem); }
+.ph-boot-screen, .ph-dashboard-loading { display: grid; min-height: 65vh; place-items: center; padding: 2rem; }
+.ph-dashboard-loading { min-height: 45vh; }
+.ph-loader { display: grid; justify-items: center; gap: .85rem; color: var(--ph-color-muted); font-weight: 650; text-align: center; }
+.ph-loader-compact { min-height: 9rem; align-content: center; font-size: .85rem; }
+.ph-spinner { width: 2.75rem; height: 2.75rem; border: 4px solid color-mix(in srgb, var(--ph-color-primary) 20%, var(--ph-color-border)); border-top-color: var(--ph-color-primary); border-radius: 50%; animation: ph-spin .8s linear infinite; }
+.ph-loader-compact .ph-spinner { width: 2rem; height: 2rem; border-width: 3px; }
+.ph-load-error { width: min(34rem, 100%); padding: 1.5rem; text-align: center; background: var(--ph-color-surface); border: 1px solid var(--ph-color-border); border-radius: var(--ph-radius); box-shadow: var(--ph-shadow); }
+@keyframes ph-spin { to { transform: rotate(360deg); } }
 .ph-card { background: var(--ph-color-surface); border: 1px solid color-mix(in srgb, var(--ph-color-border) 78%, transparent); border-radius: var(--ph-radius); box-shadow: var(--ph-shadow); padding: var(--ph-space-4); }
 .ph-grid { display: grid; gap: var(--ph-space-4); grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
 .ph-muted { color: var(--ph-color-muted); }

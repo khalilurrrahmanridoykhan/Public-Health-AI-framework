@@ -4,6 +4,15 @@ All notable changes to PHFrame will be documented here. The project intends to f
 
 ## [Unreleased]
 
+## [0.8.0a4] - 2026-08-24
+
+### Fixed
+
+- Stop recursive dashboard rendering that repeatedly requested the same visualization data and delayed page loading.
+- Deduplicate identical in-flight GET requests made by dashboard widgets.
+- Show accessible loading animations for application startup, dashboard preparation, metrics, charts, trends, and maps.
+- Show actionable retry controls when application or dashboard loading fails.
+
 ## [0.8.0a3] - 2026-08-24
 
 ### Added
@@ -166,7 +175,8 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Import audit history.
 - Portable HTML dashboard export.
 
-[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a3...HEAD
+[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a4...HEAD
+[0.8.0a4]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a3...v0.8.0a4
 [0.8.0a3]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a2...v0.8.0a3
 [0.8.0a2]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a1...v0.8.0a2
 [0.8.0a1]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a6...v0.8.0a1

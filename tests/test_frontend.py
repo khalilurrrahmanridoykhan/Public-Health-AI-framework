@@ -85,6 +85,12 @@ def test_frontend_shell_and_assets(tmp_path: Path):
     assert "data-add-content" in javascript.text
     assert "latitude-field" in javascript.text
     assert ".ph-template-grid" in css.text
+    assert "pendingGets" in javascript.text
+    assert 'PHFrame.loading("Preparing your PHFrame workspace")' in javascript.text
+    assert 'PHFrame.loading("Loading dashboard and visualizations")' in javascript.text
+    assert "this.metadata = this._metadata" not in javascript.text
+    assert ".ph-spinner" in css.text
+    assert "@keyframes ph-spin" in css.text
 
 
 def test_frontend_metadata_includes_ui_configuration(tmp_path: Path):
