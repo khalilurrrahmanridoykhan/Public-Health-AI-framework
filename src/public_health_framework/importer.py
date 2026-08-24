@@ -113,7 +113,10 @@ def import_frame(
 
     imported = 0
     if not errors and not dry_run:
-        imported = storage.bulk_create(dataset, payloads)
+        try:
+            imported = storage.bulk_create(dataset, payloads)
+        except ValueError as error:
+            errors.append({"row": 0, "message": str(error)})
     status = "failed" if errors else ("validated" if dry_run else "completed")
     run_id = storage.record_import(
         dataset_name, source, status, len(frame), imported, errors

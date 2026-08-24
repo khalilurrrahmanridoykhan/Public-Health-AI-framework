@@ -48,7 +48,7 @@ class PHAppShell extends PHElement {
   draw() {
     this.innerHTML = `<a class="ph-skip-link" href="#main">Skip to content</a>
       <div class="ph-shell"><header class="ph-header"><h1 class="ph-brand">PHFrame · ${PHFrame.escape(this.metadata.project)}</h1>
-      <nav class="ph-nav" aria-label="Primary"><a href="#/dashboard" data-route="dashboard">${PHFrame.t("dashboard")}</a><a href="#/records" data-route="records">${PHFrame.t("records")}</a><a href="#/import" data-route="import">Import</a><a href="#/quality" data-route="quality">${PHFrame.t("quality")}</a></nav>
+      <nav class="ph-nav" aria-label="Primary"><a href="#/dashboard" data-route="dashboard">${PHFrame.t("dashboard")}</a><a href="#/records" data-route="records">${PHFrame.t("records")}</a><a href="#/import" data-route="import">Import</a><a href="#/connectors" data-route="connectors">Connectors</a><a href="#/quality" data-route="quality">${PHFrame.t("quality")}</a></nav>
       <label>${PHFrame.t("theme")} <select class="ph-theme" aria-label="${PHFrame.t("theme")}"><option value="light">Light</option><option value="dark">Dark</option><option value="high-contrast">High contrast</option></select></label></header>
       <main class="ph-main" id="main" tabindex="-1"><div id="ph-view"></div></main><ph-notification-center></ph-notification-center></div>`;
     const theme = this.querySelector(".ph-theme");
@@ -73,6 +73,8 @@ class PHAppShell extends PHElement {
     } else if (route === "import") {
       view.innerHTML = `<h2>Import data</h2><ph-import-wizard></ph-import-wizard>`;
       view.querySelector("ph-import-wizard").metadata = this.metadata;
+    } else if (route === "connectors") {
+      view.innerHTML = `<h2>Connectors</h2><ph-connector-console></ph-connector-console>`;
     } else if (route === "quality") {
       view.innerHTML = `<h2>Data quality</h2><ph-quality-panel></ph-quality-panel>`;
     } else {
@@ -321,6 +323,26 @@ class PHImportWizard extends PHElement {
   }
 }
 
+class PHConnectorConsole extends PHElement {
+  async render() {
+    try {
+      const [connectors, history] = await Promise.all([PHFrame.get("/api/connectors"), PHFrame.get("/api/syncs")]);
+      const cards = connectors.data.map(item => `<article class="ph-card"><h3>${PHFrame.escape(item.name)}</h3><p>${item.type.toUpperCase()} → ${PHFrame.escape(item.dataset)}</p><p class="ph-muted">${item.schedule_minutes ? `Every ${item.schedule_minutes} minutes · ${item.due ? "Due" : "Not due"}` : "Manual schedule"}</p><div class="ph-actions"><button class="ph-button" data-sync="${item.name}" data-dry="true">Validate pull</button><ph-confirm label="Synchronize" message="Pull and atomically import records from ${PHFrame.escape(item.name)}?" data-connector="${item.name}"></ph-confirm></div></article>`).join("") || `<p class="ph-muted">No connectors configured.</p>`;
+      const rows = history.data.map(item => `<tr><td>${PHFrame.escape(item.created_at)}</td><td>${PHFrame.escape(item.connector)}</td><td>${item.status}</td><td>${item.imported_rows}/${item.fetched_rows}</td><td>${item.errors.map(error => PHFrame.escape(error.message)).join("; ")}</td></tr>`).join("") || `<tr><td colspan="5">No synchronization runs.</td></tr>`;
+      this.innerHTML = `<div class="ph-grid">${cards}</div><section class="ph-card"><h3>Synchronization history</h3><div class="ph-table-wrap"><table class="ph-table"><thead><tr><th>Time</th><th>Connector</th><th>Status</th><th>Rows</th><th>Errors</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
+      this.querySelectorAll("[data-sync]").forEach(button => button.addEventListener("click", () => this.sync(button.dataset.sync, true)));
+      this.querySelectorAll("ph-confirm[data-connector]").forEach(confirm => confirm.addEventListener("ph-confirmed", () => this.sync(confirm.dataset.connector, false)));
+    } catch (error) { this.innerHTML = `<p class="ph-error" role="alert">${PHFrame.escape(error.message)}</p>`; }
+  }
+  async sync(name, dryRun) {
+    try {
+      const response = await PHFrame.send(`/api/connectors/${name}/sync?dry_run=${dryRun}`, "POST", {});
+      PHFrame.notify(`${name}: ${response.data.status}`);
+      this.render();
+    } catch (error) { PHFrame.notify(`${name}: ${error.message}`); }
+  }
+}
+
 customElements.define("ph-app-shell", PHAppShell);
 customElements.define("ph-data-form", PHDataForm);
 customElements.define("ph-case-table", PHCaseTable);
@@ -336,4 +358,5 @@ customElements.define("ph-notification-center", PHNotificationCenter);
 customElements.define("ph-modal", PHModal);
 customElements.define("ph-confirm", PHConfirm);
 customElements.define("ph-import-wizard", PHImportWizard);
+customElements.define("ph-connector-console", PHConnectorConsole);
 window.PHFrame = PHFrame;

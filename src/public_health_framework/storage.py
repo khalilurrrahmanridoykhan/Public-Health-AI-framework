@@ -66,6 +66,17 @@ class Storage:
             Column("errors_json", Text, nullable=False),
             Column("created_at", DateTime(timezone=True), nullable=False),
         )
+        self.syncs_table = Table(
+            "_phframe_syncs", self.metadata,
+            Column("id", Integer, primary_key=True, autoincrement=True),
+            Column("connector", String(255), nullable=False),
+            Column("dataset", String(255), nullable=False),
+            Column("status", String(32), nullable=False),
+            Column("fetched_rows", Integer, nullable=False),
+            Column("imported_rows", Integer, nullable=False),
+            Column("errors_json", Text, nullable=False),
+            Column("created_at", DateTime(timezone=True), nullable=False),
+        )
 
     def initialize(self) -> None:
         self.migrate()
@@ -87,7 +98,7 @@ class Storage:
 
     def migrate(self, check_only: bool = False) -> list[str]:
         """Create metadata/tables and apply safe additive schema changes."""
-        self.metadata.create_all(self.engine, tables=[self.schema_table, self.imports_table])
+        self.metadata.create_all(self.engine, tables=[self.schema_table, self.imports_table, self.syncs_table])
         actions: list[str] = []
         inspector = inspect(self.engine)
         for dataset in self.config.datasets.values():
@@ -236,6 +247,31 @@ class Storage:
 
     def import_history(self, limit: int = 20) -> list[dict[str, Any]]:
         statement = select(self.imports_table).order_by(self.imports_table.c.id.desc()).limit(max(1, min(limit, 200)))
+        with self.engine.connect() as connection:
+            rows = connection.execute(statement).mappings().all()
+        result = []
+        for row in rows:
+            item = _serialize(dict(row))
+            item["errors"] = json.loads(item.pop("errors_json"))
+            result.append(item)
+        return result
+
+    def record_sync(
+        self, connector: str, dataset: str, status: str, fetched_rows: int,
+        imported_rows: int, errors: list[dict[str, Any]],
+    ) -> int:
+        with self.engine.begin() as connection:
+            result = connection.execute(insert(self.syncs_table).values(
+                connector=connector, dataset=dataset, status=status, fetched_rows=fetched_rows,
+                imported_rows=imported_rows, errors_json=json.dumps(errors), created_at=_now(),
+            ))
+            return int(result.inserted_primary_key[0])
+
+    def sync_history(self, limit: int = 20, connector: str | None = None) -> list[dict[str, Any]]:
+        statement = select(self.syncs_table)
+        if connector:
+            statement = statement.where(self.syncs_table.c.connector == connector)
+        statement = statement.order_by(self.syncs_table.c.id.desc()).limit(max(1, min(limit, 200)))
         with self.engine.connect() as connection:
             rows = connection.execute(statement).mappings().all()
         result = []

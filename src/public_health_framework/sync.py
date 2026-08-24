@@ -1,0 +1,73 @@
+"""Connector synchronization orchestration and due-schedule evaluation."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from typing import Any
+
+import pandas as pd
+
+from .config import ProjectConfig
+from .connectors import Transport, create_connector, json_transport
+from .importer import import_frame
+from .storage import Storage
+
+
+@dataclass(frozen=True)
+class SyncResult:
+    run_id: int
+    connector: str
+    dataset: str
+    status: str
+    fetched_rows: int
+    imported_rows: int
+    errors: tuple[dict[str, Any], ...]
+    dry_run: bool = False
+
+
+def sync_connector(
+    config: ProjectConfig, name: str, dry_run: bool = False,
+    transport: Transport = json_transport,
+) -> SyncResult:
+    if name not in config.connectors:
+        raise ValueError(f"Connector not found: {name}")
+    connector_config = config.connectors[name]
+    storage = Storage(config)
+    storage.initialize()
+    fetched = imported = 0
+    errors: list[dict[str, Any]] = []
+    status = "failed"
+    try:
+        records = create_connector(connector_config, transport).pull()
+        fetched = len(records)
+        if not records:
+            status = "validated" if dry_run else "completed"
+        else:
+            result = import_frame(
+                config, connector_config.dataset, pd.DataFrame(records),
+                f"connector:{name}", mapping=None, dry_run=dry_run,
+            )
+            imported = result.imported_rows
+            errors = list(result.errors)
+            status = result.status
+    except (OSError, ValueError) as error:
+        errors.append({"message": str(error)})
+    run_id = storage.record_sync(name, connector_config.dataset, status, fetched, imported, errors)
+    return SyncResult(run_id, name, connector_config.dataset, status, fetched, imported, tuple(errors), dry_run)
+
+
+def connector_due(config: ProjectConfig, name: str, now: datetime | None = None) -> bool:
+    connector = config.connectors[name]
+    if connector.schedule_minutes is None:
+        return False
+    storage = Storage(config)
+    storage.initialize()
+    history = storage.sync_history(1, name)
+    if not history:
+        return True
+    last = datetime.fromisoformat(history[0]["created_at"])
+    current = now or datetime.now().astimezone()
+    if last.tzinfo is None:
+        last = last.replace(tzinfo=current.tzinfo)
+    return current >= last + timedelta(minutes=connector.schedule_minutes)

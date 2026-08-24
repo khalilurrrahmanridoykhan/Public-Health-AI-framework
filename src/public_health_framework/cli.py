@@ -72,6 +72,18 @@ def _parser() -> argparse.ArgumentParser:
     history.add_argument("--config", default="phframe.yaml", help="Project configuration path")
     history.add_argument("--limit", type=int, default=20)
 
+    sync = subparsers.add_parser("sync", help="Pull records from configured connectors.")
+    sync.add_argument("connector", nargs="?", help="Connector name")
+    sync.add_argument("--config", default="phframe.yaml", help="Project configuration path")
+    sync.add_argument("--all", action="store_true", help="Run every configured connector")
+    sync.add_argument("--due", action="store_true", help="Run only connectors whose schedule is due")
+    sync.add_argument("--dry-run", action="store_true", help="Fetch and validate without importing")
+
+    syncs = subparsers.add_parser("syncs", help="Show recent connector synchronization runs.")
+    syncs.add_argument("--config", default="phframe.yaml", help="Project configuration path")
+    syncs.add_argument("--limit", type=int, default=20)
+    syncs.add_argument("--connector", help="Filter history by connector name")
+
     analyze = subparsers.add_parser("analyze", help="Create an HTML dashboard from CSV or Excel data.")
     analyze.add_argument("input", help="Path to a .csv, .xlsx, or .xlsm file")
     analyze.add_argument("-o", "--output", default="dashboard.html", help="Output HTML path")
@@ -119,6 +131,37 @@ def main(argv: list[str] | None = None) -> int:
             storage.initialize()
             print(json.dumps(storage.import_history(args.limit), indent=2))
             return 0
+        if args.command == "syncs":
+            from .config import ProjectConfig
+
+            storage = Storage(ProjectConfig.load(args.config))
+            storage.initialize()
+            print(json.dumps(storage.sync_history(args.limit, args.connector), indent=2))
+            return 0
+        if args.command == "sync":
+            from .config import ProjectConfig
+            from .sync import connector_due, sync_connector
+
+            config = ProjectConfig.load(args.config)
+            if args.all:
+                names = list(config.connectors)
+            elif args.connector:
+                names = [args.connector]
+            else:
+                raise ValueError("Specify a connector or use --all.")
+            if args.due:
+                names = [name for name in names if name in config.connectors and connector_due(config, name)]
+            if not names:
+                print("No connector synchronizations are due.")
+                return 0
+            failed = False
+            for name in names:
+                result = sync_connector(config, name, args.dry_run)
+                print(f"{name}: {result.status} ({result.imported_rows}/{result.fetched_rows} imported)")
+                for error in result.errors[:20]:
+                    print(f"  Error: {error['message']}")
+                failed = failed or result.status == "failed"
+            return 2 if failed else 0
         if args.command == "import":
             from .config import ProjectConfig
 

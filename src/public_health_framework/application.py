@@ -11,6 +11,7 @@ from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
 from starlette.routing import Route
+from starlette.concurrency import run_in_threadpool
 
 from . import __version__
 from .config import DatasetSchema, ProjectConfig
@@ -19,6 +20,7 @@ from .periods import resolve_period
 from .importer import import_frame, load_uploaded_frame, preview_frame
 from .storage import Storage
 from .ui import asset_text
+from .sync import connector_due, sync_connector
 
 
 class PHFrame:
@@ -51,6 +53,9 @@ class PHFrame:
             Route("/api/organisation-units/{code}", self.organisation_unit_detail, methods=["GET"]),
             Route("/api/dashboards/{dashboard}", self.dashboard, methods=["GET"]),
             Route("/api/epi-curve/{dataset}", self.epi_curve, methods=["GET"]),
+            Route("/api/connectors", self.connector_index, methods=["GET"]),
+            Route("/api/connectors/{connector}/sync", self.connector_sync, methods=["POST"]),
+            Route("/api/syncs", self.sync_history, methods=["GET"]),
             Route("/api/{dataset}", self.collection, methods=["GET", "POST"]),
             Route("/api/{dataset}/{record_id:int}", self.detail, methods=["GET", "PUT", "PATCH", "DELETE"]),
         ]
@@ -163,6 +168,14 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
                     "theme": self.config.ui.theme,
                     "locale": self.config.ui.locale,
                     "translations": self.config.ui.translations,
+                },
+                "connectors": {
+                    item.name: {
+                        "type": item.type, "dataset": item.dataset,
+                        "schedule_minutes": item.schedule_minutes,
+                        "endpoint": f"/api/connectors/{item.name}/sync",
+                    }
+                    for item in self.config.connectors.values()
                 },
             }
         )
@@ -338,6 +351,33 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
             return JSONResponse({"data": self.storage.epi_curve(dataset, date_field, value_field)})
         except ValueError as error:
             return _error(str(error), 422)
+
+    async def connector_index(self, request: Request) -> JSONResponse:
+        return JSONResponse({"data": [
+            {
+                "name": item.name, "type": item.type, "dataset": item.dataset,
+                "schedule_minutes": item.schedule_minutes, "due": connector_due(self.config, item.name),
+                "sync_endpoint": f"/api/connectors/{item.name}/sync",
+            }
+            for item in self.config.connectors.values()
+        ]})
+
+    async def connector_sync(self, request: Request) -> Response:
+        name = request.path_params["connector"]
+        if name not in self.config.connectors:
+            return _error("Connector not found.", 404)
+        dry_run = request.query_params.get("dry_run", "false").lower() == "true"
+        result = await run_in_threadpool(sync_connector, self.config, name, dry_run)
+        data = vars(result).copy()
+        data["errors"] = list(result.errors)
+        return JSONResponse({"data": data}, status_code=200 if result.status != "failed" else 502)
+
+    async def sync_history(self, request: Request) -> Response:
+        try:
+            limit = int(request.query_params.get("limit", "20"))
+        except ValueError:
+            return _error("limit must be an integer.", 400)
+        return JSONResponse({"data": self.storage.sync_history(limit, request.query_params.get("connector"))})
 
     async def import_history(self, request: Request) -> JSONResponse:
         try:
