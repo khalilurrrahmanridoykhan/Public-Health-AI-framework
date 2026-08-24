@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from hashlib import sha256
 import json
 import os
+import re
 from typing import Any
 from urllib.request import Request, urlopen
 
@@ -110,4 +111,7 @@ def generate_summary(title: str, evidence: list[dict[str, Any]], purpose: str, s
         content = str(result["choices"][0]["message"]["content"])
     except (KeyError, IndexError, TypeError) as error:
         raise ValueError("External AI returned an unsupported response.") from error
+    citations = {int(value) for value in re.findall(r"\[E(\d+)\]", content)}
+    if not citations or any(value < 1 or value > len(evidence) for value in citations):
+        raise ValueError("External AI output was rejected because it did not contain valid evidence citations.")
     return content, provider, model

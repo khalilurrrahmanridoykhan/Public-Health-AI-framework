@@ -2,7 +2,7 @@ from pathlib import Path
 
 from starlette.testclient import TestClient
 
-from public_health_framework.ai import deidentify_records
+from public_health_framework.ai import deidentify_records, generate_summary
 from public_health_framework.application import PHFrame
 from public_health_framework.project import create_project
 
@@ -67,3 +67,10 @@ def test_external_ai_is_opt_in_and_https_only(tmp_path: Path):
     response = client.post("/api/ai/summaries", json={"title": "Draft", "author": "Analyst"})
     assert response.status_code == 422
     assert "disabled" in response.json()["error"]["message"]
+
+
+def test_local_summary_contains_numbered_evidence_citations():
+    evidence = [{"kind": "indicator", "label": "Cases", "value": 3, "endpoint": "/api/indicators/cases"}]
+    content, provider, _ = generate_summary("Brief", evidence, "Review", {"ai_provider": "local"})
+    assert provider == "local"
+    assert "[1]" in content
