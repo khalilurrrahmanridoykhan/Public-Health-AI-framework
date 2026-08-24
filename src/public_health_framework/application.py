@@ -28,6 +28,8 @@ class PHFrame:
             Route("/health", self.health, methods=["GET"]),
             Route("/api", self.api_index, methods=["GET"]),
             Route("/api/imports", self.import_history, methods=["GET"]),
+            Route("/api/indicators", self.indicator_index, methods=["GET"]),
+            Route("/api/indicators/{indicator}", self.indicator_result, methods=["GET"]),
             Route("/api/{dataset}", self.collection, methods=["GET", "POST"]),
             Route("/api/{dataset}/{record_id:int}", self.detail, methods=["GET", "PUT", "PATCH", "DELETE"]),
         ]
@@ -80,8 +82,40 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
                     }
                     for dataset in self.config.datasets.values()
                 },
+                "indicators": {
+                    indicator.name: {
+                        "label": indicator.label,
+                        "dataset": indicator.dataset,
+                        "operation": indicator.operation,
+                        "endpoint": f"/api/indicators/{indicator.name}",
+                    }
+                    for indicator in self.config.indicators.values()
+                },
             }
         )
+
+    async def indicator_index(self, request: Request) -> JSONResponse:
+        return JSONResponse({"data": [
+            {
+                "name": item.name, "label": item.label, "dataset": item.dataset,
+                "operation": item.operation, "endpoint": f"/api/indicators/{item.name}",
+            }
+            for item in self.config.indicators.values()
+        ]})
+
+    async def indicator_result(self, request: Request) -> Response:
+        indicator = self.config.indicators.get(request.path_params["indicator"])
+        if indicator is None:
+            return _error("Indicator not found.", 404)
+        reserved = {"start", "end"}
+        filters = {key: value for key, value in request.query_params.items() if key not in reserved}
+        try:
+            result = self.storage.indicator(
+                indicator, filters, request.query_params.get("start"), request.query_params.get("end")
+            )
+            return JSONResponse({"data": result})
+        except ValueError as error:
+            return _error(str(error), 422)
 
     async def import_history(self, request: Request) -> JSONResponse:
         try:

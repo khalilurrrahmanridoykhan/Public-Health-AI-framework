@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field as dataclass_field
 from pathlib import Path
 import os
 import re
@@ -13,6 +13,7 @@ import yaml
 
 IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]*$")
 FIELD_TYPES = {"string", "integer", "number", "boolean", "date", "datetime", "location"}
+INDICATOR_OPERATIONS = {"count", "sum", "average", "rate", "ratio", "percentage"}
 
 
 @dataclass(frozen=True)
@@ -60,10 +61,69 @@ class DatasetSchema:
 
 
 @dataclass(frozen=True)
+class IndicatorSchema:
+    name: str
+    label: str
+    dataset: str
+    operation: str
+    field: str | None = None
+    numerator: str | None = None
+    denominator: str | None = None
+    multiplier: float = 1.0
+    date_field: str | None = None
+    filters: dict[str, Any] = dataclass_field(default_factory=dict)
+
+    @classmethod
+    def from_dict(
+        cls, name: str, value: dict[str, Any], datasets: dict[str, DatasetSchema]
+    ) -> "IndicatorSchema":
+        _validate_identifier(name, "indicator")
+        dataset_name = str(value.get("dataset", ""))
+        if dataset_name not in datasets:
+            raise ValueError(f"Indicator '{name}' references unknown dataset '{dataset_name}'.")
+        dataset = datasets[dataset_name]
+        operation = str(value.get("operation", "count")).lower()
+        if operation not in INDICATOR_OPERATIONS:
+            raise ValueError(f"Indicator '{name}' has unsupported operation '{operation}'.")
+        indicator = cls(
+            name=name,
+            label=str(value.get("label", name.replace("_", " ").title())),
+            dataset=dataset_name,
+            operation=operation,
+            field=value.get("field"),
+            numerator=value.get("numerator"),
+            denominator=value.get("denominator"),
+            multiplier=float(value.get("multiplier", 100 if operation == "percentage" else 1)),
+            date_field=value.get("date_field"),
+            filters=dict(value.get("filters", {}) or {}),
+        )
+        referenced = [indicator.date_field, *indicator.filters]
+        if operation in {"sum", "average"}:
+            if not indicator.field:
+                raise ValueError(f"Indicator '{name}' must define field for {operation}.")
+            referenced.append(indicator.field)
+        if operation in {"rate", "ratio", "percentage"}:
+            if not indicator.numerator or not indicator.denominator:
+                raise ValueError(f"Indicator '{name}' must define numerator and denominator.")
+            referenced.extend([indicator.numerator, indicator.denominator])
+        unknown = [item for item in referenced if item and item not in dataset.fields]
+        if unknown:
+            raise ValueError(f"Indicator '{name}' references unknown fields: {', '.join(unknown)}.")
+        numeric = {field_name for field_name, schema in dataset.fields.items() if schema.type in {"integer", "number"}}
+        measures = [item for item in [indicator.field, indicator.numerator, indicator.denominator] if item]
+        if any(item not in numeric for item in measures):
+            raise ValueError(f"Indicator '{name}' measure fields must be integer or number fields.")
+        if indicator.date_field and dataset.fields[indicator.date_field].type not in {"date", "datetime"}:
+            raise ValueError(f"Indicator '{name}' date_field must be a date or datetime field.")
+        return indicator
+
+
+@dataclass(frozen=True)
 class ProjectConfig:
     name: str
     database: str = "sqlite:///data/phframe.db"
-    datasets: dict[str, DatasetSchema] = field(default_factory=dict)
+    datasets: dict[str, DatasetSchema] = dataclass_field(default_factory=dict)
+    indicators: dict[str, IndicatorSchema] = dataclass_field(default_factory=dict)
     plugins: tuple[str, ...] = ()
     environment: str = "development"
     host: str = "127.0.0.1"
@@ -84,6 +144,13 @@ class ProjectConfig:
         if not isinstance(raw_datasets, dict):
             raise ValueError("Configuration 'datasets' must be an object.")
         datasets = {name: DatasetSchema.from_dict(name, value or {}) for name, value in raw_datasets.items()}
+        raw_indicators = raw.get("indicators", {})
+        if not isinstance(raw_indicators, dict):
+            raise ValueError("Configuration 'indicators' must be an object.")
+        indicators = {
+            name: IndicatorSchema.from_dict(name, value or {}, datasets)
+            for name, value in raw_indicators.items()
+        }
         plugins = tuple(str(item) for item in raw.get("plugins", []))
         database = os.environ.get("PHFRAME_DATABASE_URL") or _expand_env(
             str(project.get("database", "sqlite:///data/phframe.db"))
@@ -96,6 +163,7 @@ class ProjectConfig:
             name=str(name),
             database=database,
             datasets=datasets,
+            indicators=indicators,
             plugins=plugins,
             environment=environment,
             host=os.environ.get("PHFRAME_HOST", str(server.get("host", "127.0.0.1"))),

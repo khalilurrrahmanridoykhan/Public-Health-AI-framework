@@ -8,11 +8,11 @@ from typing import Any
 
 from sqlalchemy import (
     Boolean, Column, Date, DateTime, Float, Integer, MetaData, String, Table, Text,
-    create_engine, delete, inspect, insert, select, update,
+    and_, create_engine, delete, func, inspect, insert, select, update,
 )
 from sqlalchemy.schema import CreateColumn
 
-from .config import DatasetSchema, FieldSchema, ProjectConfig
+from .config import DatasetSchema, FieldSchema, IndicatorSchema, ProjectConfig
 
 
 TYPE_FACTORIES = {
@@ -210,6 +210,56 @@ class Storage:
             item["errors"] = json.loads(item.pop("errors_json"))
             result.append(item)
         return result
+
+    def indicator(
+        self,
+        indicator: IndicatorSchema,
+        filters: dict[str, Any] | None = None,
+        start: str | None = None,
+        end: str | None = None,
+    ) -> dict[str, Any]:
+        dataset = self.config.datasets[indicator.dataset]
+        table = self._dataset_table(dataset)
+        conditions = []
+        applied_filters = {**indicator.filters, **(filters or {})}
+        for name, value in applied_filters.items():
+            if name not in dataset.fields:
+                raise ValueError(f"Unknown filter field '{name}'.")
+            conditions.append(table.c[name] == _coerce(name, value, dataset.fields[name]))
+        if start or end:
+            if not indicator.date_field:
+                raise ValueError(f"Indicator '{indicator.name}' does not define date_field.")
+            date_schema = dataset.fields[indicator.date_field]
+            if start:
+                conditions.append(table.c[indicator.date_field] >= _coerce(indicator.date_field, start, date_schema))
+            if end:
+                conditions.append(table.c[indicator.date_field] <= _coerce(indicator.date_field, end, date_schema))
+
+        if indicator.operation == "count":
+            expression = func.count(table.c.id)
+        elif indicator.operation == "sum":
+            expression = func.sum(table.c[indicator.field])
+        elif indicator.operation == "average":
+            expression = func.avg(table.c[indicator.field])
+        else:
+            numerator = func.sum(table.c[indicator.numerator])
+            denominator = func.sum(table.c[indicator.denominator])
+            expression = numerator * indicator.multiplier / func.nullif(denominator, 0)
+        statement = select(expression)
+        if conditions:
+            statement = statement.where(and_(*conditions))
+        with self.engine.connect() as connection:
+            value = connection.execute(statement).scalar_one()
+        return {
+            "name": indicator.name,
+            "label": indicator.label,
+            "dataset": indicator.dataset,
+            "operation": indicator.operation,
+            "value": float(value) if value is not None else None,
+            "multiplier": indicator.multiplier,
+            "filters": applied_filters,
+            "period": {"start": start, "end": end},
+        }
 
 
 def validate_payload(dataset: DatasetSchema, payload: dict[str, Any], partial: bool) -> dict[str, Any]:

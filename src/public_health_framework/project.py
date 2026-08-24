@@ -48,6 +48,22 @@ datasets:
       population:
         type: integer
 
+indicators:
+  total_cases:
+    label: Total Cases
+    dataset: case_reports
+    operation: sum
+    field: cases
+    date_field: report_date
+  incidence_per_100000:
+    label: Incidence per 100,000
+    dataset: case_reports
+    operation: rate
+    numerator: cases
+    denominator: population
+    multiplier: 100000
+    date_field: report_date
+
 plugins: []
 """
 
@@ -110,6 +126,7 @@ def check_project(config_path: str | Path = "phframe.yaml") -> tuple[ProjectConf
     messages = [f"Configuration: {Path(config_path).resolve()}"]
     messages.append(f"Project: {config.name}")
     messages.append(f"Datasets: {len(config.datasets)}")
+    messages.append(f"Indicators: {len(config.indicators)}")
     messages.append(f"Environment: {config.environment}")
     messages.append(f"Database: {config.database_display}")
     Storage(config).initialize()

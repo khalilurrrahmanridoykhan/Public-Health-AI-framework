@@ -587,11 +587,11 @@ This application will function as:
 - A demonstration for public-health organizations
 - A basis for discovering stable framework APIs
 
-## Immediate Next Release: PHFrame 0.2
+## Current Release: PHFrame 0.2 Alpha
 
-The current version creates a one-time HTML dashboard. Version 0.2 should introduce a persistent, customizable application.
+PHFrame 0.2.0a1 delivers the Phase 1 foundation: a persistent, customizable application while retaining the one-time HTML dashboard workflow.
 
-### Required Scope
+### Delivered Scope
 
 - Rename and stabilize the `phframe` CLI
 - Add `phframe new <project-name>`
@@ -604,6 +604,27 @@ The current version creates a one-time HTML dashboard. Version 0.2 should introd
 - Generate basic CRUD APIs
 - Preserve the current HTML dashboard as an export feature
 - Add framework-level unit and integration tests
+
+## Immediate Next Release: PHFrame 0.3 Alpha
+
+The 0.3 series begins the Phase 2 public-health engine. Its first vertical slice is now implemented on the development branch.
+
+### Implemented Scope
+
+- Declarative indicator definitions
+- Count, sum, average, rate, ratio, and percentage calculations
+- Dataset-field filters
+- Date-range reporting periods
+- Generated indicator metadata and result APIs
+
+### Remaining Scope
+
+- Named epidemiological periods and epidemiological-week utilities
+- Data-quality rule definitions and evaluation
+- Saved filter and dimension definitions
+- Surveillance threshold evaluation
+- Reusable public-health field types
+- Organisation-unit hierarchy
 
 ### Explicitly Out of Scope for 0.2
 
@@ -621,8 +642,8 @@ The current version creates a one-time HTML dashboard. Version 0.2 should introd
 |---|---|
 | 0.1 | CSV/Excel to portable HTML dashboard |
 | 0.2 | Create and run a persistent PHFrame application |
-| 0.3 | Dataset schemas, CRUD APIs, and database migrations |
-| 0.4 | Indicators, reporting periods, and data-quality rules |
+| 0.3 | Indicators, reporting periods, and data-quality rules |
+| 0.4 | Organisation units and reusable public-health field types |
 | 0.5 | Web Component application shell and dashboard UI |
 | 0.6 | Organisation units, maps, and surveillance functions |
 | 0.7 | Saved imports and Kobo/DHIS2 connectors |
@@ -648,4 +669,3 @@ PHFrame should be considered successful when:
 The next engineering priority is **PHFrame 0.2: create and run a customizable malaria surveillance application with a persistent backend, API, and development server**.
 
 New features should be accepted when they strengthen this vertical slice or establish a clearly required framework interface. Features unrelated to the reference application should wait until the foundation is stable.
-

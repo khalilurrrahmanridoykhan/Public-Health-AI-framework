@@ -20,6 +20,7 @@ Current capabilities include:
 - Atomic CSV and Excel imports with reusable column mappings
 - Import audit history and safe schema migration checks
 - Portable HTML dashboards for offline sharing
+- Declarative indicators with count, sum, average, rate, ratio, and percentage calculations
 
 > [!IMPORTANT]
 > PHFrame is alpha software. Evaluate it with non-sensitive data before considering production use. It does not yet provide authentication or a complete deployment security model.
@@ -58,6 +59,36 @@ curl -X POST http://127.0.0.1:8000/api/case_reports \
 ```
 
 The Phase 1 schema supports `string`, `integer`, `number`, `boolean`, `date`, `datetime`, and `location` fields, plus `required` and `protected` metadata.
+
+## Indicators
+
+Define deterministic indicators alongside datasets in `phframe.yaml`:
+
+```yaml
+indicators:
+  total_cases:
+    dataset: case_reports
+    operation: sum
+    field: cases
+    date_field: report_date
+  incidence_per_100000:
+    dataset: case_reports
+    operation: rate
+    numerator: cases
+    denominator: population
+    multiplier: 100000
+    date_field: report_date
+```
+
+Retrieve results through the generated API:
+
+```bash
+curl 'http://127.0.0.1:8000/api/indicators/total_cases'
+curl 'http://127.0.0.1:8000/api/indicators/total_cases?district=Bandarban'
+curl 'http://127.0.0.1:8000/api/indicators/total_cases?start=2026-07-01&end=2026-07-31'
+```
+
+The supported operations are `count`, `sum`, `average`, `rate`, `ratio`, and `percentage`. Rate, ratio, and percentage indicators return `null` when the summed denominator is zero.
 
 ## Schema migrations
 

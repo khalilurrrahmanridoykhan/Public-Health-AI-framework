@@ -7,6 +7,9 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Add continuous integration across Python 3.10–3.12.
 - Add contribution and security guidance.
 - Improve package metadata and project documentation.
+- Add declarative count, sum, average, rate, ratio, and percentage indicators.
+- Add indicator metadata and result APIs with field filters and reporting-period ranges.
+- Add total-cases and incidence indicators to newly generated surveillance projects.
 
 ## [0.2.0a1] - 2026-07-21
 
