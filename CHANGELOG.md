@@ -19,6 +19,8 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Add threshold evaluation APIs that support periods and saved filters.
 - Add reusable identifier, disease-code, age, sex, case-classification, epidemiological-week, reporting-period, organisation-unit, and facility field types.
 - Add domain validation and portable storage mappings for public-health field types.
+- Add declarative organisation-unit hierarchies with parent and cycle validation.
+- Add hierarchy discovery APIs and organisation-unit referential validation for record writes and imports.
 
 ## [0.2.0a1] - 2026-07-21
 

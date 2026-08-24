@@ -15,6 +15,7 @@ def test_generated_project_uses_public_health_fields(tmp_path: Path):
     assert fields["disease"].type == "disease_code"
     assert fields["patient_age"].type == "age"
     assert fields["epi_week"].type == "epi_week"
+    assert fields["reporting_unit"].type == "organisation_unit"
 
 
 def test_age_and_epi_week_validation(tmp_path: Path):

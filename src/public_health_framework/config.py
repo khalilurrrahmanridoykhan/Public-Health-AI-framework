@@ -259,6 +259,26 @@ class ThresholdSchema:
 
 
 @dataclass(frozen=True)
+class OrganisationUnitSchema:
+    code: str
+    name: str
+    level: str
+    parent: str | None = None
+
+    @classmethod
+    def from_dict(cls, code: str, value: dict[str, Any]) -> "OrganisationUnitSchema":
+        _validate_identifier(code, "organisation-unit code")
+        name = str(value.get("name", "")).strip()
+        if not name:
+            raise ValueError(f"Organisation unit '{code}' must define name.")
+        level = str(value.get("level", "")).strip()
+        if not level:
+            raise ValueError(f"Organisation unit '{code}' must define level.")
+        parent = value.get("parent")
+        return cls(code=code, name=name, level=level, parent=str(parent) if parent else None)
+
+
+@dataclass(frozen=True)
 class ProjectConfig:
     name: str
     database: str = "sqlite:///data/phframe.db"
@@ -268,6 +288,7 @@ class ProjectConfig:
     saved_filters: dict[str, SavedFilterSchema] = dataclass_field(default_factory=dict)
     dimensions: dict[str, DimensionSchema] = dataclass_field(default_factory=dict)
     thresholds: dict[str, ThresholdSchema] = dataclass_field(default_factory=dict)
+    organisation_units: dict[str, OrganisationUnitSchema] = dataclass_field(default_factory=dict)
     plugins: tuple[str, ...] = ()
     environment: str = "development"
     host: str = "127.0.0.1"
@@ -323,6 +344,14 @@ class ProjectConfig:
             name: ThresholdSchema.from_dict(name, value or {}, indicators)
             for name, value in raw_thresholds.items()
         }
+        raw_units = raw.get("organisation_units", {})
+        if not isinstance(raw_units, dict):
+            raise ValueError("Configuration 'organisation_units' must be an object.")
+        organisation_units = {
+            code: OrganisationUnitSchema.from_dict(code, value or {})
+            for code, value in raw_units.items()
+        }
+        _validate_organisation_units(organisation_units)
         plugins = tuple(str(item) for item in raw.get("plugins", []))
         database = os.environ.get("PHFRAME_DATABASE_URL") or _expand_env(
             str(project.get("database", "sqlite:///data/phframe.db"))
@@ -340,6 +369,7 @@ class ProjectConfig:
             saved_filters=saved_filters,
             dimensions=dimensions,
             thresholds=thresholds,
+            organisation_units=organisation_units,
             plugins=plugins,
             environment=environment,
             host=os.environ.get("PHFRAME_HOST", str(server.get("host", "127.0.0.1"))),
@@ -386,3 +416,16 @@ def _expand_env(value: str) -> str:
 def _validate_identifier(value: str, kind: str) -> None:
     if not IDENTIFIER.fullmatch(str(value)):
         raise ValueError(f"Invalid {kind} name '{value}'. Use lowercase letters, numbers, and underscores.")
+
+
+def _validate_organisation_units(units: dict[str, OrganisationUnitSchema]) -> None:
+    for unit in units.values():
+        if unit.parent and unit.parent not in units:
+            raise ValueError(f"Organisation unit '{unit.code}' references unknown parent '{unit.parent}'.")
+        seen = {unit.code}
+        parent = unit.parent
+        while parent:
+            if parent in seen:
+                raise ValueError(f"Organisation-unit hierarchy contains a cycle at '{parent}'.")
+            seen.add(parent)
+            parent = units[parent].parent

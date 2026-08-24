@@ -71,6 +71,27 @@ Reusable public-health types add domain-aware storage and validation:
 
 These types use portable text or integer database columns, so applications retain SQLite and PostgreSQL compatibility.
 
+## Organisation-unit hierarchy
+
+Declare reporting structures with stable codes and parent relationships:
+
+```yaml
+organisation_units:
+  bangladesh:
+    name: Bangladesh
+    level: country
+  chattogram_division:
+    name: Chattogram Division
+    level: division
+    parent: bangladesh
+  bandarban:
+    name: Bandarban
+    level: district
+    parent: chattogram_division
+```
+
+`GET /api/organisation-units` lists the hierarchy and root codes. `GET /api/organisation-units/{code}` returns the unit with its children and ordered ancestors. Values written to `organisation_unit` fields must reference a configured code. PHFrame rejects missing parents and hierarchy cycles during configuration loading.
+
 ## Indicators
 
 Define deterministic indicators alongside datasets in `phframe.yaml`:

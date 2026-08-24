@@ -58,4 +58,5 @@ def test_legacy_sqlite_schema_remains_compatible(tmp_path: Path):
     assert storage.migrate() == [
         "add field case_reports.patient_age",
         "add field case_reports.epi_week",
+        "add field case_reports.reporting_unit",
     ]

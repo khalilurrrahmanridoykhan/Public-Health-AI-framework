@@ -51,6 +51,8 @@ datasets:
         type: age
       epi_week:
         type: epi_week
+      reporting_unit:
+        type: organisation_unit
 
 indicators:
   total_cases:
@@ -109,6 +111,23 @@ thresholds:
     severity: warning
     message: Weekly case count has reached the surveillance alert level.
 
+organisation_units:
+  bangladesh:
+    name: Bangladesh
+    level: country
+  chattogram_division:
+    name: Chattogram Division
+    level: division
+    parent: bangladesh
+  bandarban:
+    name: Bandarban
+    level: district
+    parent: chattogram_division
+  rangamati:
+    name: Rangamati
+    level: district
+    parent: chattogram_division
+
 plugins: []
 """
 
@@ -136,6 +155,7 @@ Saved filters are listed at `/api/filters`; grouped dimensions are available at
 Surveillance thresholds are evaluated at `/api/thresholds/{{name}}`.
 Generated case reports use reusable public-health identifier, disease-code, age,
 and epidemiological-week field types.
+Organisation-unit hierarchy metadata is available at `/api/organisation-units`.
 
 ## Import records
 
@@ -184,6 +204,7 @@ def check_project(config_path: str | Path = "phframe.yaml") -> tuple[ProjectConf
     messages.append(f"Saved filters: {len(config.saved_filters)}")
     messages.append(f"Dimensions: {len(config.dimensions)}")
     messages.append(f"Thresholds: {len(config.thresholds)}")
+    messages.append(f"Organisation units: {len(config.organisation_units)}")
     messages.append(f"Environment: {config.environment}")
     messages.append(f"Database: {config.database_display}")
     Storage(config).initialize()

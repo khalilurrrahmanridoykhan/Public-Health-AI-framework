@@ -168,6 +168,7 @@ class Storage:
 
     def create(self, dataset: DatasetSchema, payload: dict[str, Any]) -> dict[str, Any]:
         values = validate_payload(dataset, payload, partial=False)
+        self._validate_organisation_units(dataset, values)
         now = _now()
         values.update(created_at=now, updated_at=now)
         table = self._dataset_table(dataset)
@@ -181,6 +182,7 @@ class Storage:
         if self.get(dataset, record_id) is None:
             return None
         values = validate_payload(dataset, payload, partial=True)
+        self._validate_organisation_units(dataset, values)
         if values:
             values["updated_at"] = _now()
             with self.engine.begin() as connection:
@@ -195,6 +197,8 @@ class Storage:
 
     def bulk_create(self, dataset: DatasetSchema, payloads: list[dict[str, Any]]) -> int:
         validated = [validate_payload(dataset, payload, partial=False) for payload in payloads]
+        for values in validated:
+            self._validate_organisation_units(dataset, values)
         if not validated:
             return 0
         now = _now()
@@ -202,6 +206,14 @@ class Storage:
         with self.engine.begin() as connection:
             connection.execute(insert(self._dataset_table(dataset)), rows)
         return len(rows)
+
+    def _validate_organisation_units(self, dataset: DatasetSchema, values: dict[str, Any]) -> None:
+        if not self.config.organisation_units:
+            return
+        for name, schema in dataset.fields.items():
+            value = values.get(name)
+            if schema.type == "organisation_unit" and value is not None and value not in self.config.organisation_units:
+                raise ValueError(f"Field '{name}' references unknown organisation unit '{value}'.")
 
     def record_import(
         self, dataset: str, source: str, status: str, total_rows: int,

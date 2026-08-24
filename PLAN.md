@@ -607,7 +607,7 @@ PHFrame 0.2.0a1 delivers the Phase 1 foundation: a persistent, customizable appl
 
 ## Immediate Next Release: PHFrame 0.3 Alpha
 
-The 0.3 series begins the Phase 2 public-health engine. Its first vertical slice is now implemented on the development branch.
+The 0.3 series delivers the planned Phase 2 public-health engine scope. The next development phase is the Web Component frontend system.
 
 ### Implemented Scope
 
@@ -623,12 +623,9 @@ The 0.3 series begins the Phase 2 public-health engine. Its first vertical slice
 - Declarative dimensions and grouped-count APIs
 - Surveillance thresholds with period-aware evaluation
 - Reusable public-health field types with domain validation
+- Organisation-unit hierarchy, discovery APIs, and referential validation
 
-### Remaining Scope
-
-- Organisation-unit hierarchy
-
-### Explicitly Out of Scope for 0.2
+### Historical 0.2 Exclusions
 
 - A complete React-like rendering engine
 - All health-program plugins

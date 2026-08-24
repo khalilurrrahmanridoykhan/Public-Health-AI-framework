@@ -38,6 +38,8 @@ class PHFrame:
             Route("/api/dimensions/{dimension}", self.dimension_result, methods=["GET"]),
             Route("/api/thresholds", self.threshold_index, methods=["GET"]),
             Route("/api/thresholds/{threshold}", self.threshold_result, methods=["GET"]),
+            Route("/api/organisation-units", self.organisation_unit_index, methods=["GET"]),
+            Route("/api/organisation-units/{code}", self.organisation_unit_detail, methods=["GET"]),
             Route("/api/{dataset}", self.collection, methods=["GET", "POST"]),
             Route("/api/{dataset}/{record_id:int}", self.detail, methods=["GET", "PUT", "PATCH", "DELETE"]),
         ]
@@ -124,6 +126,10 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
                         "endpoint": f"/api/thresholds/{item.name}",
                     }
                     for item in self.config.thresholds.values()
+                },
+                "organisation_units": {
+                    "count": len(self.config.organisation_units),
+                    "endpoint": "/api/organisation-units",
                 },
             }
         )
@@ -246,6 +252,35 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
             "triggered": triggered, "status": "no_data" if actual is None else ("triggered" if triggered else "normal"),
             "severity": threshold.severity, "message": threshold.message,
             "filters": result["filters"], "period": result["period"],
+        }
+
+    async def organisation_unit_index(self, request: Request) -> JSONResponse:
+        units = self.config.organisation_units
+        return JSONResponse({
+            "data": [self._organisation_unit(unit) for unit in units.values()],
+            "roots": [unit.code for unit in units.values() if unit.parent is None],
+            "count": len(units),
+        })
+
+    async def organisation_unit_detail(self, request: Request) -> Response:
+        unit = self.config.organisation_units.get(request.path_params["code"])
+        if unit is None:
+            return _error("Organisation unit not found.", 404)
+        result = self._organisation_unit(unit)
+        ancestors = []
+        parent = unit.parent
+        while parent:
+            ancestor = self.config.organisation_units[parent]
+            ancestors.insert(0, self._organisation_unit(ancestor))
+            parent = ancestor.parent
+        result["ancestors"] = ancestors
+        return JSONResponse({"data": result})
+
+    def _organisation_unit(self, unit: Any) -> dict[str, Any]:
+        return {
+            "code": unit.code, "name": unit.name, "level": unit.level, "parent": unit.parent,
+            "children": [item.code for item in self.config.organisation_units.values() if item.parent == unit.code],
+            "endpoint": f"/api/organisation-units/{unit.code}",
         }
 
     async def import_history(self, request: Request) -> JSONResponse:
