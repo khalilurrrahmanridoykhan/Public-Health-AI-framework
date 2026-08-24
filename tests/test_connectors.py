@@ -64,3 +64,35 @@ def test_project_connector_configuration_validation(tmp_path: Path):
     connector = ProjectConfig.load(path).connectors["surveillance"]
     assert connector.type == "dhis2"
     assert connector.token_env == "DHIS_TOKEN"
+
+
+@pytest.mark.parametrize(
+    ("connector_type", "resource", "payload", "expected_path"),
+    [
+        ("dhis2", "MALARIA", {"dataValues": [{"dataElement": "cases", "value": "4"}]}, "api/dataValueSets.json"),
+        ("kobo", "asset123", {"results": [{"case": {"id": "K-1"}}], "next": None}, "api/v2/assets/asset123/data.json"),
+        ("odk", "7/malaria", {"value": [{"case": {"id": "O-1"}}]}, "v1/projects/7/forms/malaria.svc/Submissions"),
+    ],
+)
+def test_builtin_connector_adapters(connector_type, resource, payload, expected_path):
+    mapping = {"dataElement": "case_id"} if connector_type == "dhis2" else {"case.id": "case_id"}
+    schema = _schema(type=connector_type, resource=resource, mapping=mapping, parameters={})
+    calls = []
+    records = create_connector(
+        schema, lambda url, headers, timeout: calls.append(url) or payload
+    ).pull()
+    assert expected_path in calls[0]
+    assert records[0]["case_id"] in {"cases", "K-1", "O-1"}
+
+
+def test_kobo_and_odk_pagination():
+    pages = {
+        "https://example.test/api/v2/assets/asset/data.json": {
+            "results": [{"id": "1"}], "next": "https://example.test/page/2"
+        },
+        "https://example.test/page/2": {"results": [{"id": "2"}], "next": None},
+    }
+    schema = _schema(type="kobo", resource="asset", mapping={"id": "case_id"}, parameters={})
+    assert create_connector(schema, lambda url, headers, timeout: pages[url]).pull() == [
+        {"case_id": "1"}, {"case_id": "2"}
+    ]
