@@ -7,7 +7,7 @@
 
 PHFrame is an early-stage framework for building extensible public-health data systems. It combines generated projects, declarative health schemas, persistent storage, automatic APIs, a public-health engine, and a standards-based Web Component interface. The original CSV/Excel dashboard generator remains available as an export workflow.
 
-> Current version: `0.5.0a1` (Phase 3 frontend preview)
+> Current version: `0.7.0a1` (Phase 4 connector preview)
 
 ## Why PHFrame?
 
@@ -22,6 +22,7 @@ Current capabilities include:
 - Portable HTML dashboards for offline sharing
 - Declarative indicators with count, sum, average, rate, ratio, and percentage calculations
 - Configurable Web Component dashboards, forms, tables, filters, charts, maps, and epidemiological curves
+- Browser CSV/Excel imports and scheduled DHIS2, KoboToolbox, and ODK synchronization
 
 > [!IMPORTANT]
 > PHFrame is alpha software. Evaluate it with non-sensitive data before considering production use. It does not yet provide authentication or a complete deployment security model.
@@ -85,6 +86,94 @@ dashboards:
         date_field: report_date
         value_field: cases
 ```
+
+## Browser imports
+
+Open `/app#/import` to import `.csv`, `.xlsx`, or `.xlsm` files through a guided workflow:
+
+1. Select the target dataset and file.
+2. Preview up to ten rows.
+3. Map source columns to typed dataset fields.
+4. Save the mapping as a reusable server-side template.
+5. Validate without writing, or import all rows atomically.
+6. Inspect row-level failures through the import run error API.
+
+Browser uploads are limited to 25 MB. `GET /api/import-mappings` lists reusable mappings, and `GET /api/imports/{run_id}/errors` provides structured error reports.
+
+## DHIS2, KoboToolbox, and ODK connectors
+
+Connectors pull JSON records, apply nested source-to-dataset mappings, validate every record, and write atomically. Credentials are read only from environment variables and are never returned through metadata APIs.
+
+Example KoboToolbox connector:
+
+```yaml
+connectors:
+  kobo_cases:
+    type: kobo
+    dataset: case_reports
+    base_url: https://kf.kobotoolbox.org
+    resource: your_asset_uid
+    schedule_minutes: 60
+    auth:
+      token_env: KOBO_TOKEN
+    mapping:
+      case_id: case_id
+      disease: disease
+      status: status
+      report_date: report_date
+      district: district
+      cases: cases
+```
+
+DHIS2 uses `resource` as the data-set UID and reads `dataValues`; ODK uses `PROJECT_ID/FORM_ID` and reads the OData `Submissions` feed. Nested source fields use dot notation, such as `__system.submissionDate`.
+
+```yaml
+connectors:
+  dhis2_values:
+    type: dhis2
+    dataset: aggregate_values
+    base_url: https://play.dhis2.org/example
+    resource: DATA_SET_UID
+    auth:
+      token_env: DHIS2_TOKEN
+    parameters:
+      period: 202608
+      orgUnit: ORG_UNIT_UID
+    mapping:
+      dataElement: data_element
+      period: period
+      orgUnit: organisation_unit
+      value: value
+
+  odk_cases:
+    type: odk
+    dataset: case_reports
+    base_url: https://central.example.org
+    resource: 7/malaria_case
+    auth:
+      token_env: ODK_SESSION_TOKEN
+    parameters:
+      $top: 500
+    mapping:
+      meta.instanceID: case_id
+      disease: disease
+      status: status
+      __system.submissionDate: report_date
+      district: district
+      cases: cases
+```
+
+Run connectors manually, validate them, or invoke due schedules from cron/systemd:
+
+```bash
+phframe sync kobo_cases
+phframe sync kobo_cases --dry-run
+phframe sync --all
+phframe sync --all --due
+phframe syncs --limit 50
+```
+
+`schedule_minutes` determines whether `--due` selects a connector; PHFrame records every completed, validated, or failed synchronization. The browser console at `/app#/connectors` exposes the same status and history. See the official [DHIS2 API authentication](https://docs.dhis2.org/en/develop/using-the-api/dhis-core-version-master/introduction.html), [KoboToolbox API v2 migration](https://support.kobotoolbox.org/migrating_api.html), and [ODK Central OData](https://docs.getodk.org/central-api-odata-endpoints/) documentation for provider-side setup.
 
 Example request:
 

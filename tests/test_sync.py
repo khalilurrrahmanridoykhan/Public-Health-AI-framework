@@ -4,6 +4,7 @@ from pathlib import Path
 from starlette.testclient import TestClient
 
 from public_health_framework.application import PHFrame
+from public_health_framework.cli import main
 from public_health_framework.config import ProjectConfig
 from public_health_framework.project import create_project
 from public_health_framework.storage import Storage
@@ -68,3 +69,9 @@ def test_due_schedule_and_connector_metadata_api(tmp_path: Path):
     assert metadata["name"] == "kobo_cases"
     assert "base_url" not in metadata
     assert client.get("/api/syncs").json()["data"][0]["status"] == "completed"
+
+
+def test_sync_cli_handles_no_due_connectors(tmp_path: Path, capsys):
+    root = create_project("Empty Sync", tmp_path / "empty-sync")
+    assert main(["sync", "--all", "--due", "--config", str(root / "phframe.yaml")]) == 0
+    assert "No connector synchronizations are due" in capsys.readouterr().out

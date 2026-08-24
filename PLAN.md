@@ -533,6 +533,8 @@ Deliverables:
 - Scheduled synchronization
 - Import history and error reports
 
+**Status: Completed in the 0.7.0 alpha preview.** Delivered capabilities include the browser CSV/Excel import workflow, server-side reusable mappings, structured error reports, secure connector configuration and registry, paginated DHIS2/Kobo/ODK adapters, atomic sync execution, due-schedule controls, CLI/API audit history, and a browser connector console.
+
 ### Phase 5: AI Assistance
 
 **Estimated scope:** 6–8 weeks
@@ -667,4 +669,4 @@ PHFrame should be considered successful when:
 
 ## Current Priority
 
-Phases 1–3 are implemented in the `0.5.0a1` preview. The next engineering priority is **Phase 4: connectors and synchronization**, beginning with the improved browser import wizard and reusable connector interfaces before external DHIS2, KoboToolbox, and ODK integrations.
+Phases 1–4 are implemented in the `0.7.0a1` preview. The next engineering priority is **Phase 5: privacy-aware AI assistance**, beginning with provider abstraction, de-identification, evidence-backed summaries, human approval, and complete AI audit history.

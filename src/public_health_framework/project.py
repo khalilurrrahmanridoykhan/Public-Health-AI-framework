@@ -185,6 +185,8 @@ Surveillance thresholds are evaluated at `/api/thresholds/{{name}}`.
 Generated case reports use reusable public-health identifier, disease-code, age,
 and epidemiological-week field types.
 Organisation-unit hierarchy metadata is available at `/api/organisation-units`.
+Browser imports are available in the application at `/app#/import`, and configured
+connector synchronizations at `/app#/connectors`.
 
 ## Import records
 

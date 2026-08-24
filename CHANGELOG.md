@@ -4,6 +4,17 @@ All notable changes to PHFrame will be documented here. The project intends to f
 
 ## [Unreleased]
 
+## [0.7.0a1] - 2026-08-24
+
+### Added
+
+- Add a browser CSV/Excel preview, mapping, validation, and atomic import workflow.
+- Add reusable server-side browser import mappings and structured run error reports.
+- Add a connector registry with environment-based credentials, nested mappings, pagination, timeouts, and a page safety limit.
+- Add DHIS2 data-value-set, KoboToolbox v2 submission, and ODK Central OData adapters.
+- Add atomic connector synchronization with dedicated audit history.
+- Add `phframe sync`, due-schedule evaluation, sync history APIs, and a browser connector console.
+
 ## [0.5.0a1] - 2026-08-24
 
 ### Added
@@ -44,6 +55,7 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Import audit history.
 - Portable HTML dashboard export.
 
-[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.5.0a1...HEAD
+[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a1...HEAD
+[0.7.0a1]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.5.0a1...v0.7.0a1
 [0.5.0a1]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.2.0a1...v0.5.0a1
 [0.2.0a1]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/releases/tag/v0.2.0a1
