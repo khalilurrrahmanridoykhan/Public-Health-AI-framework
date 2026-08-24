@@ -9,7 +9,7 @@
 
 PHFrame is an early-stage framework for building extensible public-health data systems. It combines generated projects, declarative health schemas, persistent storage, automatic APIs, a public-health engine, and a standards-based Web Component interface. The original CSV/Excel dashboard generator remains available as an export workflow.
 
-> Current version: `0.8.0a2` (conversational public-health analyst preview)
+> Current version: `0.8.0a3` (multi-dashboard and template workspace preview)
 
 ## Why PHFrame?
 
@@ -161,6 +161,31 @@ numeric, categorical, and date field. Layout choices are stored in the browser.
 Resize cards from any edge or corner. The grid span, height, chart layout, legend,
 and content overflow adapt together; mobile layouts continue to collapse to a
 single column.
+
+Dashboards are not limited to the configured starter view. The dashboard selector
+can switch among any number of server-saved user dashboards. Use **Create new** to
+start from a blank canvas or one of six professional templates: Executive overview,
+Surveillance operations, Programme monitoring, DHIS2 aggregate, Worldwide
+geospatial, and Blank canvas. PHFrame recommends a template from the selected
+dataset's numeric, categorical, date, DHIS2, and coordinate capabilities. Use
+**Customize this dashboard** to turn a project-configured dashboard into an editable
+saved copy.
+
+Each dashboard accepts live metrics, grouped charts/tables, trends, coordinate
+maps, and rich content blocks. Content blocks support editable headings,
+paragraphs, bold/italic/underline text, lists, and safe hyperlinks. Dashboard
+names and descriptions can be edited without changing `phframe.yaml`.
+
+For a worldwide coordinate map, add numeric columns named `latitude` and
+`longitude` (also recognized: `lat`/`lon`, `lat`/`lng`, or
+`y_coordinate`/`x_coordinate`). PHFrame recommends the geospatial template and
+offers the coordinate map automatically. The map endpoint aggregates coordinates
+into 0.01-degree buckets before returning them to the browser and never includes
+protected record fields:
+
+```text
+GET /api/geospatial/{dataset}?latitude=latitude&longitude=longitude
+```
 
 ## Branding and access settings
 

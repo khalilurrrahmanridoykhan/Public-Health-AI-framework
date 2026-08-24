@@ -4,6 +4,22 @@ All notable changes to PHFrame will be documented here. The project intends to f
 
 ## [Unreleased]
 
+## [0.8.0a3] - 2026-08-24
+
+### Added
+
+- Add a server-persisted multi-dashboard workspace with dashboard switching, creation, renaming, deletion, and configurable-dashboard cloning.
+- Add Executive overview, Surveillance operations, Programme monitoring, DHIS2 aggregate, Worldwide geospatial, and Blank canvas templates.
+- Add schema-aware template recommendations based on numeric, categorical, date, DHIS2, and coordinate columns.
+- Add rich dashboard content blocks with editable headings, paragraphs, formatting, lists, and safe hyperlinks.
+- Add coordinate-aware worldwide maps and a privacy-reduced geospatial aggregation API.
+- Add automatic coordinate-map discovery for latitude/longitude-style numeric columns.
+
+### Changed
+
+- Replace the single fixed dashboard route with a user-managed dashboard selector and template gallery.
+- Preserve configured dashboards while allowing users to create editable saved copies without changing project configuration.
+
 ## [0.8.0a2] - 2026-08-24
 
 ### Added
@@ -150,7 +166,8 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Import audit history.
 - Portable HTML dashboard export.
 
-[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a2...HEAD
+[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a3...HEAD
+[0.8.0a3]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a2...v0.8.0a3
 [0.8.0a2]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a1...v0.8.0a2
 [0.8.0a1]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a6...v0.8.0a1
 [0.7.0a6]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a5...v0.7.0a6
