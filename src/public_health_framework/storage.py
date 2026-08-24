@@ -111,6 +111,19 @@ class Storage:
             Column("details_json", Text, nullable=False),
             Column("created_at", DateTime(timezone=True), nullable=False),
         )
+        self.ai_chat_table = Table(
+            "_phframe_ai_chat", self.metadata,
+            Column("id", Integer, primary_key=True, autoincrement=True),
+            Column("session_id", String(64), nullable=False),
+            Column("question", Text, nullable=False),
+            Column("answer", Text, nullable=False),
+            Column("intent", String(64), nullable=False),
+            Column("evidence_json", Text, nullable=False),
+            Column("evidence_digest", String(64), nullable=False),
+            Column("privacy_json", Text, nullable=False),
+            Column("actor", String(255), nullable=False),
+            Column("created_at", DateTime(timezone=True), nullable=False),
+        )
 
     def initialize(self) -> None:
         self.migrate()
@@ -133,7 +146,7 @@ class Storage:
     def migrate(self, check_only: bool = False) -> list[str]:
         """Create metadata/tables and apply safe additive schema changes."""
         self.metadata.create_all(
-            self.engine, tables=[self.schema_table, self.imports_table, self.syncs_table, self.mappings_table, self.ai_summaries_table, self.ai_audit_table]
+            self.engine, tables=[self.schema_table, self.imports_table, self.syncs_table, self.mappings_table, self.ai_summaries_table, self.ai_audit_table, self.ai_chat_table]
         )
         actions: list[str] = []
         inspector = inspect(self.engine)
@@ -369,6 +382,28 @@ class Storage:
         for row in rows:
             item = _serialize(dict(row)); item["details"] = json.loads(item.pop("details_json")); result.append(item)
         return result
+
+    def record_ai_chat(self, values: dict[str, Any]) -> dict[str, Any]:
+        now = _now()
+        with self.engine.begin() as connection:
+            result = connection.execute(insert(self.ai_chat_table).values(**values, created_at=now))
+            chat_id = int(result.inserted_primary_key[0])
+            connection.execute(insert(self.ai_audit_table).values(summary_id=None, event="analyst_question", actor=values["actor"], details_json=json.dumps({"chat_id": chat_id, "session_id": values["session_id"], "intent": values["intent"], "evidence_digest": values["evidence_digest"]}), created_at=now))
+        return self.ai_chat(chat_id) or {}
+
+    def ai_chat(self, chat_id: int) -> dict[str, Any] | None:
+        with self.engine.connect() as connection:
+            row = connection.execute(select(self.ai_chat_table).where(self.ai_chat_table.c.id == chat_id)).mappings().first()
+        return self._ai_chat_row(row) if row else None
+
+    def ai_chats(self, session_id: str, limit: int = 50) -> list[dict[str, Any]]:
+        with self.engine.connect() as connection:
+            rows = connection.execute(select(self.ai_chat_table).where(self.ai_chat_table.c.session_id == session_id).order_by(self.ai_chat_table.c.id.asc()).limit(max(1, min(limit, 200)))).mappings().all()
+        return [self._ai_chat_row(row) for row in rows]
+
+    @staticmethod
+    def _ai_chat_row(row: Any) -> dict[str, Any]:
+        item = _serialize(dict(row)); item["evidence"] = json.loads(item.pop("evidence_json")); item["privacy"] = json.loads(item.pop("privacy_json")); return item
 
     def record_sync(
         self, connector: str, dataset: str, status: str, fetched_rows: int,

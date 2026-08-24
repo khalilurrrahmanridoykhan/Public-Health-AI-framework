@@ -58,6 +58,87 @@ def evidence_digest(evidence: list[dict[str, Any]]) -> str:
     return sha256(json.dumps(evidence, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
+def enrich_trend(label: str, points: list[dict[str, Any]], endpoint: str) -> dict[str, Any]:
+    values = [float(point["value"]) for point in points]
+    first, latest = (values[0], values[-1]) if values else (None, None)
+    change = latest - first if values else None
+    percent = (change / first * 100) if values and first else None
+    direction = "stable"
+    if change is not None and change > 0: direction = "increasing"
+    if change is not None and change < 0: direction = "decreasing"
+    anomaly = None
+    if len(values) >= 4:
+        baseline = values[:-1]
+        mean = sum(baseline) / len(baseline)
+        variance = sum((value - mean) ** 2 for value in baseline) / len(baseline)
+        deviation = variance ** .5
+        score = (latest - mean) / deviation if deviation else 0
+        if abs(score) >= 2:
+            anomaly = {"score": round(score, 2), "direction": "above" if score > 0 else "below", "baseline_mean": round(mean, 2)}
+    return {"kind": "trend", "name": label.lower().replace(" ", "_"), "label": label, "points": points, "first": first, "latest": latest, "change": change, "percent_change": percent, "direction": direction, "anomaly": anomaly, "endpoint": endpoint}
+
+
+def answer_question(question: str, evidence: list[dict[str, Any]], previous_evidence: list[str] | None = None) -> tuple[str, list[dict[str, Any]], dict[str, Any]]:
+    """Answer an analyst question using only computed evidence and explicit uncertainty."""
+    query = question.lower().strip()
+    if not query:
+        raise ValueError("question is required.")
+    stop = {"what", "which", "where", "when", "show", "tell", "about", "give", "with", "from", "this", "that", "have", "does", "data", "please"}
+    tokens = {token for token in re.findall(r"[a-z0-9_]+", query) if len(token) > 2 and token not in stop}
+    intent = "overview"
+    if any(word in query for word in ("trend", "increase", "decrease", "change", "over time", "rising", "falling")): intent = "trend"
+    if any(word in query for word in ("unusual", "anomal", "spike", "outlier", "unexpected")): intent = "anomaly"
+    if any(word in query for word in ("compare", "versus", " vs ", "difference", "highest", "lowest", "location", "district", "country")): intent = "comparison"
+    if any(word in query for word in ("quality", "missing", "invalid", "complete")): intent = "quality"
+    if any(word in query for word in ("alert", "threshold", "warning", "critical")): intent = "alert"
+    if any(word in query for word in ("why", "cause", "reason", "explain")): intent = "explanation"
+    kind_priority = {
+        "trend": {"trend"}, "anomaly": {"trend"}, "comparison": {"dimension"},
+        "quality": {"quality"}, "alert": {"threshold"}, "explanation": {"trend", "dimension", "quality", "threshold"},
+    }.get(intent, {"indicator", "trend", "dimension", "quality", "threshold"})
+    scored = []
+    for item in evidence:
+        searchable = " ".join(str(item.get(key, "")) for key in ("name", "label", "dataset", "field")).lower()
+        score = (4 if item.get("kind") in kind_priority else 0) + sum(2 for token in tokens if token in searchable)
+        if item.get("kind") == "dimension" and any(str(entry.get("value", "")).lower() in query for entry in item.get("values", [])): score += 5
+        if item.get("name") in (previous_evidence or []): score += 1
+        scored.append((score, item))
+    selected = [item for score, item in sorted(scored, key=lambda pair: pair[0], reverse=True) if score > 0][:6]
+    if not selected: selected = evidence[:6]
+    lines = ["### Analyst answer"]
+    if intent == "explanation":
+        lines.append("The available aggregates can show **what changed**, but they cannot establish a cause. The observations below identify signals to investigate:")
+    for index, item in enumerate(selected, 1):
+        kind, label = item.get("kind"), item.get("label", item.get("name", "Evidence"))
+        if kind == "indicator":
+            value = "no data" if item.get("value") is None else f"{item['value']:g}"
+            lines.append(f"- **{label}: {value}.** This is the configured {item.get('operation', 'aggregate')} result [E{index}].")
+        elif kind == "dimension":
+            ranked = sorted(item.get("values", []), key=lambda entry: entry["count"], reverse=True)
+            if ranked:
+                top = ranked[0]; runner = ranked[1] if len(ranked) > 1 else None
+                comparison = f", followed by {runner['value']} ({runner['count']})" if runner else ""
+                lines.append(f"- **{label}:** {top['value']} has the highest count ({top['count']}){comparison} [E{index}].")
+            else: lines.append(f"- **{label}:** no grouped observations are available [E{index}].")
+        elif kind == "trend":
+            percent = "not calculable" if item.get("percent_change") is None else f"{item['percent_change']:+.1f}%"
+            lines.append(f"- **{label} is {item['direction']}:** {item.get('first')} to {item.get('latest')} ({percent}) across {len(item.get('points', []))} reported points [E{index}].")
+            if item.get("anomaly"):
+                anomaly = item["anomaly"]
+                lines.append(f"- The latest value is unusually {anomaly['direction']} the earlier baseline (z-score {anomaly['score']}, baseline mean {anomaly['baseline_mean']}) [E{index}].")
+        elif kind == "quality":
+            score = "not available" if item.get("score") is None else f"{item['score']:.1f}%"
+            lines.append(f"- **{label}:** quality score {score}, with {item.get('violations', 0)} violation(s) among {item.get('total', 0)} records [E{index}].")
+        elif kind == "threshold":
+            lines.append(f"- **{label}: {item.get('status')}.** Observed {item.get('actual')} against threshold {item.get('threshold')} [E{index}].")
+    if intent in {"explanation", "anomaly", "trend", "alert"}:
+        lines.extend(["", "### Suggested investigation", "1. Confirm reporting completeness and recent data-quality violations.", "2. Compare the signal by location and reporting unit.", "3. Check reporting delays, definition changes, duplicate records, and connector/import history.", "4. Ask a subject-matter expert to interpret operational or epidemiological context."])
+    lines.extend(["", "### Safety note", "This answer uses aggregate project evidence only. It does not establish causality, predict future events, or provide diagnosis or clinical advice.", "", "### Evidence"])
+    for index, item in enumerate(selected, 1): lines.append(f"[E{index}] {item.get('label', item.get('name'))} — {item.get('endpoint')}")
+    meta = {"intent": intent, "evidence_names": [item.get("name") for item in selected], "question_tokens": sorted(tokens)}
+    return "\n".join(lines), selected, meta
+
+
 def local_summary(title: str, evidence: list[dict[str, Any]], purpose: str = "") -> str:
     """Produce a conservative narrative whose every factual statement cites evidence."""
     lines = [f"## {title}", "", "AI-assisted draft — requires human review before use."]

@@ -27,7 +27,7 @@ from .storage import Storage
 from .ui import asset_bytes, asset_text
 from .settings import SiteSettings
 from .sync import connector_due, sync_connector
-from .ai import deidentify_records, evidence_digest, generate_summary
+from .ai import answer_question, deidentify_records, enrich_trend, evidence_digest, generate_summary
 
 
 class PHFrame:
@@ -53,6 +53,8 @@ class PHFrame:
             Route("/api/settings", self.settings_api, methods=["GET", "PUT"]),
             Route("/api/settings/assets/{kind}", self.settings_asset_upload, methods=["POST"]),
             Route("/api/ai/deidentify/{dataset}", self.ai_deidentify, methods=["POST"]),
+            Route("/api/ai/chat", self.ai_chat, methods=["GET", "POST"]),
+            Route("/api/ai/chat/{chat_id:int}/report", self.ai_chat_report, methods=["POST"]),
             Route("/api/ai/summaries", self.ai_summaries, methods=["GET", "POST"]),
             Route("/api/ai/summaries/{summary_id:int}", self.ai_summary_detail, methods=["GET"]),
             Route("/api/ai/summaries/{summary_id:int}/review", self.ai_summary_review, methods=["POST"]),
@@ -240,7 +242,57 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
             comparisons = {"gt": lambda a, b: a > b, "gte": lambda a, b: a >= b, "lt": lambda a, b: a < b, "lte": lambda a, b: a <= b, "eq": lambda a, b: a == b}
             triggered = comparisons[item.operator](actual, item.value) if actual is not None else None
             evidence.append({"kind": "threshold", "name": item.name, "label": item.label, "actual": actual, "threshold": item.value, "status": "no_data" if actual is None else ("triggered" if triggered else "normal"), "endpoint": f"/api/thresholds/{item.name}"})
+        for dataset in self.config.datasets.values():
+            date_fields = [name for name, field in dataset.fields.items() if field.type in {"date", "datetime"}]
+            numeric_fields = [name for name, field in dataset.fields.items() if field.type in {"integer", "number"}]
+            if date_fields:
+                date_field = next((name for name in date_fields if name in {"report_date", "event_date", "date"}), next((name for name in date_fields if dataset.fields[name].required), date_fields[0]))
+                preferred = next((name for name in numeric_fields if name in {"cases", "count", "events", "value"}), numeric_fields[0] if numeric_fields else None)
+                points = self.storage.epi_curve(dataset, date_field, preferred)
+                label = f"{dataset.label} over time" + (f" ({preferred.replace('_', ' ')})" if preferred else "")
+                trend = enrich_trend(label, points, f"/api/epi-curve/{dataset.name}?date_field={date_field}" + (f"&value_field={preferred}" if preferred else ""))
+                trend["name"] = f"{dataset.name}_{date_field}_{preferred or 'count'}_trend"; trend["dataset"] = dataset.name
+                evidence.append(trend)
         return evidence
+
+    async def ai_chat(self, request: Request) -> Response:
+        session_id = request.query_params.get("session_id", "")
+        if request.method == "GET":
+            if not re.fullmatch(r"[A-Za-z0-9_-]{8,64}", session_id):
+                return _error("A valid session_id is required.", 422)
+            return JSONResponse({"data": self.storage.ai_chats(session_id)})
+        try:
+            payload = await request.json()
+            session_id = str(payload.get("session_id", ""))
+            question = str(payload.get("question", "")).strip()[:2000]
+            if not re.fullmatch(r"[A-Za-z0-9_-]{8,64}", session_id):
+                raise ValueError("A valid session_id is required.")
+            history = self.storage.ai_chats(session_id)
+            previous = [item.get("name") for item in history[-1]["evidence"]] if history else []
+            answer, selected, meta = answer_question(question, self._ai_evidence(), previous)
+            settings = self.site_settings.load(); provider = settings.get("ai_provider", "local")
+            if provider != "local":
+                answer, provider, _ = await run_in_threadpool(generate_summary, question, selected, "Answer the analyst question directly and preserve valid [E#] citations.", settings)
+            privacy = {"input_scope": "selected aggregate evidence only", "protected_fields_sent": [], "row_level_records_sent": 0, "external_transfer": provider != "local"}
+            chat = self.storage.record_ai_chat({"session_id": session_id, "question": question, "answer": answer, "intent": meta["intent"], "evidence_json": json.dumps(selected), "evidence_digest": evidence_digest(selected), "privacy_json": json.dumps(privacy), "actor": self._actor(request, str(payload.get("author", "")))})
+            return JSONResponse({"data": chat}, status_code=201)
+        except (json.JSONDecodeError, TypeError, ValueError) as error:
+            return _error(str(error), 422)
+        except Exception as error:
+            return _error(f"AI analyst request failed: {error}", 502)
+
+    async def ai_chat_report(self, request: Request) -> Response:
+        chat = self.storage.ai_chat(request.path_params["chat_id"])
+        if not chat:
+            return _error("AI chat answer not found.", 404)
+        try:
+            payload = await request.json()
+            title = str(payload.get("title", f"Situation report: {chat['question']}"))[:255]
+            privacy = {**chat["privacy"], "source_chat_id": chat["id"]}
+            summary = self.storage.create_ai_summary({"title": title, "purpose": f"Drafted from analyst question: {chat['question']}", "content": chat["answer"], "provider": "analyst", "model": "phframe-analyst-v1", "evidence_json": json.dumps(chat["evidence"]), "evidence_digest": chat["evidence_digest"], "privacy_json": json.dumps(privacy), "created_by": self._actor(request, str(payload.get("author", "")))})
+            return JSONResponse({"data": summary}, status_code=201)
+        except (json.JSONDecodeError, TypeError, ValueError) as error:
+            return _error(str(error), 422)
 
     async def ai_summaries(self, request: Request) -> Response:
         if request.method == "GET":

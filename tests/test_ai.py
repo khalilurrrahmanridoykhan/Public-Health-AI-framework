@@ -74,3 +74,38 @@ def test_local_summary_contains_numbered_evidence_citations():
     content, provider, _ = generate_summary("Brief", evidence, "Review", {"ai_provider": "local"})
     assert provider == "local"
     assert "[1]" in content
+
+
+def test_conversational_analyst_answers_targeted_questions_and_keeps_context(tmp_path: Path):
+    root, client = _app(tmp_path)
+    for index, cases in enumerate([1, 2, 3, 12], 20):
+        client.post("/api/case_reports", json={"case_id": f"case-{index}", "disease": "malaria", "status": "confirmed", "report_date": f"2026-08-{index}", "district": "North" if index < 23 else "South", "country": "Example", "cases": cases, "population": 1000})
+    session = "analyst-session-001"
+    response = client.post("/api/ai/chat", json={"session_id": session, "question": "Are cases increasing over time and is there an unusual spike?", "author": "Analyst One"})
+    assert response.status_code == 201
+    answer = response.json()["data"]
+    assert answer["intent"] in {"trend", "anomaly"}
+    assert "increasing" in answer["answer"]
+    assert "[E1]" in answer["answer"]
+    assert any(item["kind"] == "trend" for item in answer["evidence"])
+    assert answer["privacy"]["row_level_records_sent"] == 0
+    assert answer["privacy"]["protected_fields_sent"] == []
+
+    follow_up = client.post("/api/ai/chat", json={"session_id": session, "question": "What data quality issues should I check?", "author": "Analyst One"})
+    assert follow_up.status_code == 201
+    assert follow_up.json()["data"]["intent"] == "quality"
+    history = client.get(f"/api/ai/chat?session_id={session}").json()["data"]
+    assert len(history) == 2
+
+    report = client.post(f"/api/ai/chat/{answer['id']}/report", json={"title": "Weekly situation report", "author": "Analyst One"})
+    assert report.status_code == 201
+    assert report.json()["data"]["status"] == "draft"
+    assert report.json()["data"]["privacy"]["source_chat_id"] == answer["id"]
+
+
+def test_ai_chat_validates_session_and_actor(tmp_path: Path):
+    root, client = _app(tmp_path)
+    assert client.get("/api/ai/chat?session_id=bad").status_code == 422
+    response = client.post("/api/ai/chat", json={"session_id": "valid-session", "question": "Show the overview"})
+    assert response.status_code == 422
+    assert "name is required" in response.json()["error"]["message"]
