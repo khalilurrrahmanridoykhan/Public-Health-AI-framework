@@ -53,6 +53,7 @@ def test_frontend_shell_and_assets(tmp_path: Path):
     assert ".json,.xml" in javascript.text
     assert "Generic REST API" in javascript.text
     assert 'customElements.define("ph-settings-panel"' in javascript.text
+    assert 'this.querySelector("form").addEventListener("submit", event => this.save(event))' in javascript.text
     assert '"ne", "se", "sw", "nw"' in javascript.text
     assert "KoboToolbox submissions" in javascript.text
     assert ".ph-builder-layout" in css.text

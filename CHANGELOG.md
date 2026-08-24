@@ -4,6 +4,12 @@ All notable changes to PHFrame will be documented here. The project intends to f
 
 ## [Unreleased]
 
+## [0.7.0a5] - 2026-08-24
+
+### Fixed
+
+- Bind Settings submission to its HTML form so browser `FormData` construction and saving work correctly.
+
 ## [0.7.0a4] - 2026-08-24
 
 ### Added
@@ -95,7 +101,8 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Import audit history.
 - Portable HTML dashboard export.
 
-[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a4...HEAD
+[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a5...HEAD
+[0.7.0a5]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a4...v0.7.0a5
 [0.7.0a4]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a3...v0.7.0a4
 [0.7.0a3]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a2...v0.7.0a3
 [0.7.0a2]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a1...v0.7.0a2

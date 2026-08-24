@@ -539,7 +539,7 @@ class PHSettingsPanel extends PHElement {
     this.querySelector('[name="access_mode"]').value = this._settings.access_mode;
     const picker = this.querySelector('[name="primary_color_picker"]'), code = this.querySelector('[name="primary_color"]');
     picker.addEventListener("input", () => code.value = picker.value); code.addEventListener("input", () => { if (/^#[0-9a-f]{6}$/i.test(code.value)) picker.value = code.value; });
-    this.addEventListener("submit", event => this.save(event));
+    this.querySelector("form").addEventListener("submit", event => this.save(event));
   }
   async upload(kind, file) {
     if (!file?.size) return;
