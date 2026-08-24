@@ -82,6 +82,7 @@ def test_frontend_shell_and_assets(tmp_path: Path):
     assert "<b>Me</b>" in javascript.text
     assert 'author: "Me"' in javascript.text
     assert ".ph-ai-popup" in css.text
+    assert "width: min(38rem" in css.text
     for component in ["ph-dashboard-manager", "ph-geo-map"]:
         assert f'customElements.define("{component}"' in javascript.text
     assert "Dashboard templates" in javascript.text

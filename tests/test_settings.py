@@ -6,6 +6,12 @@ from public_health_framework.application import PHFrame
 from public_health_framework.project import create_project
 
 
+def test_ai_navigation_is_hidden_by_default(tmp_path: Path):
+    root = create_project("Floating AI App", tmp_path / "floating-ai-app")
+    settings = TestClient(PHFrame.from_file(str(root / "phframe.yaml"))).get("/api/settings").json()["data"]
+    assert settings["navigation"]["ai"] == {"label": "AI assistance", "visible": False}
+
+
 def test_brand_settings_and_assets_are_persisted(tmp_path: Path):
     root = create_project("Branded App", tmp_path / "branded-app")
     client = TestClient(PHFrame.from_file(str(root / "phframe.yaml")))

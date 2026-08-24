@@ -4,6 +4,13 @@ All notable changes to PHFrame will be documented here. The project intends to f
 
 ## [Unreleased]
 
+## [0.8.0a12] - 2026-08-24
+
+### Changed
+
+- Widen the desktop floating AI assistant from 32rem to 38rem while preserving its height and mobile layout.
+- Hide the standalone AI Assistance navigation item by default now that the assistant is available globally.
+
 ## [0.8.0a11] - 2026-08-24
 
 ### Added
@@ -248,7 +255,8 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Import audit history.
 - Portable HTML dashboard export.
 
-[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a11...HEAD
+[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a12...HEAD
+[0.8.0a12]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a11...v0.8.0a12
 [0.8.0a11]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a10...v0.8.0a11
 [0.8.0a10]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a9...v0.8.0a10
 [0.8.0a9]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a8...v0.8.0a9

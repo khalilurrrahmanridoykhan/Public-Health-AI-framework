@@ -26,7 +26,7 @@ DEFAULT_NAVIGATION = {
     "connectors": {"label": "Connectors", "visible": True},
     "quality": {"label": "Data quality", "visible": True},
     "pages": {"label": "Pages", "visible": True},
-    "ai": {"label": "AI assistance", "visible": True},
+    "ai": {"label": "AI assistance", "visible": False},
     "settings": {"label": "Settings", "visible": True},
 }
 
