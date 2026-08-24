@@ -64,6 +64,12 @@ def test_frontend_shell_and_assets(tmp_path: Path):
     assert "applyColor" in javascript.text
     assert ".ph-page-canvas" in css.text
     assert ".ph-rich-editor" in css.text
+    assert 'customElements.define("ph-ai-workspace"' in javascript.text
+    assert "data-ai-form" in javascript.text
+    assert "data-deid-form" in javascript.text
+    assert "Human-controlled assistance" in javascript.text
+    assert "0 protected fields sent" in javascript.text
+    assert ".ph-ai-layout" in css.text
 
 
 def test_frontend_metadata_includes_ui_configuration(tmp_path: Path):
