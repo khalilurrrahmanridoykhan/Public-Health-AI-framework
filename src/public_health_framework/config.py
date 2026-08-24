@@ -14,6 +14,7 @@ import yaml
 IDENTIFIER = re.compile(r"^[a-z][a-z0-9_]*$")
 FIELD_TYPES = {"string", "integer", "number", "boolean", "date", "datetime", "location"}
 INDICATOR_OPERATIONS = {"count", "sum", "average", "rate", "ratio", "percentage"}
+DATA_QUALITY_CHECKS = {"required", "range", "allowed"}
 
 
 @dataclass(frozen=True)
@@ -119,11 +120,54 @@ class IndicatorSchema:
 
 
 @dataclass(frozen=True)
+class DataQualityRuleSchema:
+    name: str
+    label: str
+    dataset: str
+    field: str
+    check: str
+    minimum: float | None = None
+    maximum: float | None = None
+    values: tuple[Any, ...] = ()
+
+    @classmethod
+    def from_dict(
+        cls, name: str, value: dict[str, Any], datasets: dict[str, DatasetSchema]
+    ) -> "DataQualityRuleSchema":
+        _validate_identifier(name, "data-quality rule")
+        dataset_name = str(value.get("dataset", ""))
+        if dataset_name not in datasets:
+            raise ValueError(f"Data-quality rule '{name}' references unknown dataset '{dataset_name}'.")
+        field_name = str(value.get("field", ""))
+        if field_name not in datasets[dataset_name].fields:
+            raise ValueError(f"Data-quality rule '{name}' references unknown field '{field_name}'.")
+        check = str(value.get("check", "required")).lower()
+        if check not in DATA_QUALITY_CHECKS:
+            raise ValueError(f"Data-quality rule '{name}' has unsupported check '{check}'.")
+        minimum = value.get("min")
+        maximum = value.get("max")
+        values = tuple(value.get("values", ()) or ())
+        if check == "range" and minimum is None and maximum is None:
+            raise ValueError(f"Data-quality rule '{name}' must define min or max.")
+        if check == "range" and datasets[dataset_name].fields[field_name].type not in {"integer", "number"}:
+            raise ValueError(f"Data-quality rule '{name}' requires a numeric field for range checks.")
+        if check == "allowed" and not values:
+            raise ValueError(f"Data-quality rule '{name}' must define values.")
+        return cls(
+            name=name, label=str(value.get("label", name.replace("_", " ").title())),
+            dataset=dataset_name, field=field_name, check=check,
+            minimum=float(minimum) if minimum is not None else None,
+            maximum=float(maximum) if maximum is not None else None, values=values,
+        )
+
+
+@dataclass(frozen=True)
 class ProjectConfig:
     name: str
     database: str = "sqlite:///data/phframe.db"
     datasets: dict[str, DatasetSchema] = dataclass_field(default_factory=dict)
     indicators: dict[str, IndicatorSchema] = dataclass_field(default_factory=dict)
+    data_quality_rules: dict[str, DataQualityRuleSchema] = dataclass_field(default_factory=dict)
     plugins: tuple[str, ...] = ()
     environment: str = "development"
     host: str = "127.0.0.1"
@@ -151,6 +195,13 @@ class ProjectConfig:
             name: IndicatorSchema.from_dict(name, value or {}, datasets)
             for name, value in raw_indicators.items()
         }
+        raw_rules = raw.get("data_quality", {})
+        if not isinstance(raw_rules, dict):
+            raise ValueError("Configuration 'data_quality' must be an object.")
+        data_quality_rules = {
+            name: DataQualityRuleSchema.from_dict(name, value or {}, datasets)
+            for name, value in raw_rules.items()
+        }
         plugins = tuple(str(item) for item in raw.get("plugins", []))
         database = os.environ.get("PHFRAME_DATABASE_URL") or _expand_env(
             str(project.get("database", "sqlite:///data/phframe.db"))
@@ -164,6 +215,7 @@ class ProjectConfig:
             database=database,
             datasets=datasets,
             indicators=indicators,
+            data_quality_rules=data_quality_rules,
             plugins=plugins,
             environment=environment,
             host=os.environ.get("PHFRAME_HOST", str(server.get("host", "127.0.0.1"))),

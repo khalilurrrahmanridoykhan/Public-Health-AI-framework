@@ -8,11 +8,11 @@ from typing import Any
 
 from sqlalchemy import (
     Boolean, Column, Date, DateTime, Float, Integer, MetaData, String, Table, Text,
-    and_, create_engine, delete, func, inspect, insert, select, update,
+    and_, create_engine, delete, func, inspect, insert, or_, select, update,
 )
 from sqlalchemy.schema import CreateColumn
 
-from .config import DatasetSchema, FieldSchema, IndicatorSchema, ProjectConfig
+from .config import DataQualityRuleSchema, DatasetSchema, FieldSchema, IndicatorSchema, ProjectConfig
 
 
 TYPE_FACTORIES = {
@@ -259,6 +259,36 @@ class Storage:
             "multiplier": indicator.multiplier,
             "filters": applied_filters,
             "period": {"start": start, "end": end},
+        }
+
+    def data_quality(self, rule: DataQualityRuleSchema) -> dict[str, Any]:
+        dataset = self.config.datasets[rule.dataset]
+        table = self._dataset_table(dataset)
+        column = table.c[rule.field]
+        if rule.check == "required":
+            violation = column.is_(None)
+            if dataset.fields[rule.field].type in {"string", "location"}:
+                violation = or_(violation, column == "")
+        elif rule.check == "range":
+            bounds = []
+            if rule.minimum is not None:
+                bounds.append(column < rule.minimum)
+            if rule.maximum is not None:
+                bounds.append(column > rule.maximum)
+            violation = and_(column.is_not(None), or_(*bounds))
+        else:
+            violation = and_(column.is_not(None), column.not_in(rule.values))
+        with self.engine.connect() as connection:
+            total = int(connection.execute(select(func.count(table.c.id))).scalar_one())
+            violations = int(connection.execute(
+                select(func.count(table.c.id)).where(violation)
+            ).scalar_one())
+        valid = total - violations
+        return {
+            "name": rule.name, "label": rule.label, "dataset": rule.dataset,
+            "field": rule.field, "check": rule.check, "total": total,
+            "valid": valid, "violations": violations,
+            "score": (valid / total * 100) if total else None,
         }
 
 

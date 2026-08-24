@@ -86,9 +86,32 @@ Retrieve results through the generated API:
 curl 'http://127.0.0.1:8000/api/indicators/total_cases'
 curl 'http://127.0.0.1:8000/api/indicators/total_cases?district=Bandarban'
 curl 'http://127.0.0.1:8000/api/indicators/total_cases?start=2026-07-01&end=2026-07-31'
+curl 'http://127.0.0.1:8000/api/indicators/total_cases?period=2026-W30'
 ```
 
 The supported operations are `count`, `sum`, `average`, `rate`, `ratio`, and `percentage`. Rate, ratio, and percentage indicators return `null` when the summed denominator is zero.
+
+Named periods accept ISO epidemiological weeks (`2026-W30`), calendar months (`2026-07`), and quarters (`2026-Q3`).
+
+## Data-quality rules
+
+Configure completeness, numeric range, and allowed-value checks without changing imported records:
+
+```yaml
+data_quality:
+  cases_nonnegative:
+    dataset: case_reports
+    field: cases
+    check: range
+    min: 0
+  valid_case_status:
+    dataset: case_reports
+    field: status
+    check: allowed
+    values: [suspected, probable, confirmed]
+```
+
+`GET /api/data-quality` evaluates every rule. `GET /api/data-quality/{rule}` returns its record count, valid count, violation count, and percentage score.
 
 ## Schema migrations
 

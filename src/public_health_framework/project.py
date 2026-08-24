@@ -64,6 +64,20 @@ indicators:
     multiplier: 100000
     date_field: report_date
 
+data_quality:
+  cases_nonnegative:
+    label: Cases are nonnegative
+    dataset: case_reports
+    field: cases
+    check: range
+    min: 0
+  valid_case_status:
+    label: Case status is recognized
+    dataset: case_reports
+    field: status
+    check: allowed
+    values: [suspected, probable, confirmed]
+
 plugins: []
 """
 
@@ -83,6 +97,9 @@ Open <http://127.0.0.1:8000> and inspect API metadata at
 <http://127.0.0.1:8000/api>.
 
 Edit `phframe.yaml` to customize datasets and fields.
+
+Indicator results are available at `/api/indicators/{{name}}` and data-quality
+results at `/api/data-quality`.
 
 ## Import records
 
@@ -127,6 +144,7 @@ def check_project(config_path: str | Path = "phframe.yaml") -> tuple[ProjectConf
     messages.append(f"Project: {config.name}")
     messages.append(f"Datasets: {len(config.datasets)}")
     messages.append(f"Indicators: {len(config.indicators)}")
+    messages.append(f"Data-quality rules: {len(config.data_quality_rules)}")
     messages.append(f"Environment: {config.environment}")
     messages.append(f"Database: {config.database_display}")
     Storage(config).initialize()

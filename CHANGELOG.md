@@ -10,6 +10,9 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Add declarative count, sum, average, rate, ratio, and percentage indicators.
 - Add indicator metadata and result APIs with field filters and reporting-period ranges.
 - Add total-cases and incidence indicators to newly generated surveillance projects.
+- Add ISO-week, calendar-month, and quarter reporting periods to indicator queries.
+- Add declarative completeness, numeric-range, and allowed-value data-quality rules.
+- Add data-quality metadata and evaluation APIs.
 
 ## [0.2.0a1] - 2026-07-21
 

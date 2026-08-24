@@ -13,6 +13,7 @@ from starlette.routing import Route
 from . import __version__
 from .config import DatasetSchema, ProjectConfig
 from .plugins import load_plugins
+from .periods import resolve_period
 from .storage import Storage
 
 
@@ -30,6 +31,8 @@ class PHFrame:
             Route("/api/imports", self.import_history, methods=["GET"]),
             Route("/api/indicators", self.indicator_index, methods=["GET"]),
             Route("/api/indicators/{indicator}", self.indicator_result, methods=["GET"]),
+            Route("/api/data-quality", self.data_quality_index, methods=["GET"]),
+            Route("/api/data-quality/{rule}", self.data_quality_result, methods=["GET"]),
             Route("/api/{dataset}", self.collection, methods=["GET", "POST"]),
             Route("/api/{dataset}/{record_id:int}", self.detail, methods=["GET", "PUT", "PATCH", "DELETE"]),
         ]
@@ -91,6 +94,13 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
                     }
                     for indicator in self.config.indicators.values()
                 },
+                "data_quality": {
+                    rule.name: {
+                        "label": rule.label, "dataset": rule.dataset, "field": rule.field,
+                        "check": rule.check, "endpoint": f"/api/data-quality/{rule.name}",
+                    }
+                    for rule in self.config.data_quality_rules.values()
+                },
             }
         )
 
@@ -107,15 +117,33 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
         indicator = self.config.indicators.get(request.path_params["indicator"])
         if indicator is None:
             return _error("Indicator not found.", 404)
-        reserved = {"start", "end"}
+        reserved = {"start", "end", "period"}
         filters = {key: value for key, value in request.query_params.items() if key not in reserved}
         try:
+            start, end = request.query_params.get("start"), request.query_params.get("end")
+            period = request.query_params.get("period")
+            if period:
+                if start or end:
+                    raise ValueError("Use period or start/end, not both.")
+                period_start, period_end = resolve_period(period)
+                start, end = period_start.isoformat(), period_end.isoformat()
             result = self.storage.indicator(
-                indicator, filters, request.query_params.get("start"), request.query_params.get("end")
+                indicator, filters, start, end
             )
+            if period:
+                result["period"]["name"] = period
             return JSONResponse({"data": result})
         except ValueError as error:
             return _error(str(error), 422)
+
+    async def data_quality_index(self, request: Request) -> JSONResponse:
+        return JSONResponse({"data": [self.storage.data_quality(rule) for rule in self.config.data_quality_rules.values()]})
+
+    async def data_quality_result(self, request: Request) -> Response:
+        rule = self.config.data_quality_rules.get(request.path_params["rule"])
+        if rule is None:
+            return _error("Data-quality rule not found.", 404)
+        return JSONResponse({"data": self.storage.data_quality(rule)})
 
     async def import_history(self, request: Request) -> JSONResponse:
         try:

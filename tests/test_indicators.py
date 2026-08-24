@@ -41,6 +41,17 @@ def test_indicator_filters_and_reporting_period(tmp_path: Path):
         "/api/indicators/total_cases?start=2026-08-01&end=2026-08-31"
     ).json()["data"]
     assert period["value"] == 5.0
+    iso_week = client.get("/api/indicators/total_cases?period=2026-W33").json()["data"]
+    assert iso_week["value"] == 5.0
+    assert iso_week["period"] == {"start": "2026-08-10", "end": "2026-08-16", "name": "2026-W33"}
+
+
+def test_month_and_quarter_periods(tmp_path: Path):
+    client = _client(tmp_path)
+    assert client.get("/api/indicators/total_cases?period=2026-07").json()["data"]["value"] == 10.0
+    assert client.get("/api/indicators/total_cases?period=2026-Q3").json()["data"]["value"] == 15.0
+    invalid = client.get("/api/indicators/total_cases?period=2026-W99")
+    assert invalid.status_code == 422
 
 
 def test_rate_and_invalid_filter(tmp_path: Path):

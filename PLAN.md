@@ -615,12 +615,13 @@ The 0.3 series begins the Phase 2 public-health engine. Its first vertical slice
 - Count, sum, average, rate, ratio, and percentage calculations
 - Dataset-field filters
 - Date-range reporting periods
+- Named ISO-week, calendar-month, and quarter reporting periods
 - Generated indicator metadata and result APIs
+- Completeness, numeric-range, and allowed-value data-quality rules
+- Data-quality evaluation APIs
 
 ### Remaining Scope
 
-- Named epidemiological periods and epidemiological-week utilities
-- Data-quality rule definitions and evaluation
 - Saved filter and dimension definitions
 - Surveillance threshold evaluation
 - Reusable public-health field types
