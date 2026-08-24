@@ -9,7 +9,7 @@
 
 PHFrame is an early-stage framework for building extensible public-health data systems. It combines generated projects, declarative health schemas, persistent storage, automatic APIs, a public-health engine, and a standards-based Web Component interface. The original CSV/Excel dashboard generator remains available as an export workflow.
 
-> Current version: `0.8.0a8` (boundary catalog-index hotfix)
+> Current version: `0.8.0a9` (privacy-aware Cloudflare dashboard publishing)
 
 ## Why PHFrame?
 
@@ -175,6 +175,37 @@ Each dashboard accepts live metrics, grouped charts/tables, trends, coordinate
 maps, and rich content blocks. Content blocks support editable headings,
 paragraphs, bold/italic/underline text, lists, and safe hyperlinks. Dashboard
 names and descriptions can be edited without changing `phframe.yaml`.
+
+### Publish a dashboard with Cloudflare Pages
+
+Open **Settings → Cloudflare Pages** and enter the Cloudflare account ID, a
+default Pages project name, and the name of the environment variable that holds
+the API token. Keep the secret outside the project:
+
+```bash
+export CLOUDFLARE_API_TOKEN="your-cloudflare-api-token"
+phframe serve
+```
+
+On the Dashboard screen, choose **Publish dashboard**. Snapshot mode embeds the
+current aggregate results and needs no backend. Live mode periodically requests
+an HTTPS aggregate API through a fixed-origin Pages Worker; its edge response is
+cached for the selected refresh interval. If that API requires a bearer token,
+configure `UPSTREAM_API_TOKEN` as a Cloudflare Pages secret after deployment.
+
+Every bundle and deployment first runs a privacy review. Unsupported widgets,
+protected dimensions, and protected source fields are blocked. The generated
+site contains zero row-level records. **Download bundle** provides the same
+privacy-reviewed ZIP for manual deployment with Wrangler. One-click deployment
+requires Node.js/`npx`, a Cloudflare account ID, and a token with Pages edit
+permission. PHFrame stores publication URLs and audit results, never API tokens.
+
+An externally reachable public PHFrame server can supply its reviewed aggregate
+feed at:
+
+```text
+GET /api/publications/feed/{dashboard_id}
+```
 
 For a worldwide coordinate map, add numeric columns named `latitude` and
 `longitude` (also recognized: `lat`/`lon`, `lat`/`lng`, or

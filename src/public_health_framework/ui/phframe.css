@@ -266,6 +266,11 @@ button, a { touch-action: manipulation; }
 .ph-settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
 .ph-settings-save { grid-column: 1 / -1; display: flex; align-items: center; gap: 1rem; }
 .ph-boundary-settings { grid-column: 1 / -1; }
+.ph-cloudflare-settings { grid-column: 1 / -1; }
+.ph-publication-review { display: flex; flex-direction: column; gap: .35rem; border-left: 4px solid var(--ph-color-border); }
+.ph-publication-review span { color: var(--ph-color-muted); }
+.ph-publication-approved { border-left-color: #15966f; background: color-mix(in srgb, #15966f 10%, var(--ph-color-surface)); }
+.ph-publish-dialog { width: min(760px, calc(100vw - 2rem)); }
 .ph-color-setting { display: grid; grid-template-columns: 4rem 1fr; align-items: end; gap: .8rem; }
 .ph-color-setting input[type="color"] { width: 4rem; height: 3.2rem; padding: .2rem; background: var(--ph-color-surface); border: 1px solid var(--ph-color-border); border-radius: .5rem; }
 .ph-nav-settings { display: grid; gap: .45rem; }

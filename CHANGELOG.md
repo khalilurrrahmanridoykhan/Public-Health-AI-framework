@@ -4,6 +4,20 @@ All notable changes to PHFrame will be documented here. The project intends to f
 
 ## [Unreleased]
 
+## [0.8.0a9] - 2026-08-24
+
+### Added
+
+- Publish a selected dashboard as an aggregate-only snapshot or live Cloudflare Pages site.
+- Run a mandatory privacy audit that blocks protected fields and row-level exports before bundling or deployment.
+- Download a portable Pages deployment ZIP with security headers and, for live mode, a fixed-origin Worker proxy with edge caching.
+- Configure the Cloudflare account, default project, and token environment-variable name without storing the token.
+- Create Pages projects, deploy through Wrangler, retain publication history, and expose privacy-reviewed aggregate feeds for externally reachable PHFrame servers.
+
+### Security
+
+- Require HTTPS live data sources and support upstream bearer credentials only through the Cloudflare `UPSTREAM_API_TOKEN` secret.
+
 ## [0.8.0a8] - 2026-08-24
 
 ### Fixed
@@ -209,7 +223,8 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Import audit history.
 - Portable HTML dashboard export.
 
-[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a8...HEAD
+[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a9...HEAD
+[0.8.0a9]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a8...v0.8.0a9
 [0.8.0a8]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a7...v0.8.0a8
 [0.8.0a7]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a6...v0.8.0a7
 [0.8.0a6]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a5...v0.8.0a6

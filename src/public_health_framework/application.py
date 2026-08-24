@@ -6,9 +6,13 @@ from html import escape
 from http.cookies import SimpleCookie
 import json
 import mimetypes
+import os
 from pathlib import Path
 import re
+import subprocess
+import tempfile
 from typing import Any
+from zipfile import ZipFile
 
 import yaml
 
@@ -22,6 +26,7 @@ from . import __version__
 from .config import ConnectorSchema, DatasetSchema, FIELD_TYPES, FieldSchema, ProjectConfig
 from .plugins import load_plugins
 from .periods import resolve_period
+from .publishing import build_bundle, publication_audit, safe_project_name
 from .importer import import_frame, load_uploaded_frame, preview_frame
 from .storage import Storage
 from .ui import asset_bytes, asset_text
@@ -55,6 +60,11 @@ class PHFrame:
             Route("/api/boundaries", self.boundary_index, methods=["GET", "POST"]),
             Route("/api/boundaries/countries", self.boundary_countries, methods=["GET"]),
             Route("/api/boundaries/{boundary_id}", self.boundary_detail, methods=["GET"]),
+            Route("/api/publications", self.publication_index, methods=["GET"]),
+            Route("/api/publications/feed/{dashboard_id}", self.publication_feed, methods=["GET"]),
+            Route("/api/publications/preview", self.publication_preview, methods=["POST"]),
+            Route("/api/publications/bundle", self.publication_bundle, methods=["POST"]),
+            Route("/api/publications/deploy", self.publication_deploy, methods=["POST"]),
             Route("/api/ai/deidentify/{dataset}", self.ai_deidentify, methods=["POST"]),
             Route("/api/ai/chat", self.ai_chat, methods=["GET", "POST"]),
             Route("/api/ai/chat/{chat_id:int}/report", self.ai_chat_report, methods=["POST"]),
@@ -224,6 +234,90 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
     async def boundary_countries(self, request: Request) -> Response:
         try: return JSONResponse({"data": await run_in_threadpool(self.site_settings.boundary_countries)})
         except (ValueError, OSError) as error: return _error(str(error), 502)
+
+    async def publication_index(self, request: Request) -> Response:
+        settings = self.site_settings.load()
+        return JSONResponse({"data": settings.get("publications", []), "cloudflare": {"configured": bool(os.getenv(settings.get("cloudflare_token_env", "CLOUDFLARE_API_TOKEN")) and settings.get("cloudflare_account_id")), "token_env": settings.get("cloudflare_token_env", "CLOUDFLARE_API_TOKEN")}})
+
+    async def publication_feed(self, request: Request) -> Response:
+        try:
+            dashboard = self._publication_dashboard(request.path_params["dashboard_id"])
+            audit = publication_audit(self.config, dashboard, "snapshot")
+            if not audit["approved"]: raise ValueError("Privacy review failed: " + "; ".join(audit["findings"]))
+            return JSONResponse(self._publication_snapshot(dashboard), headers={"cache-control": "public, max-age=60"})
+        except ValueError as error: return _error(str(error), 422)
+
+    def _publication_dashboard(self, dashboard_id: str) -> dict[str, Any]:
+        if dashboard_id.startswith("configured-"):
+            name = dashboard_id.removeprefix("configured-"); dashboard = self.config.dashboards.get(name)
+            if not dashboard: raise ValueError("Dashboard not found.")
+            return {"id": dashboard_id, "title": dashboard.label, "widgets": [{key: value for key, value in vars(widget).items() if value is not None} for widget in dashboard.widgets]}
+        dashboard = next((item for item in self.site_settings.load().get("dashboards", []) if item.get("id") == dashboard_id), None)
+        if not dashboard: raise ValueError("Dashboard not found.")
+        return dashboard
+
+    def _publication_snapshot(self, dashboard: dict[str, Any]) -> dict[str, Any]:
+        widgets = []
+        for widget in dashboard.get("widgets", []):
+            kind, result = widget.get("type"), {"type": widget.get("type"), "title": widget.get("title", widget.get("type", "Widget"))}
+            if kind == "content": result["html"] = widget.get("html", "")
+            elif kind == "kpi" and widget.get("indicator") in self.config.indicators:
+                result.update(self.storage.indicator(self.config.indicators[widget["indicator"]]))
+            elif kind in {"chart", "map"} and widget.get("dimension") in self.config.dimensions:
+                result.update(self.storage.dimension(self.config.dimensions[widget["dimension"]]))
+            elif kind in {"field_kpi", "field_chart"} and widget.get("dataset") in self.config.datasets:
+                records = self.storage.list(self.config.datasets[widget["dataset"]], limit=1000); field = widget.get("field")
+                if kind == "field_kpi":
+                    numbers = [float(row[field]) for row in records if row.get(field) is not None]; operation = widget.get("operation", "sum"); result.update({"value": len(numbers) if operation == "count" else (sum(numbers) if operation == "sum" else (sum(numbers) / len(numbers) if numbers else None)), "operation": operation})
+                else:
+                    counts = {}; [counts.__setitem__(str(row.get(field) or "Unknown"), counts.get(str(row.get(field) or "Unknown"), 0) + 1) for row in records]; result["values"] = [{"value": key, "count": value} for key, value in sorted(counts.items(), key=lambda item: -item[1])]
+            elif kind == "epi_curve" and widget.get("dataset") in self.config.datasets:
+                result["values"] = self.storage.epi_curve(self.config.datasets[widget["dataset"]], widget.get("date_field", ""), widget.get("value_field"))
+            elif kind == "geo_map" and widget.get("dataset") in self.config.datasets:
+                dataset = self.config.datasets[widget["dataset"]]; lat, lon, buckets = widget.get("latitude_field"), widget.get("longitude_field"), {}
+                for row in self.storage.list(dataset, limit=1000):
+                    if row.get(lat) is None or row.get(lon) is None: continue
+                    point = (round(float(row[lat]), 2), round(float(row[lon]), 2)); buckets[point] = buckets.get(point, 0) + 1
+                result["values"] = [{"latitude": point[0], "longitude": point[1], "count": count} for point, count in buckets.items()]
+            widgets.append(result)
+        return {"generated_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(), "widgets": widgets}
+
+    def _publication_payload(self, payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], str, str, int]:
+        dashboard = self._publication_dashboard(str(payload.get("dashboard_id", ""))); mode = str(payload.get("mode", "snapshot")); upstream = str(payload.get("upstream_url", "")); refresh = max(1, min(int(payload.get("refresh_minutes", 15)), 1440)); audit = publication_audit(self.config, dashboard, mode, upstream)
+        if not audit["approved"]: raise ValueError("Privacy review failed: " + "; ".join(audit["findings"]))
+        return dashboard, audit, mode, upstream, refresh
+
+    async def publication_preview(self, request: Request) -> Response:
+        try:
+            _, audit, _, _, _ = self._publication_payload(await request.json()); return JSONResponse({"data": audit})
+        except (json.JSONDecodeError, TypeError, ValueError) as error: return _error(str(error), 422)
+
+    async def publication_bundle(self, request: Request) -> Response:
+        try:
+            dashboard, _, mode, upstream, refresh = self._publication_payload(await request.json()); content = build_bundle(dashboard, self._publication_snapshot(dashboard), self.site_settings.public(), mode, upstream, refresh)
+            return Response(content, media_type="application/zip", headers={"content-disposition": f'attachment; filename="{safe_project_name(dashboard.get("title", "dashboard"))}-cloudflare.zip"'})
+        except (json.JSONDecodeError, TypeError, ValueError) as error: return _error(str(error), 422)
+
+    async def publication_deploy(self, request: Request) -> Response:
+        try:
+            payload = await request.json(); dashboard, audit, mode, upstream, refresh = self._publication_payload(payload); settings = self.site_settings.load(); account = str(settings.get("cloudflare_account_id", "")); token_env = str(settings.get("cloudflare_token_env", "CLOUDFLARE_API_TOKEN")); token = os.getenv(token_env, ""); project = safe_project_name(str(payload.get("project_name") or settings.get("cloudflare_project_name") or dashboard.get("title")))
+            if not account or not token: raise ValueError(f"Configure a Cloudflare account ID and the {token_env} environment variable first.")
+            content = build_bundle(dashboard, self._publication_snapshot(dashboard), self.site_settings.public(), mode, upstream, refresh)
+            with tempfile.TemporaryDirectory(prefix="phframe-publish-") as directory:
+                archive_path = Path(directory) / "bundle.zip"; archive_path.write_bytes(content)
+                with ZipFile(archive_path) as archive: archive.extractall(Path(directory) / "site")
+                environment = {**os.environ, "CLOUDFLARE_ACCOUNT_ID": account, "CLOUDFLARE_API_TOKEN": token}
+                created = await run_in_threadpool(subprocess.run, ["npx", "--yes", "wrangler", "pages", "project", "create", project, "--production-branch", "main"], capture_output=True, text=True, timeout=90, env=environment)
+                creation_message = (created.stderr or created.stdout).lower()
+                if created.returncode and "already exists" not in creation_message and "already been taken" not in creation_message:
+                    raise ValueError("Cloudflare project setup failed: " + (created.stderr or created.stdout)[-1000:])
+                process = await run_in_threadpool(subprocess.run, ["npx", "--yes", "wrangler", "pages", "deploy", str(Path(directory) / "site"), "--project-name", project, "--branch", "main", "--commit-dirty=true"], capture_output=True, text=True, timeout=180, env=environment)
+            if process.returncode: raise ValueError("Cloudflare deployment failed: " + (process.stderr or process.stdout)[-1000:])
+            urls = re.findall(r"https://[^\s]+\.pages\.dev", process.stdout + process.stderr); url = urls[-1].rstrip(".,") if urls else f"https://{project}.pages.dev"
+            publication = self.site_settings.record_publication({"dashboard_id": dashboard.get("id"), "project_name": project, "url": url, "mode": mode, "refresh_minutes": refresh, "privacy": audit})
+            return JSONResponse({"data": publication}, status_code=201)
+        except (FileNotFoundError, subprocess.TimeoutExpired): return _error("Cloudflare deployment requires Node.js and npx, and must finish within three minutes.", 503)
+        except (json.JSONDecodeError, TypeError, ValueError) as error: return _error(str(error), 422)
 
     def _actor(self, request: Request, declared: str = "") -> str:
         token = request.cookies.get("phframe_session", "")

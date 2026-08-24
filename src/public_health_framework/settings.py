@@ -12,6 +12,7 @@ from pathlib import Path
 import re
 import secrets
 import time
+from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urlparse
 from urllib.request import Request, urlopen
@@ -59,6 +60,10 @@ class SiteSettings:
             "ai_api_key_env": "",
             "allow_external_ai": False,
             "access_mode": "public",
+            "cloudflare_account_id": "",
+            "cloudflare_project_name": "",
+            "cloudflare_token_env": "CLOUDFLARE_API_TOKEN",
+            "publications": [],
             "users": [],
         }
 
@@ -87,7 +92,7 @@ class SiteSettings:
             "brand_name", "header_title", "dashboard_title", "primary_color",
             "default_theme", "footer_html", "show_footer", "navigation", "pages", "access_mode",
             "ai_provider", "ai_model", "ai_endpoint", "ai_api_key_env", "allow_external_ai",
-            "dashboards",
+            "dashboards", "cloudflare_account_id", "cloudflare_project_name", "cloudflare_token_env",
         }
         settings.update({key: value for key, value in values.items() if key in allowed})
         if settings["access_mode"] not in {"public", "private"}:
@@ -105,6 +110,15 @@ class SiteSettings:
         settings["ai_model"] = str(settings.get("ai_model", ""))[:255]
         settings["ai_endpoint"] = str(settings.get("ai_endpoint", ""))[:1000]
         settings["ai_api_key_env"] = str(settings.get("ai_api_key_env", ""))[:255]
+        settings["cloudflare_account_id"] = str(settings.get("cloudflare_account_id", "")).strip()[:64]
+        settings["cloudflare_project_name"] = str(settings.get("cloudflare_project_name", "")).strip().lower()[:58]
+        settings["cloudflare_token_env"] = str(settings.get("cloudflare_token_env", "CLOUDFLARE_API_TOKEN")).strip()
+        if settings["cloudflare_account_id"] and not re.fullmatch(r"[A-Za-z0-9_-]+", settings["cloudflare_account_id"]):
+            raise ValueError("Cloudflare account ID contains invalid characters.")
+        if settings["cloudflare_project_name"] and not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?", settings["cloudflare_project_name"]):
+            raise ValueError("Cloudflare project name must use lowercase letters, numbers, and hyphens.")
+        if not re.fullmatch(r"[A-Z_][A-Z0-9_]*", settings["cloudflare_token_env"]):
+            raise ValueError("Cloudflare token environment variable name is invalid.")
         if settings["ai_provider"] != "local" and settings.get("allow_external_ai"):
             if urlparse(settings["ai_endpoint"]).scheme != "https":
                 raise ValueError("External AI endpoints must use HTTPS.")
@@ -118,6 +132,23 @@ class SiteSettings:
             raise ValueError("Create a login user before enabling private mode.")
         self._save(settings)
         return self.public()
+
+    def record_publication(self, values: dict[str, Any]) -> dict[str, Any]:
+        settings = self.load()
+        item = {
+            "dashboard_id": str(values.get("dashboard_id", ""))[:200],
+            "project_name": str(values.get("project_name", ""))[:100],
+            "url": str(values.get("url", ""))[:1000],
+            "mode": str(values.get("mode", "snapshot")),
+            "refresh_minutes": int(values.get("refresh_minutes", 15)),
+            "published_at": datetime.now(timezone.utc).isoformat(),
+            "privacy": values.get("privacy", {}),
+        }
+        if urlparse(item["url"]).scheme != "https" or item["mode"] not in {"snapshot", "live"}:
+            raise ValueError("Publication record is invalid.")
+        settings["publications"] = [item, *settings.get("publications", [])][:100]
+        self._save(settings)
+        return item
 
     def _validate_dashboards(self, dashboards: Any) -> list[dict[str, Any]]:
         if not isinstance(dashboards, list) or len(dashboards) > 50:
