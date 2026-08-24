@@ -70,6 +70,12 @@ def test_frontend_shell_and_assets(tmp_path: Path):
     assert "Human-controlled assistance" in javascript.text
     assert "0 protected fields sent" in javascript.text
     assert ".ph-ai-layout" in css.text
+    assert "Public Health AI Analyst" in javascript.text
+    assert "data-chat-form" in javascript.text
+    assert "data-chat-report" in javascript.text
+    assert "Are cases increasing over time?" in javascript.text
+    assert ".ph-ai-transcript" in css.text
+    assert ".ph-ai-composer" in css.text
 
 
 def test_frontend_metadata_includes_ui_configuration(tmp_path: Path):
