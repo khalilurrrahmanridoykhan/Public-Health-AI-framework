@@ -26,6 +26,16 @@ def test_frontend_shell_and_assets(tmp_path: Path):
     assert 'role="status"' in javascript.text
     for component in ["ph-kpi", "ph-indicator-chart", "ph-epi-curve", "ph-map", "ph-dashboard"]:
         assert f'customElements.define("{component}"' in javascript.text
+    assert 'draggable="true"' in javascript.text
+    assert "data-visualization" in javascript.text
+    assert "data-size" in javascript.text
+    assert "ph-dashboard-layout:" in javascript.text
+    assert "Dashboard layout saved." in javascript.text
+    assert "Bar chart" in javascript.text
+    assert "Donut chart" in javascript.text
+    assert "Line chart" in javascript.text
+    assert ".ph-dashboard-grid" in css.text
+    assert ".ph-drag-over" in css.text
     assert 'role="img"' in javascript.text
     for component in ["ph-notification-center", "ph-modal", "ph-confirm"]:
         assert f'customElements.define("{component}"' in javascript.text

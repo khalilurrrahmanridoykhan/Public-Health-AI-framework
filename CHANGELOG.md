@@ -4,6 +4,17 @@ All notable changes to PHFrame will be documented here. The project intends to f
 
 ## [Unreleased]
 
+## [0.7.0a2] - 2026-08-24
+
+### Added
+
+- Add browser-saved dashboard layouts with drag-and-drop and accessible move controls.
+- Add per-widget size controls and number, gauge, bar, donut, line, column, tile-map, and table visualizations.
+
+### Changed
+
+- Redesign the application dashboard with a modern responsive grid, clearer visual hierarchy, improved charts, and purposeful empty states.
+
 ## [0.7.0a1] - 2026-08-24
 
 ### Added
@@ -55,7 +66,8 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Import audit history.
 - Portable HTML dashboard export.
 
-[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a1...HEAD
+[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a2...HEAD
+[0.7.0a2]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a1...v0.7.0a2
 [0.7.0a1]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.5.0a1...v0.7.0a1
 [0.5.0a1]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.2.0a1...v0.5.0a1
 [0.2.0a1]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/releases/tag/v0.2.0a1
