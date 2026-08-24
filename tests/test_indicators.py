@@ -61,3 +61,12 @@ def test_rate_and_invalid_filter(tmp_path: Path):
     invalid = client.get("/api/indicators/total_cases?unknown=value")
     assert invalid.status_code == 422
     assert "Unknown filter field" in invalid.json()["error"]["message"]
+
+
+def test_indicator_uses_saved_filter(tmp_path: Path):
+    client = _client(tmp_path)
+    result = client.get("/api/indicators/total_cases?filter=confirmed_cases").json()["data"]
+    assert result["value"] == 10.0
+    assert result["filters"] == {"status": "confirmed"}
+    missing = client.get("/api/indicators/total_cases?filter=missing")
+    assert missing.status_code == 422

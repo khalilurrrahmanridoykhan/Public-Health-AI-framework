@@ -78,6 +78,24 @@ data_quality:
     check: allowed
     values: [suspected, probable, confirmed]
 
+filters:
+  confirmed_cases:
+    label: Confirmed cases
+    dataset: case_reports
+    values:
+      status: confirmed
+
+dimensions:
+  cases_by_district:
+    label: Cases by district
+    dataset: case_reports
+    field: district
+  confirmed_cases_by_district:
+    label: Confirmed cases by district
+    dataset: case_reports
+    field: district
+    filter: confirmed_cases
+
 plugins: []
 """
 
@@ -100,6 +118,8 @@ Edit `phframe.yaml` to customize datasets and fields.
 
 Indicator results are available at `/api/indicators/{{name}}` and data-quality
 results at `/api/data-quality`.
+Saved filters are listed at `/api/filters`; grouped dimensions are available at
+`/api/dimensions/{{name}}`.
 
 ## Import records
 
@@ -145,6 +165,8 @@ def check_project(config_path: str | Path = "phframe.yaml") -> tuple[ProjectConf
     messages.append(f"Datasets: {len(config.datasets)}")
     messages.append(f"Indicators: {len(config.indicators)}")
     messages.append(f"Data-quality rules: {len(config.data_quality_rules)}")
+    messages.append(f"Saved filters: {len(config.saved_filters)}")
+    messages.append(f"Dimensions: {len(config.dimensions)}")
     messages.append(f"Environment: {config.environment}")
     messages.append(f"Database: {config.database_display}")
     Storage(config).initialize()

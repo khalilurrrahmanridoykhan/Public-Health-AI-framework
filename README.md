@@ -113,6 +113,26 @@ data_quality:
 
 `GET /api/data-quality` evaluates every rule. `GET /api/data-quality/{rule}` returns its record count, valid count, violation count, and percentage score.
 
+## Saved filters and dimensions
+
+Reusable filters keep common cohorts consistent across indicators and grouped summaries:
+
+```yaml
+filters:
+  confirmed_cases:
+    dataset: case_reports
+    values:
+      status: confirmed
+
+dimensions:
+  confirmed_cases_by_district:
+    dataset: case_reports
+    field: district
+    filter: confirmed_cases
+```
+
+Apply a saved filter with `GET /api/indicators/total_cases?filter=confirmed_cases`. Dimension results are available from `GET /api/dimensions/{name}` and return each distinct value with its record count. Request fields can override saved filter values when an ad hoc refinement is needed.
+
 ## Schema migrations
 
 PHFrame tracks the configured dataset schemas in the project database. Preview safe changes with:

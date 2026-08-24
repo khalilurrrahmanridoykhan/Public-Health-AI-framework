@@ -12,7 +12,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.schema import CreateColumn
 
-from .config import DataQualityRuleSchema, DatasetSchema, FieldSchema, IndicatorSchema, ProjectConfig
+from .config import DataQualityRuleSchema, DatasetSchema, DimensionSchema, FieldSchema, IndicatorSchema, ProjectConfig
 
 
 TYPE_FACTORIES = {
@@ -289,6 +289,26 @@ class Storage:
             "field": rule.field, "check": rule.check, "total": total,
             "valid": valid, "violations": violations,
             "score": (valid / total * 100) if total else None,
+        }
+
+    def dimension(self, dimension: DimensionSchema, filters: dict[str, Any] | None = None) -> dict[str, Any]:
+        dataset = self.config.datasets[dimension.dataset]
+        table = self._dataset_table(dataset)
+        conditions = []
+        for name, value in (filters or {}).items():
+            if name not in dataset.fields:
+                raise ValueError(f"Unknown filter field '{name}'.")
+            conditions.append(table.c[name] == _coerce(name, value, dataset.fields[name]))
+        field = table.c[dimension.field]
+        statement = select(field.label("value"), func.count(table.c.id).label("count")).group_by(field).order_by(field)
+        if conditions:
+            statement = statement.where(and_(*conditions))
+        with self.engine.connect() as connection:
+            rows = connection.execute(statement).mappings().all()
+        return {
+            "name": dimension.name, "label": dimension.label, "dataset": dimension.dataset,
+            "field": dimension.field, "filters": filters or {},
+            "values": [{"value": _serialize(row["value"]), "count": int(row["count"])} for row in rows],
         }
 
 

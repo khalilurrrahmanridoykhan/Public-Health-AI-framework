@@ -13,6 +13,8 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Add ISO-week, calendar-month, and quarter reporting periods to indicator queries.
 - Add declarative completeness, numeric-range, and allowed-value data-quality rules.
 - Add data-quality metadata and evaluation APIs.
+- Add reusable saved filters for indicator and dimension queries.
+- Add declarative dimensions with grouped-count APIs.
 
 ## [0.2.0a1] - 2026-07-21
 

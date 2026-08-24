@@ -33,6 +33,9 @@ class PHFrame:
             Route("/api/indicators/{indicator}", self.indicator_result, methods=["GET"]),
             Route("/api/data-quality", self.data_quality_index, methods=["GET"]),
             Route("/api/data-quality/{rule}", self.data_quality_result, methods=["GET"]),
+            Route("/api/filters", self.filter_index, methods=["GET"]),
+            Route("/api/dimensions", self.dimension_index, methods=["GET"]),
+            Route("/api/dimensions/{dimension}", self.dimension_result, methods=["GET"]),
             Route("/api/{dataset}", self.collection, methods=["GET", "POST"]),
             Route("/api/{dataset}/{record_id:int}", self.detail, methods=["GET", "PUT", "PATCH", "DELETE"]),
         ]
@@ -101,6 +104,17 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
                     }
                     for rule in self.config.data_quality_rules.values()
                 },
+                "filters": {
+                    item.name: {"label": item.label, "dataset": item.dataset, "values": item.values}
+                    for item in self.config.saved_filters.values()
+                },
+                "dimensions": {
+                    item.name: {
+                        "label": item.label, "dataset": item.dataset, "field": item.field,
+                        "endpoint": f"/api/dimensions/{item.name}",
+                    }
+                    for item in self.config.dimensions.values()
+                },
             }
         )
 
@@ -117,9 +131,17 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
         indicator = self.config.indicators.get(request.path_params["indicator"])
         if indicator is None:
             return _error("Indicator not found.", 404)
-        reserved = {"start", "end", "period"}
+        reserved = {"start", "end", "period", "filter"}
         filters = {key: value for key, value in request.query_params.items() if key not in reserved}
         try:
+            saved_filter_name = request.query_params.get("filter")
+            if saved_filter_name:
+                saved_filter = self.config.saved_filters.get(saved_filter_name)
+                if saved_filter is None:
+                    raise ValueError(f"Saved filter '{saved_filter_name}' not found.")
+                if saved_filter.dataset != indicator.dataset:
+                    raise ValueError(f"Saved filter '{saved_filter_name}' belongs to a different dataset.")
+                filters = {**saved_filter.values, **filters}
             start, end = request.query_params.get("start"), request.query_params.get("end")
             period = request.query_params.get("period")
             if period:
@@ -144,6 +166,38 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
         if rule is None:
             return _error("Data-quality rule not found.", 404)
         return JSONResponse({"data": self.storage.data_quality(rule)})
+
+    async def filter_index(self, request: Request) -> JSONResponse:
+        return JSONResponse({"data": [
+            {"name": item.name, "label": item.label, "dataset": item.dataset, "values": item.values}
+            for item in self.config.saved_filters.values()
+        ]})
+
+    async def dimension_index(self, request: Request) -> JSONResponse:
+        return JSONResponse({"data": [
+            {"name": item.name, "label": item.label, "dataset": item.dataset, "field": item.field,
+             "endpoint": f"/api/dimensions/{item.name}"}
+            for item in self.config.dimensions.values()
+        ]})
+
+    async def dimension_result(self, request: Request) -> Response:
+        dimension = self.config.dimensions.get(request.path_params["dimension"])
+        if dimension is None:
+            return _error("Dimension not found.", 404)
+        saved_filter_name = request.query_params.get("filter") or dimension.saved_filter
+        filters = {}
+        if saved_filter_name:
+            saved_filter = self.config.saved_filters.get(saved_filter_name)
+            if saved_filter is None:
+                return _error(f"Saved filter '{saved_filter_name}' not found.", 422)
+            if saved_filter.dataset != dimension.dataset:
+                return _error(f"Saved filter '{saved_filter_name}' belongs to a different dataset.", 422)
+            filters.update(saved_filter.values)
+        filters.update({key: value for key, value in request.query_params.items() if key != "filter"})
+        try:
+            return JSONResponse({"data": self.storage.dimension(dimension, filters)})
+        except ValueError as error:
+            return _error(str(error), 422)
 
     async def import_history(self, request: Request) -> JSONResponse:
         try:

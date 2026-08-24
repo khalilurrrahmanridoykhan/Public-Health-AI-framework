@@ -162,12 +162,73 @@ class DataQualityRuleSchema:
 
 
 @dataclass(frozen=True)
+class SavedFilterSchema:
+    name: str
+    label: str
+    dataset: str
+    values: dict[str, Any]
+
+    @classmethod
+    def from_dict(
+        cls, name: str, value: dict[str, Any], datasets: dict[str, DatasetSchema]
+    ) -> "SavedFilterSchema":
+        _validate_identifier(name, "saved filter")
+        dataset_name = str(value.get("dataset", ""))
+        if dataset_name not in datasets:
+            raise ValueError(f"Saved filter '{name}' references unknown dataset '{dataset_name}'.")
+        values = dict(value.get("values", {}) or {})
+        if not values:
+            raise ValueError(f"Saved filter '{name}' must define values.")
+        unknown = set(values) - set(datasets[dataset_name].fields)
+        if unknown:
+            raise ValueError(f"Saved filter '{name}' references unknown fields: {', '.join(sorted(unknown))}.")
+        return cls(
+            name=name, label=str(value.get("label", name.replace("_", " ").title())),
+            dataset=dataset_name, values=values,
+        )
+
+
+@dataclass(frozen=True)
+class DimensionSchema:
+    name: str
+    label: str
+    dataset: str
+    field: str
+    saved_filter: str | None = None
+
+    @classmethod
+    def from_dict(
+        cls, name: str, value: dict[str, Any], datasets: dict[str, DatasetSchema],
+        saved_filters: dict[str, SavedFilterSchema],
+    ) -> "DimensionSchema":
+        _validate_identifier(name, "dimension")
+        dataset_name = str(value.get("dataset", ""))
+        if dataset_name not in datasets:
+            raise ValueError(f"Dimension '{name}' references unknown dataset '{dataset_name}'.")
+        field_name = str(value.get("field", ""))
+        if field_name not in datasets[dataset_name].fields:
+            raise ValueError(f"Dimension '{name}' references unknown field '{field_name}'.")
+        saved_filter = value.get("filter")
+        if saved_filter:
+            if saved_filter not in saved_filters:
+                raise ValueError(f"Dimension '{name}' references unknown saved filter '{saved_filter}'.")
+            if saved_filters[saved_filter].dataset != dataset_name:
+                raise ValueError(f"Dimension '{name}' and saved filter '{saved_filter}' use different datasets.")
+        return cls(
+            name=name, label=str(value.get("label", name.replace("_", " ").title())),
+            dataset=dataset_name, field=field_name, saved_filter=saved_filter,
+        )
+
+
+@dataclass(frozen=True)
 class ProjectConfig:
     name: str
     database: str = "sqlite:///data/phframe.db"
     datasets: dict[str, DatasetSchema] = dataclass_field(default_factory=dict)
     indicators: dict[str, IndicatorSchema] = dataclass_field(default_factory=dict)
     data_quality_rules: dict[str, DataQualityRuleSchema] = dataclass_field(default_factory=dict)
+    saved_filters: dict[str, SavedFilterSchema] = dataclass_field(default_factory=dict)
+    dimensions: dict[str, DimensionSchema] = dataclass_field(default_factory=dict)
     plugins: tuple[str, ...] = ()
     environment: str = "development"
     host: str = "127.0.0.1"
@@ -202,6 +263,20 @@ class ProjectConfig:
             name: DataQualityRuleSchema.from_dict(name, value or {}, datasets)
             for name, value in raw_rules.items()
         }
+        raw_filters = raw.get("filters", {})
+        if not isinstance(raw_filters, dict):
+            raise ValueError("Configuration 'filters' must be an object.")
+        saved_filters = {
+            name: SavedFilterSchema.from_dict(name, value or {}, datasets)
+            for name, value in raw_filters.items()
+        }
+        raw_dimensions = raw.get("dimensions", {})
+        if not isinstance(raw_dimensions, dict):
+            raise ValueError("Configuration 'dimensions' must be an object.")
+        dimensions = {
+            name: DimensionSchema.from_dict(name, value or {}, datasets, saved_filters)
+            for name, value in raw_dimensions.items()
+        }
         plugins = tuple(str(item) for item in raw.get("plugins", []))
         database = os.environ.get("PHFRAME_DATABASE_URL") or _expand_env(
             str(project.get("database", "sqlite:///data/phframe.db"))
@@ -216,6 +291,8 @@ class ProjectConfig:
             datasets=datasets,
             indicators=indicators,
             data_quality_rules=data_quality_rules,
+            saved_filters=saved_filters,
+            dimensions=dimensions,
             plugins=plugins,
             environment=environment,
             host=os.environ.get("PHFRAME_HOST", str(server.get("host", "127.0.0.1"))),

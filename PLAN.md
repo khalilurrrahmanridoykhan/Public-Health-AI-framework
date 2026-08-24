@@ -619,10 +619,11 @@ The 0.3 series begins the Phase 2 public-health engine. Its first vertical slice
 - Generated indicator metadata and result APIs
 - Completeness, numeric-range, and allowed-value data-quality rules
 - Data-quality evaluation APIs
+- Reusable saved filters for indicator queries
+- Declarative dimensions and grouped-count APIs
 
 ### Remaining Scope
 
-- Saved filter and dimension definitions
 - Surveillance threshold evaluation
 - Reusable public-health field types
 - Organisation-unit hierarchy
