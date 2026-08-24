@@ -4,12 +4,15 @@ from __future__ import annotations
 
 import base64
 from hashlib import pbkdf2_hmac
+from html import escape
+from html.parser import HTMLParser
 import hmac
 import json
 from pathlib import Path
 import secrets
 import time
 from typing import Any
+from urllib.parse import urlparse
 
 
 DEFAULT_NAVIGATION = {
@@ -19,6 +22,7 @@ DEFAULT_NAVIGATION = {
     "import": {"label": "Import", "visible": True},
     "connectors": {"label": "Connectors", "visible": True},
     "quality": {"label": "Data quality", "visible": True},
+    "pages": {"label": "Pages", "visible": True},
     "settings": {"label": "Settings", "visible": True},
 }
 
@@ -40,9 +44,10 @@ class SiteSettings:
             "default_theme": "light",
             "logo_url": "/assets/phframe-logo.png",
             "favicon_url": "/assets/phframe-logo.png",
-            "footer_text": "Powered by PHFrame",
+            "footer_html": 'Powered by PHFrame · Developed by <a href="https://krrkhan.com">Khalilur Rahman Ridoy Khan</a>',
             "show_footer": True,
             "navigation": DEFAULT_NAVIGATION,
+            "pages": [],
             "access_mode": "public",
             "users": [],
         }
@@ -51,6 +56,8 @@ class SiteSettings:
         settings = self.defaults()
         if self.path.exists():
             stored = json.loads(self.path.read_text(encoding="utf-8"))
+            if "footer_html" not in stored and "footer_text" in stored:
+                stored["footer_html"] = f"<p>{escape(str(stored['footer_text']))}</p>"
             settings.update(stored)
             settings["navigation"] = {
                 key: {**value, **stored.get("navigation", {}).get(key, {})}
@@ -68,7 +75,7 @@ class SiteSettings:
         settings = self.load()
         allowed = {
             "brand_name", "header_title", "dashboard_title", "primary_color",
-            "default_theme", "footer_text", "show_footer", "navigation", "access_mode",
+            "default_theme", "footer_html", "show_footer", "navigation", "pages", "access_mode",
         }
         settings.update({key: value for key, value in values.items() if key in allowed})
         if settings["access_mode"] not in {"public", "private"}:
@@ -78,6 +85,8 @@ class SiteSettings:
         color = str(settings["primary_color"])
         if len(color) != 7 or not color.startswith("#") or any(char not in "0123456789abcdefABCDEF" for char in color[1:]):
             raise ValueError("primary_color must be a six-digit hex color.")
+        settings["footer_html"] = sanitize_html(str(settings.get("footer_html", "")))
+        settings["pages"] = self._validate_pages(settings.get("pages", []))
         if username or password:
             if not username or not password or len(password) < 10:
                 raise ValueError("A username and password of at least 10 characters are required.")
@@ -86,6 +95,37 @@ class SiteSettings:
             raise ValueError("Create a login user before enabling private mode.")
         self._save(settings)
         return self.public()
+
+    def _validate_pages(self, pages: Any) -> list[dict[str, Any]]:
+        if not isinstance(pages, list) or len(pages) > 50:
+            raise ValueError("pages must be a list containing at most 50 pages.")
+        clean: list[dict[str, Any]] = []
+        slugs: set[str] = set()
+        for page in pages:
+            if not isinstance(page, dict):
+                raise ValueError("Each page must be an object.")
+            slug = str(page.get("slug", ""))
+            if not slug or not slug.replace("-", "").isalnum() or slug in slugs:
+                raise ValueError("Page slugs must be unique and contain letters, numbers, or hyphens.")
+            slugs.add(slug)
+            page_type = str(page.get("type", "internal"))
+            if page_type not in {"internal", "external"}:
+                raise ValueError("Page type must be internal or external.")
+            url = str(page.get("url", ""))
+            if page_type == "external" and urlparse(url).scheme not in {"http", "https"}:
+                raise ValueError("External page URLs must use http or https.")
+            blocks = page.get("blocks", []) if page_type == "internal" else []
+            if not isinstance(blocks, list) or len(blocks) > 100:
+                raise ValueError("A page can contain at most 100 blocks.")
+            clean_blocks = []
+            for block in blocks:
+                if not isinstance(block, dict) or block.get("type") not in {"text", "table", "visualization"}:
+                    raise ValueError("Page blocks must be text, table, or visualization blocks.")
+                item = {str(key): value for key, value in block.items() if key in {"id", "type", "title", "html", "dataset", "source"}}
+                if item["type"] == "text": item["html"] = sanitize_html(str(item.get("html", "")))
+                clean_blocks.append(item)
+            clean.append({"slug": slug, "title": str(page.get("title", slug))[:200], "nav_label": str(page.get("nav_label", page.get("title", slug)))[:100], "type": page_type, "url": url, "blocks": clean_blocks})
+        return clean
 
     def _set_user(self, settings: dict[str, Any], username: str, password: str) -> None:
         username = username.strip()
@@ -155,3 +195,29 @@ class SiteSettings:
         temporary = self.path.with_suffix(".json.tmp")
         temporary.write_text(json.dumps(settings, indent=2), encoding="utf-8")
         temporary.replace(self.path)
+
+
+class _SafeHTMLParser(HTMLParser):
+    allowed = {"a", "b", "strong", "em", "i", "u", "p", "br", "ul", "ol", "li"}
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True); self.parts: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag not in self.allowed: return
+        clean = ""
+        if tag == "a":
+            href = next((value or "" for name, value in attrs if name == "href"), "")
+            if urlparse(href).scheme in {"http", "https"}: clean = f' href="{escape(href, quote=True)}" target="_blank" rel="noopener noreferrer"'
+        self.parts.append(f"<{tag}{clean}>")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in self.allowed and tag != "br": self.parts.append(f"</{tag}>")
+
+    def handle_data(self, data: str) -> None:
+        self.parts.append(escape(data))
+
+
+def sanitize_html(value: str) -> str:
+    parser = _SafeHTMLParser(); parser.feed(value); parser.close()
+    return "".join(parser.parts)

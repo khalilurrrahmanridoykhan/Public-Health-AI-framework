@@ -9,7 +9,7 @@
 
 PHFrame is an early-stage framework for building extensible public-health data systems. It combines generated projects, declarative health schemas, persistent storage, automatic APIs, a public-health engine, and a standards-based Web Component interface. The original CSV/Excel dashboard generator remains available as an export workflow.
 
-> Current version: `0.7.0a5` (branded workspace and access-control preview)
+> Current version: `0.7.0a6` (custom page-builder preview)
 
 ## Why PHFrame?
 
@@ -27,10 +27,12 @@ Current capabilities include:
 - Browser-managed typed columns for worldwide, programme-specific data models
 - Browser imports with downloadable examples and scheduled generic API, DHIS2, KoboToolbox, and ODK synchronization
 - Editable branding, navigation, footer, themes, primary color, dashboard title, logo, and favicon
+- Custom navigation pages with drag-and-drop text, table, and visualization blocks or external URL redirects
+- Safe rich-text footer and page content with bold, italic, underline, lists, and hyperlinks
 - Optional private mode with PBKDF2-hashed local user credentials and signed, HTTP-only login sessions
 
 > [!IMPORTANT]
-> PHFrame is alpha software. Evaluate it with non-sensitive data before considering production use. It does not yet provide authentication or a complete deployment security model.
+> PHFrame is alpha software. Evaluate it with non-sensitive data before considering production use. Its optional local login is a preview and is not yet a complete production deployment security model.
 
 ## Create a public-health application
 
@@ -63,6 +65,10 @@ The Phase 3 interface is served directly by PHFrame and has no React or external
 - Light, dark, and high-contrast themes using CSS design tokens
 - English and Bengali localization foundations with project-specific translation overrides
 - Keyboard focus styling, skip navigation, reduced-motion support, live notifications, modal dialogs, and confirmations
+
+Use **Pages** in the application navigation to create an internal page or an external link. Internal pages have a drag-and-drop canvas where editors can add rich text, live dataset tables, and configured metrics or charts. Saving a page adds it to the navigation automatically. External pages redirect the visitor to the supplied HTTP or HTTPS URL.
+
+Use **Settings** to configure the header and dashboard titles, logo, favicon, navigation labels, access mode, theme, and primary color. The primary color is automatically adjusted for readable accents in dark mode while the selected color remains the header brand color. The footer editor supports formatted text and safe web links.
 
 Configure the interface and dashboard:
 

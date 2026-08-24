@@ -57,6 +57,13 @@ def test_frontend_shell_and_assets(tmp_path: Path):
     assert '"ne", "se", "sw", "nw"' in javascript.text
     assert "KoboToolbox submissions" in javascript.text
     assert ".ph-builder-layout" in css.text
+    for component in ["ph-rich-editor", "ph-page-table", "ph-custom-page", "ph-page-builder"]:
+        assert f'customElements.define("{component}"' in javascript.text
+    assert "data-add-block" in javascript.text
+    assert "footer_html" in javascript.text
+    assert "applyColor" in javascript.text
+    assert ".ph-page-canvas" in css.text
+    assert ".ph-rich-editor" in css.text
 
 
 def test_frontend_metadata_includes_ui_configuration(tmp_path: Path):

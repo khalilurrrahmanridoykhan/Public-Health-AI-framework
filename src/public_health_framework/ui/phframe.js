@@ -21,6 +21,16 @@ const PHFrame = {
     span.textContent = value == null ? "" : String(value);
     return span.innerHTML;
   },
+  applyColor(value) {
+    const hex = /^#[0-9a-f]{6}$/i.test(value || "") ? value : "#087e8b";
+    const channels = [1, 3, 5].map(index => parseInt(hex.slice(index, index + 2), 16));
+    const mix = (target, amount) => `#${channels.map(channel => Math.round(channel + (target - channel) * amount).toString(16).padStart(2, "0")).join("")}`;
+    const dark = document.documentElement.dataset.theme === "dark";
+    document.documentElement.style.setProperty("--ph-color-primary", dark ? mix(255, .38) : hex);
+    document.documentElement.style.setProperty("--ph-color-primary-strong", dark ? hex : mix(0, .25));
+    document.documentElement.style.setProperty("--ph-color-accent", dark ? mix(255, .38) : hex);
+    document.documentElement.style.setProperty("--ph-color-accent-soft", `color-mix(in srgb, ${hex} 18%, transparent)`);
+  },
   t(key) { return this.customMessages?.[key] || this.messages[this.locale]?.[key] || this.messages.en[key] || key; },
   notify(message) { dispatchEvent(new CustomEvent("ph-notify", { detail: { message } })); }
 };
@@ -36,13 +46,13 @@ class PHAppShell extends PHElement {
     try {
       const [metadata, settings] = await Promise.all([PHFrame.get("/api"), PHFrame.get("/api/settings")]);
       this.metadata = metadata;
+      PHFrame.appMetadata = metadata;
       PHFrame.siteSettings = settings.data;
       PHFrame.locale = this.metadata.ui?.locale || "en";
       PHFrame.customMessages = this.metadata.ui?.translations || {};
       document.documentElement.lang = PHFrame.locale;
       document.documentElement.dataset.theme = localStorage.getItem("ph-theme") || PHFrame.siteSettings.default_theme || this.metadata.ui?.theme || "light";
-      document.documentElement.style.setProperty("--ph-color-primary", PHFrame.siteSettings.primary_color);
-      document.documentElement.style.setProperty("--ph-color-primary-strong", PHFrame.siteSettings.primary_color);
+      PHFrame.applyColor(PHFrame.siteSettings.primary_color);
       const favicon = document.querySelector("[data-ph-favicon]"); if (favicon) favicon.href = PHFrame.siteSettings.favicon_url;
       this.draw();
       addEventListener("hashchange", () => this.route());
@@ -52,21 +62,25 @@ class PHAppShell extends PHElement {
   }
   draw() {
     const navigation = PHFrame.siteSettings.navigation;
-    const links = Object.entries(navigation).filter(([, item]) => item.visible).map(([route, item]) => `<a href="#/${route}" data-route="${route}">${PHFrame.escape(item.label)}</a>`).join("");
+    const builtInLinks = Object.entries(navigation).filter(([, item]) => item.visible).map(([route, item]) => `<a href="#/${route}" data-route="${route}">${PHFrame.escape(item.label)}</a>`).join("");
+    const customLinks = (PHFrame.siteSettings.pages || []).map(page => page.type === "external" ? `<a href="${PHFrame.escape(page.url)}">${PHFrame.escape(page.nav_label)}</a>` : `<a href="#/page/${PHFrame.escape(page.slug)}" data-page="${PHFrame.escape(page.slug)}">${PHFrame.escape(page.nav_label)}</a>`).join("");
+    const links = builtInLinks + customLinks;
     this.innerHTML = `<a class="ph-skip-link" href="#main">Skip to content</a>
       <div class="ph-shell"><header class="ph-header"><a class="ph-brand" href="#/dashboard"><img src="${PHFrame.escape(PHFrame.siteSettings.logo_url)}" alt=""><span><b>${PHFrame.escape(PHFrame.siteSettings.brand_name)}</b><small>${PHFrame.escape(PHFrame.siteSettings.header_title)}</small></span></a>
       <nav class="ph-nav" aria-label="Primary">${links}</nav>
       <div class="ph-header-tools"><label>${PHFrame.t("theme")} <select class="ph-theme" aria-label="${PHFrame.t("theme")}"><option value="light">Light</option><option value="dark">Dark</option><option value="high-contrast">High contrast</option></select></label>${PHFrame.siteSettings.access_mode === "private" ? `<button class="ph-logout" type="button">Sign out</button>` : ""}</div></header>
-      <main class="ph-main" id="main" tabindex="-1"><div id="ph-view"></div></main>${PHFrame.siteSettings.show_footer ? `<footer class="ph-footer">${PHFrame.escape(PHFrame.siteSettings.footer_text)}</footer>` : ""}<ph-notification-center></ph-notification-center></div>`;
+      <main class="ph-main" id="main" tabindex="-1"><div id="ph-view"></div></main>${PHFrame.siteSettings.show_footer ? `<footer class="ph-footer">${PHFrame.siteSettings.footer_html}</footer>` : ""}<ph-notification-center></ph-notification-center></div>`;
     const theme = this.querySelector(".ph-theme");
     theme.value = document.documentElement.dataset.theme;
-    theme.addEventListener("change", () => { document.documentElement.dataset.theme = theme.value; localStorage.setItem("ph-theme", theme.value); });
+    theme.addEventListener("change", () => { document.documentElement.dataset.theme = theme.value; localStorage.setItem("ph-theme", theme.value); PHFrame.applyColor(PHFrame.siteSettings.primary_color); });
     this.querySelector(".ph-logout")?.addEventListener("click", async () => { await PHFrame.send("/api/auth/logout", "POST", {}); location.href = "/login"; });
     this.route();
   }
   route() {
     const route = (location.hash.match(/^#\/([^/?]+)/) || [])[1] || "dashboard";
     this.querySelectorAll("[data-route]").forEach(link => link.toggleAttribute("aria-current", link.dataset.route === route));
+    const activeSlug = route === "page" ? decodeURIComponent(location.hash.split("/")[2] || "") : "";
+    this.querySelectorAll("[data-page]").forEach(link => link.toggleAttribute("aria-current", link.dataset.page === activeSlug));
     const view = this.querySelector("#ph-view");
     if (route === "records") {
       const first = Object.keys(this.metadata.datasets)[0];
@@ -91,6 +105,14 @@ class PHAppShell extends PHElement {
     } else if (route === "settings") {
       view.innerHTML = `<h2>Settings</h2><ph-settings-panel></ph-settings-panel>`;
       view.querySelector("ph-settings-panel").settings = PHFrame.siteSettings;
+    } else if (route === "pages") {
+      view.innerHTML = `<h2>Pages</h2><ph-page-builder></ph-page-builder>`;
+      view.querySelector("ph-page-builder").settings = PHFrame.siteSettings;
+      view.querySelector("ph-page-builder").metadata = this.metadata;
+    } else if (route === "page") {
+      const slug = decodeURIComponent(location.hash.split("/")[2] || "");
+      view.innerHTML = `<ph-custom-page slug="${PHFrame.escape(slug)}"></ph-custom-page>`;
+      view.querySelector("ph-custom-page").settings = PHFrame.siteSettings;
     } else {
       const dashboard = Object.keys(this.metadata.dashboards || {})[0];
       view.innerHTML = dashboard ? `<ph-dashboard name="${PHFrame.escape(dashboard)}"></ph-dashboard>` : `<h2>Dashboard</h2><p class="ph-muted">No dashboard configured.</p>`;
@@ -529,14 +551,25 @@ class PHDataBuilder extends PHElement {
   }
 }
 
+class PHRichEditor extends PHElement {
+  set value(value) { this._value = value || ""; if (this.isConnected) this.render(); }
+  get value() { return this.querySelector("[contenteditable]")?.innerHTML || ""; }
+  render() {
+    this.innerHTML = `<div class="ph-editor-toolbar" aria-label="Text formatting"><button type="button" data-command="bold"><b>B</b></button><button type="button" data-command="italic"><i>I</i></button><button type="button" data-command="underline"><u>U</u></button><button type="button" data-command="insertUnorderedList">• List</button><button type="button" data-link>Link</button></div><div class="ph-rich-editor" contenteditable="true" role="textbox" aria-multiline="true">${this._value || ""}</div>`;
+    this.querySelectorAll("[data-command]").forEach(button => button.addEventListener("click", () => { document.execCommand(button.dataset.command); this.querySelector("[contenteditable]").focus(); }));
+    this.querySelector("[data-link]").addEventListener("click", () => { const url = prompt("Enter an https:// link"); if (url && /^https?:\/\//i.test(url)) document.execCommand("createLink", false, url); });
+  }
+}
+
 class PHSettingsPanel extends PHElement {
   set settings(value) { this._settings = value; if (this.isConnected) this.render(); }
   render() {
     if (!this._settings) return;
     const navigation = Object.entries(this._settings.navigation).map(([route, item]) => `<div class="ph-nav-setting"><label><input type="checkbox" name="nav_visible_${route}" ${item.visible ? "checked" : ""}> Show</label><div class="ph-field"><label for="ph-nav-${route}">${PHFrame.escape(route)}</label><input id="ph-nav-${route}" name="nav_label_${route}" value="${PHFrame.escape(item.label)}"></div></div>`).join("");
-    this.innerHTML = `<form class="ph-settings-grid"><section class="ph-card ph-stack"><div><p class="ph-eyebrow">Identity</p><h3>Brand and header</h3></div><div class="ph-field"><label>Brand name</label><input name="brand_name" value="${PHFrame.escape(this._settings.brand_name)}"></div><div class="ph-field"><label>Header title</label><input name="header_title" value="${PHFrame.escape(this._settings.header_title)}"></div><div class="ph-field"><label>Dashboard title</label><input name="dashboard_title" value="${PHFrame.escape(this._settings.dashboard_title)}" placeholder="Use configured dashboard title"></div><div class="ph-form-grid"><div class="ph-field"><label>Logo</label><input type="file" name="logo" accept=".png,.jpg,.jpeg,.webp"></div><div class="ph-field"><label>Favicon</label><input type="file" name="favicon" accept=".png,.jpg,.jpeg,.webp,.ico"></div></div></section><section class="ph-card ph-stack"><div><p class="ph-eyebrow">Appearance</p><h3>Colors and theme</h3></div><div class="ph-color-setting"><input name="primary_color_picker" type="color" value="${PHFrame.escape(this._settings.primary_color)}" aria-label="Primary color picker"><div class="ph-field"><label>Primary color code</label><input name="primary_color" value="${PHFrame.escape(this._settings.primary_color)}" pattern="#[0-9a-fA-F]{6}"></div></div><div class="ph-field"><label>Default theme</label><select name="default_theme"><option value="light">Light</option><option value="dark">Dark</option><option value="high-contrast">High contrast</option></select></div><label><input type="checkbox" name="show_footer" ${this._settings.show_footer ? "checked" : ""}> Show footer</label><div class="ph-field"><label>Footer text</label><input name="footer_text" value="${PHFrame.escape(this._settings.footer_text)}"></div></section><section class="ph-card ph-stack"><div><p class="ph-eyebrow">Navigation</p><h3>Menu labels and visibility</h3></div><div class="ph-nav-settings">${navigation}</div></section><section class="ph-card ph-stack"><div><p class="ph-eyebrow">Access</p><h3>Public or private mode</h3></div><div class="ph-field"><label>Access mode</label><select name="access_mode"><option value="public">Public — no login required</option><option value="private">Private — login required</option></select></div><p class="ph-muted">Create or update a login when enabling private mode. Passwords are securely hashed and never returned by the API.</p><div class="ph-form-grid"><div class="ph-field"><label>Username</label><input name="username" autocomplete="username" placeholder="admin"></div><div class="ph-field"><label>New password</label><input name="password" type="password" minlength="10" autocomplete="new-password" placeholder="At least 10 characters"></div></div></section><div class="ph-settings-save"><button class="ph-button" type="submit">Save system settings</button><p role="status" class="ph-status"></p></div></form>`;
+    this.innerHTML = `<form class="ph-settings-grid"><section class="ph-card ph-stack"><div><p class="ph-eyebrow">Identity</p><h3>Brand and header</h3></div><div class="ph-field"><label>Brand name</label><input name="brand_name" value="${PHFrame.escape(this._settings.brand_name)}"></div><div class="ph-field"><label>Header title</label><input name="header_title" value="${PHFrame.escape(this._settings.header_title)}"></div><div class="ph-field"><label>Dashboard title</label><input name="dashboard_title" value="${PHFrame.escape(this._settings.dashboard_title)}" placeholder="Use configured dashboard title"></div><div class="ph-form-grid"><div class="ph-field"><label>Logo</label><input type="file" name="logo" accept=".png,.jpg,.jpeg,.webp"></div><div class="ph-field"><label>Favicon</label><input type="file" name="favicon" accept=".png,.jpg,.jpeg,.webp,.ico"></div></div></section><section class="ph-card ph-stack"><div><p class="ph-eyebrow">Appearance</p><h3>Colors and theme</h3></div><div class="ph-color-setting"><input name="primary_color_picker" type="color" value="${PHFrame.escape(this._settings.primary_color)}" aria-label="Primary color picker"><div class="ph-field"><label>Primary color code</label><input name="primary_color" value="${PHFrame.escape(this._settings.primary_color)}" pattern="#[0-9a-fA-F]{6}"></div></div><div class="ph-field"><label>Default theme</label><select name="default_theme"><option value="light">Light</option><option value="dark">Dark</option><option value="high-contrast">High contrast</option></select></div><label><input type="checkbox" name="show_footer" ${this._settings.show_footer ? "checked" : ""}> Show footer</label><div class="ph-field"><label>Footer content</label><ph-rich-editor data-footer-editor></ph-rich-editor></div></section><section class="ph-card ph-stack"><div><p class="ph-eyebrow">Navigation</p><h3>Menu labels and visibility</h3></div><div class="ph-nav-settings">${navigation}</div></section><section class="ph-card ph-stack"><div><p class="ph-eyebrow">Access</p><h3>Public or private mode</h3></div><div class="ph-field"><label>Access mode</label><select name="access_mode"><option value="public">Public — no login required</option><option value="private">Private — login required</option></select></div><p class="ph-muted">Create or update a login when enabling private mode. Passwords are securely hashed and never returned by the API.</p><div class="ph-form-grid"><div class="ph-field"><label>Username</label><input name="username" autocomplete="username" placeholder="admin"></div><div class="ph-field"><label>New password</label><input name="password" type="password" minlength="10" autocomplete="new-password" placeholder="At least 10 characters"></div></div></section><div class="ph-settings-save"><button class="ph-button" type="submit">Save system settings</button><p role="status" class="ph-status"></p></div></form>`;
     this.querySelector('[name="default_theme"]').value = this._settings.default_theme;
     this.querySelector('[name="access_mode"]').value = this._settings.access_mode;
+    this.querySelector("[data-footer-editor]").value = this._settings.footer_html;
     const picker = this.querySelector('[name="primary_color_picker"]'), code = this.querySelector('[name="primary_color"]');
     picker.addEventListener("input", () => code.value = picker.value); code.addEventListener("input", () => { if (/^#[0-9a-f]{6}$/i.test(code.value)) picker.value = code.value; });
     this.querySelector("form").addEventListener("submit", event => this.save(event));
@@ -551,9 +584,91 @@ class PHSettingsPanel extends PHElement {
     try {
       await this.upload("logo", data.get("logo")); await this.upload("favicon", data.get("favicon"));
       const navigation = Object.fromEntries(Object.keys(this._settings.navigation).map(route => [route, { label: String(data.get(`nav_label_${route}`) || route), visible: data.has(`nav_visible_${route}`) }]));
-      const payload = { brand_name: data.get("brand_name"), header_title: data.get("header_title"), dashboard_title: data.get("dashboard_title"), primary_color: data.get("primary_color"), default_theme: data.get("default_theme"), footer_text: data.get("footer_text"), show_footer: data.has("show_footer"), access_mode: data.get("access_mode"), navigation, username: data.get("username"), password: data.get("password") };
+      const payload = { brand_name: data.get("brand_name"), header_title: data.get("header_title"), dashboard_title: data.get("dashboard_title"), primary_color: data.get("primary_color"), default_theme: data.get("default_theme"), footer_html: this.querySelector("[data-footer-editor]").value, show_footer: data.has("show_footer"), access_mode: data.get("access_mode"), navigation, username: data.get("username"), password: data.get("password") };
       await PHFrame.send("/api/settings", "PUT", payload); status.textContent = "Settings saved. Reloading…"; localStorage.removeItem("ph-theme"); setTimeout(() => location.reload(), 500);
     } catch (error) { status.textContent = error.message; status.className = "ph-status ph-error"; }
+  }
+}
+
+class PHPageTable extends PHElement {
+  async render() {
+    try {
+      const dataset = this.getAttribute("dataset"), response = await PHFrame.get(`/api/${dataset}?limit=20`), schema = PHFrame.appMetadata.datasets[dataset];
+      const columns = Object.keys(schema.fields).filter(name => !schema.fields[name].protected);
+      this.innerHTML = `<div class="ph-table-wrap"><table class="ph-table"><thead><tr>${columns.map(name => `<th>${PHFrame.escape(schema.fields[name].label || name)}</th>`).join("")}</tr></thead><tbody>${response.data.map(row => `<tr>${columns.map(name => `<td>${PHFrame.escape(row[name] ?? "—")}</td>`).join("")}</tr>`).join("") || `<tr><td colspan="${columns.length}">No records yet.</td></tr>`}</tbody></table></div>`;
+    } catch (error) { this.innerHTML = `<p class="ph-error">${PHFrame.escape(error.message)}</p>`; }
+  }
+}
+
+class PHCustomPage extends PHElement {
+  set settings(value) { this._settings = value; if (this.isConnected) this.render(); }
+  render() {
+    if (!this._settings) return;
+    const page = (this._settings.pages || []).find(item => item.slug === this.getAttribute("slug"));
+    if (!page) { this.innerHTML = `<h2>Page not found</h2>`; return; }
+    const blocks = page.blocks.map(block => `<article class="ph-card ph-page-block">${block.title ? `<h3>${PHFrame.escape(block.title)}</h3>` : ""}${this.block(block)}</article>`).join("");
+    this.innerHTML = `<header class="ph-page-heading"><p class="ph-eyebrow">Custom page</p><h2>${PHFrame.escape(page.title)}</h2></header><div class="ph-page-grid">${blocks}</div>`;
+  }
+  block(block) {
+    if (block.type === "text") return `<div class="ph-prose">${block.html}</div>`;
+    if (block.type === "table") return `<ph-page-table dataset="${PHFrame.escape(block.dataset)}"></ph-page-table>`;
+    const [type, ...parts] = block.source.split("|");
+    if (type === "kpi") return `<ph-kpi indicator="${parts[0]}"></ph-kpi>`;
+    if (type === "field_kpi") return `<ph-kpi dataset="${parts[0]}" field="${parts[1]}" operation="sum"></ph-kpi>`;
+    if (type === "chart") return `<ph-indicator-chart dimension="${parts[0]}"></ph-indicator-chart>`;
+    if (type === "field_chart") return `<ph-indicator-chart dataset="${parts[0]}" field="${parts[1]}"></ph-indicator-chart>`;
+    return `<ph-epi-curve dataset="${parts[0]}" date-field="${parts[1]}" value-field="${parts[2] || ""}"></ph-epi-curve>`;
+  }
+}
+
+class PHPageBuilder extends PHElement {
+  set settings(value) { this._settings = value; if (this.isConnected) this.render(); }
+  set metadata(value) { this._metadata = value; PHFrame.appMetadata = value; if (this.isConnected) this.render(); }
+  render() {
+    if (!this._settings || !this._metadata) return;
+    const pages = (this._settings.pages || []).map(page => `<article class="ph-card"><div class="ph-widget-header"><div><p class="ph-eyebrow">${page.type}</p><h3>${PHFrame.escape(page.title)}</h3><p class="ph-muted">${page.type === "external" ? PHFrame.escape(page.url) : `${page.blocks.length} blocks`}</p></div><button class="ph-icon-danger" data-delete-page="${PHFrame.escape(page.slug)}">×</button></div>${page.type === "internal" ? `<button class="ph-button ph-button-secondary" data-edit-page="${PHFrame.escape(page.slug)}">Design page</button>` : `<a class="ph-button" href="${PHFrame.escape(page.url)}" target="_blank" rel="noopener noreferrer">Open link</a>`}</article>`).join("") || `<div class="ph-empty-state"><span>＋</span><p>No custom pages yet.</p></div>`;
+    this.innerHTML = `<div class="ph-builder-layout"><section><div class="ph-grid">${pages}</div></section><section class="ph-card"><p class="ph-eyebrow">Navigation page</p><h3>Create a page or link</h3><form class="ph-stack" data-page-form><div class="ph-field"><label>Page title</label><input name="title" required placeholder="Programme overview"></div><div class="ph-field"><label>Navigation label</label><input name="nav_label" required placeholder="Overview"></div><div class="ph-field"><label>Slug</label><input name="slug" required pattern="[a-z0-9]+(?:-[a-z0-9]+)*" placeholder="programme-overview"></div><div class="ph-field"><label>Page type</label><select name="type"><option value="internal">Drag-and-drop page</option><option value="external">External URL redirect</option></select></div><div class="ph-field" data-page-url hidden><label>External URL</label><input name="url" type="url" placeholder="https://example.org"></div><button class="ph-button">Create page</button><p role="status" class="ph-status"></p></form></section></div><div data-page-designer></div>`;
+    const form = this.querySelector("[data-page-form]"), type = form.querySelector('[name="type"]'); type.addEventListener("change", () => this.querySelector("[data-page-url]").hidden = type.value !== "external"); form.addEventListener("submit", event => this.create(event));
+    this.querySelectorAll("[data-edit-page]").forEach(button => button.addEventListener("click", () => this.design(button.dataset.editPage)));
+    this.querySelectorAll("[data-delete-page]").forEach(button => button.addEventListener("click", () => this.remove(button.dataset.deletePage)));
+  }
+  async persist(pages) {
+    const response = await PHFrame.send("/api/settings", "PUT", { pages }); this._settings.pages = response.data.pages; PHFrame.siteSettings.pages = response.data.pages;
+  }
+  async create(event) {
+    event.preventDefault(); const form = event.currentTarget, data = new FormData(form), status = form.querySelector("[role=status]");
+    try { const page = { title: data.get("title"), nav_label: data.get("nav_label"), slug: data.get("slug"), type: data.get("type"), url: data.get("url") || "", blocks: [] }; await this.persist([...(this._settings.pages || []), page]); this.render(); PHFrame.notify("Page created."); } catch (error) { status.textContent = error.message; }
+  }
+  async remove(slug) { if (!confirm("Remove this page and its navigation item?")) return; await this.persist(this._settings.pages.filter(page => page.slug !== slug)); this.render(); }
+  sourceOptions() {
+    const metrics = Object.entries(this._metadata.indicators || {}).map(([name, item]) => `<option value="kpi|${name}">Metric · ${PHFrame.escape(item.label)}</option>`).join("");
+    const dimensions = Object.entries(this._metadata.dimensions || {}).map(([name, item]) => `<option value="chart|${name}">Chart · ${PHFrame.escape(item.label)}</option>`).join("");
+    const fields = Object.entries(this._metadata.datasets).flatMap(([dataset, item]) => Object.entries(item.fields).filter(([, field]) => !["date", "datetime"].includes(field.type)).map(([name, field]) => ["integer", "number", "age"].includes(field.type) ? `<option value="field_kpi|${dataset}|${name}">Sum · ${PHFrame.escape(field.label || name)}</option>` : `<option value="field_chart|${dataset}|${name}">Groups · ${PHFrame.escape(field.label || name)}</option>`)).join("");
+    return metrics + dimensions + fields;
+  }
+  design(slug) {
+    const page = this._settings.pages.find(item => item.slug === slug), datasets = Object.entries(this._metadata.datasets).map(([name, item]) => `<option value="${name}">${PHFrame.escape(item.label)}</option>`).join("");
+    const blocks = page.blocks.map(block => this.editorBlock(block, datasets)).join("");
+    const designer = this.querySelector("[data-page-designer]"); designer.innerHTML = `<section class="ph-card ph-page-designer"><div class="ph-widget-header"><div><p class="ph-eyebrow">Page designer</p><h3>${PHFrame.escape(page.title)}</h3></div><button class="ph-button" data-save-page>Save page</button></div><div class="ph-actions ph-block-tools"><button type="button" data-add-block="text">+ Text</button><button type="button" data-add-block="table">+ Table</button><button type="button" data-add-block="visualization">+ Visualization</button></div><div class="ph-page-canvas" data-page-canvas>${blocks}</div></section>`;
+    page.blocks.forEach(block => { const element = designer.querySelector(`[data-block-id="${CSS.escape(block.id)}"]`); if (block.type === "text") element.querySelector("ph-rich-editor").value = block.html; if (block.type === "table") element.querySelector("[data-block-dataset]").value = block.dataset; if (block.type === "visualization") element.querySelector("[data-block-source]").value = block.source; });
+    designer.querySelector("[data-save-page]").addEventListener("click", () => this.saveDesign(page)); designer.querySelectorAll("[data-add-block]").forEach(button => button.addEventListener("click", () => this.addBlock(button.dataset.addBlock, datasets))); this.bindBlocks(); designer.scrollIntoView({ behavior: "smooth" });
+  }
+  editorBlock(block, datasets) {
+    let editor = block.type === "text" ? `<ph-rich-editor data-block-html></ph-rich-editor>` : (block.type === "table" ? `<div class="ph-field"><label>Dataset</label><select data-block-dataset>${datasets}</select></div>` : `<div class="ph-field"><label>Visualization source</label><select data-block-source>${this.sourceOptions()}</select></div>`);
+    return `<article class="ph-card ph-page-editor-block" draggable="true" data-block-id="${block.id}" data-block-type="${block.type}"><div class="ph-widget-header"><b>${block.type}</b><div><button type="button" data-block-move="up">↑</button><button type="button" data-block-move="down">↓</button><button type="button" data-remove-block>×</button></div></div><div class="ph-field"><label>Block title</label><input data-block-title value="${PHFrame.escape(block.title || "")}"></div>${editor}</article>`;
+  }
+  addBlock(type, datasets) { const block = { id: `block-${Date.now()}`, type, title: "", html: "<p>Write your content here…</p>", dataset: Object.keys(this._metadata.datasets)[0], source: `kpi|${Object.keys(this._metadata.indicators)[0] || ""}` }; this.querySelector("[data-page-canvas]").insertAdjacentHTML("beforeend", this.editorBlock(block, datasets)); const element = this.querySelector(`[data-block-id="${block.id}"]`); if (type === "text") element.querySelector("ph-rich-editor").value = block.html; this.bindBlocks(); }
+  bindBlocks() {
+    this.querySelectorAll(".ph-page-editor-block").forEach(block => {
+      if (block.dataset.bound) return; block.dataset.bound = "true";
+      block.querySelector("[data-remove-block]").addEventListener("click", () => block.remove());
+      block.querySelectorAll("[data-block-move]").forEach(button => button.addEventListener("click", () => { const sibling = button.dataset.blockMove === "up" ? block.previousElementSibling : block.nextElementSibling; if (sibling) button.dataset.blockMove === "up" ? sibling.before(block) : sibling.after(block); }));
+      block.addEventListener("dragstart", event => event.dataTransfer.setData("text/plain", block.dataset.blockId)); block.addEventListener("dragover", event => event.preventDefault()); block.addEventListener("drop", event => { event.preventDefault(); const source = this.querySelector(`[data-block-id="${CSS.escape(event.dataTransfer.getData("text/plain"))}"]`); if (source && source !== block) block.before(source); });
+    });
+  }
+  async saveDesign(page) {
+    const blocks = [...this.querySelectorAll(".ph-page-editor-block")].map(block => ({ id: block.dataset.blockId, type: block.dataset.blockType, title: block.querySelector("[data-block-title]").value, html: block.querySelector("[data-block-html]")?.value || "", dataset: block.querySelector("[data-block-dataset]")?.value || "", source: block.querySelector("[data-block-source]")?.value || "" }));
+    await this.persist(this._settings.pages.map(item => item.slug === page.slug ? { ...item, blocks } : item)); this.render(); PHFrame.notify("Page saved.");
   }
 }
 
@@ -625,5 +740,9 @@ customElements.define("ph-confirm", PHConfirm);
 customElements.define("ph-import-wizard", PHImportWizard);
 customElements.define("ph-data-builder", PHDataBuilder);
 customElements.define("ph-settings-panel", PHSettingsPanel);
+customElements.define("ph-rich-editor", PHRichEditor);
+customElements.define("ph-page-table", PHPageTable);
+customElements.define("ph-custom-page", PHCustomPage);
+customElements.define("ph-page-builder", PHPageBuilder);
 customElements.define("ph-connector-console", PHConnectorConsole);
 window.PHFrame = PHFrame;

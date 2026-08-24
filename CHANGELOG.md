@@ -4,6 +4,21 @@ All notable changes to PHFrame will be documented here. The project intends to f
 
 ## [Unreleased]
 
+## [0.7.0a6] - 2026-08-24
+
+### Added
+
+- Add browser-managed internal pages with drag-and-drop text, live table, and visualization blocks.
+- Add external URL navigation items that redirect from the application header.
+- Add safe rich-text editors for page copy and footer content with formatting, lists, and links.
+- Add the PHFrame and Khalilur Rahman Ridoy Khan attribution as the default footer.
+
+### Fixed
+
+- Keep custom primary colors readable in dark mode without changing the selected header brand color.
+- Make charts reflow within freely resized dashboard cards and remove unwanted card-level scrollbars.
+- Preserve custom plain-text footers created by earlier PHFrame versions.
+
 ## [0.7.0a5] - 2026-08-24
 
 ### Fixed
@@ -101,7 +116,8 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Import audit history.
 - Portable HTML dashboard export.
 
-[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a5...HEAD
+[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a6...HEAD
+[0.7.0a6]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a5...v0.7.0a6
 [0.7.0a5]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a4...v0.7.0a5
 [0.7.0a4]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a3...v0.7.0a4
 [0.7.0a3]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a2...v0.7.0a3
