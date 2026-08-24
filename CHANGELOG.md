@@ -4,6 +4,13 @@ All notable changes to PHFrame will be documented here. The project intends to f
 
 ## [Unreleased]
 
+## [0.8.0a8] - 2026-08-24
+
+### Fixed
+
+- Exclude the searchable country catalog and other non-boundary JSON files from the installed boundary-layer index.
+- Tolerate malformed or unrelated JSON files in the project boundary directory instead of returning an API 500 error.
+
 ## [0.8.0a7] - 2026-08-24
 
 ### Added
@@ -202,7 +209,8 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Import audit history.
 - Portable HTML dashboard export.
 
-[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a7...HEAD
+[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a8...HEAD
+[0.8.0a8]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a7...v0.8.0a8
 [0.8.0a7]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a6...v0.8.0a7
 [0.8.0a6]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a5...v0.8.0a6
 [0.8.0a5]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a4...v0.8.0a5

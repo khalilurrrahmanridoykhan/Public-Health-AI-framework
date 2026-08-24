@@ -215,10 +215,12 @@ class SiteSettings:
         if not self.boundary_dir.exists(): return []
         items = []
         for path in sorted(self.boundary_dir.glob("*.json")):
+            if path.name == "countries.json": continue
             try:
                 data = json.loads(path.read_text(encoding="utf-8"))
+                if not isinstance(data, dict) or not data.get("id") or data.get("geojson", {}).get("type") != "FeatureCollection": continue
                 items.append({key: data.get(key) for key in ("id", "country", "iso3", "level", "year", "source", "license", "feature_count")})
-            except (OSError, json.JSONDecodeError): continue
+            except (OSError, json.JSONDecodeError, AttributeError): continue
         return items
 
     def boundary_countries(self) -> list[dict[str, str]]:

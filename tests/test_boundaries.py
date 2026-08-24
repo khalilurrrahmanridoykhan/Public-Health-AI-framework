@@ -40,3 +40,13 @@ def test_searchable_country_catalog_is_sorted_and_cached(monkeypatch, tmp_path: 
     assert settings.boundary_countries() == [{"name": "Bangladesh", "iso3": "BGD"}, {"name": "Zimbabwe", "iso3": "ZWE"}]
     monkeypatch.setattr(SiteSettings, "_download_json", staticmethod(lambda url, maximum: (_ for _ in ()).throw(AssertionError("cache not used"))))
     assert settings.boundary_countries()[0]["iso3"] == "BGD"
+    assert settings.boundaries() == []
+
+
+def test_boundary_index_ignores_non_boundary_json(tmp_path: Path):
+    settings = SiteSettings(tmp_path, "Test")
+    settings.boundary_dir.mkdir(parents=True)
+    (settings.boundary_dir / "countries.json").write_text('[{"name":"Bangladesh","iso3":"BGD"}]', encoding="utf-8")
+    (settings.boundary_dir / "unrelated.json").write_text('[1, 2, 3]', encoding="utf-8")
+    (settings.boundary_dir / "broken.json").write_text('{', encoding="utf-8")
+    assert settings.boundaries() == []
