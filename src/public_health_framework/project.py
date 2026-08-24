@@ -206,6 +206,9 @@ GITIGNORE_TEMPLATE = """__pycache__/
 .env
 data/*.db
 data/*.db-*
+data/phframe-settings.json
+data/.phframe-secret
+data/branding/
 """
 
 

@@ -34,11 +34,16 @@ class PHAppShell extends PHElement {
   async render() {
     this.innerHTML = `<p class="ph-muted" role="status">Loading PHFrame…</p>`;
     try {
-      this.metadata = await PHFrame.get("/api");
+      const [metadata, settings] = await Promise.all([PHFrame.get("/api"), PHFrame.get("/api/settings")]);
+      this.metadata = metadata;
+      PHFrame.siteSettings = settings.data;
       PHFrame.locale = this.metadata.ui?.locale || "en";
       PHFrame.customMessages = this.metadata.ui?.translations || {};
       document.documentElement.lang = PHFrame.locale;
-      document.documentElement.dataset.theme = localStorage.getItem("ph-theme") || this.metadata.ui?.theme || "light";
+      document.documentElement.dataset.theme = localStorage.getItem("ph-theme") || PHFrame.siteSettings.default_theme || this.metadata.ui?.theme || "light";
+      document.documentElement.style.setProperty("--ph-color-primary", PHFrame.siteSettings.primary_color);
+      document.documentElement.style.setProperty("--ph-color-primary-strong", PHFrame.siteSettings.primary_color);
+      const favicon = document.querySelector("[data-ph-favicon]"); if (favicon) favicon.href = PHFrame.siteSettings.favicon_url;
       this.draw();
       addEventListener("hashchange", () => this.route());
     } catch (error) {
@@ -46,14 +51,17 @@ class PHAppShell extends PHElement {
     }
   }
   draw() {
+    const navigation = PHFrame.siteSettings.navigation;
+    const links = Object.entries(navigation).filter(([, item]) => item.visible).map(([route, item]) => `<a href="#/${route}" data-route="${route}">${PHFrame.escape(item.label)}</a>`).join("");
     this.innerHTML = `<a class="ph-skip-link" href="#main">Skip to content</a>
-      <div class="ph-shell"><header class="ph-header"><h1 class="ph-brand">PHFrame · ${PHFrame.escape(this.metadata.project)}</h1>
-      <nav class="ph-nav" aria-label="Primary"><a href="#/dashboard" data-route="dashboard">${PHFrame.t("dashboard")}</a><a href="#/records" data-route="records">${PHFrame.t("records")}</a><a href="#/builder" data-route="builder">Data builder</a><a href="#/import" data-route="import">Import</a><a href="#/connectors" data-route="connectors">Connectors</a><a href="#/quality" data-route="quality">${PHFrame.t("quality")}</a></nav>
-      <label>${PHFrame.t("theme")} <select class="ph-theme" aria-label="${PHFrame.t("theme")}"><option value="light">Light</option><option value="dark">Dark</option><option value="high-contrast">High contrast</option></select></label></header>
-      <main class="ph-main" id="main" tabindex="-1"><div id="ph-view"></div></main><ph-notification-center></ph-notification-center></div>`;
+      <div class="ph-shell"><header class="ph-header"><a class="ph-brand" href="#/dashboard"><img src="${PHFrame.escape(PHFrame.siteSettings.logo_url)}" alt=""><span><b>${PHFrame.escape(PHFrame.siteSettings.brand_name)}</b><small>${PHFrame.escape(PHFrame.siteSettings.header_title)}</small></span></a>
+      <nav class="ph-nav" aria-label="Primary">${links}</nav>
+      <div class="ph-header-tools"><label>${PHFrame.t("theme")} <select class="ph-theme" aria-label="${PHFrame.t("theme")}"><option value="light">Light</option><option value="dark">Dark</option><option value="high-contrast">High contrast</option></select></label>${PHFrame.siteSettings.access_mode === "private" ? `<button class="ph-logout" type="button">Sign out</button>` : ""}</div></header>
+      <main class="ph-main" id="main" tabindex="-1"><div id="ph-view"></div></main>${PHFrame.siteSettings.show_footer ? `<footer class="ph-footer">${PHFrame.escape(PHFrame.siteSettings.footer_text)}</footer>` : ""}<ph-notification-center></ph-notification-center></div>`;
     const theme = this.querySelector(".ph-theme");
     theme.value = document.documentElement.dataset.theme;
     theme.addEventListener("change", () => { document.documentElement.dataset.theme = theme.value; localStorage.setItem("ph-theme", theme.value); });
+    this.querySelector(".ph-logout")?.addEventListener("click", async () => { await PHFrame.send("/api/auth/logout", "POST", {}); location.href = "/login"; });
     this.route();
   }
   route() {
@@ -80,6 +88,9 @@ class PHAppShell extends PHElement {
       view.innerHTML = `<h2>Connectors</h2><ph-connector-console></ph-connector-console>`;
     } else if (route === "quality") {
       view.innerHTML = `<h2>Data quality</h2><ph-quality-panel></ph-quality-panel>`;
+    } else if (route === "settings") {
+      view.innerHTML = `<h2>Settings</h2><ph-settings-panel></ph-settings-panel>`;
+      view.querySelector("ph-settings-panel").settings = PHFrame.siteSettings;
     } else {
       const dashboard = Object.keys(this.metadata.dashboards || {})[0];
       view.innerHTML = dashboard ? `<ph-dashboard name="${PHFrame.escape(dashboard)}"></ph-dashboard>` : `<h2>Dashboard</h2><p class="ph-muted">No dashboard configured.</p>`;
@@ -291,7 +302,8 @@ class PHDashboard extends PHElement {
     const order = this.settings.order || [];
     indexed.sort((a, b) => { const ai = order.indexOf(a.id), bi = order.indexOf(b.id); return (ai < 0 ? 999 + a.index : ai) - (bi < 0 ? 999 + b.index : bi); });
     const cards = indexed.map(item => this.card(item.widget, item.index, item.id)).join("");
-    this.innerHTML = `<section class="ph-dashboard-heading"><div><p class="ph-eyebrow">Data overview</p><h2>${PHFrame.escape(this.dashboard.label)}</h2><p class="ph-muted">Live metrics and trends from your configured datasets</p></div><div class="ph-dashboard-actions"><button class="ph-button" type="button" data-add-widget>+ Add visualization</button><button class="ph-button ph-button-secondary" type="button" data-reset>Reset layout</button><span class="ph-save-state" role="status">Changes save automatically</span></div></section><div class="ph-dashboard-grid" aria-label="Customizable dashboard">${cards}</div>${this.widgetDialog()}`;
+    const title = PHFrame.siteSettings?.dashboard_title || this.dashboard.label;
+    this.innerHTML = `<section class="ph-dashboard-heading"><div><p class="ph-eyebrow">Data overview</p><h2>${PHFrame.escape(title)}</h2><p class="ph-muted">Live metrics and trends from your configured datasets</p></div><div class="ph-dashboard-actions"><button class="ph-button" type="button" data-add-widget>+ Add visualization</button><button class="ph-button ph-button-secondary" type="button" data-reset>Reset layout</button><span class="ph-save-state" role="status">Changes save automatically</span></div></section><div class="ph-dashboard-grid" aria-label="Customizable dashboard">${cards}</div>${this.widgetDialog()}`;
     this.bind();
   }
   widgetDialog() {
@@ -319,7 +331,8 @@ class PHDashboard extends PHElement {
     else if (widget.type === "map") component = `<ph-map dimension="${widget.dimension}" visualization="${visualization}"></ph-map>`;
     else component = `<ph-epi-curve dataset="${widget.dataset}" date-field="${widget.date_field}" value-field="${widget.value_field || ""}" visualization="${visualization}"></ph-epi-curve>`;
     const span = saved.span || { compact: 3, medium: 6, wide: 12 }[size], height = saved.height || 285;
-    return `<article class="ph-card ph-dashboard-card ph-size-${size}" style="--ph-widget-span:${span};--ph-widget-height:${height}px" data-widget-id="${id}" draggable="true"><header class="ph-widget-header"><div><p class="ph-widget-kind">${PHFrame.escape(widget.type === "epi_curve" ? "Trend" : widget.type)}</p><h3>${PHFrame.escape(widget.title)}</h3></div><div class="ph-card-actions"><button class="ph-drag-handle" type="button" aria-label="Drag ${PHFrame.escape(widget.title)}" title="Drag to reorder">⠿</button><button class="ph-remove-widget" type="button" aria-label="Remove ${PHFrame.escape(widget.title)}" title="Remove visualization">×</button></div></header><div class="ph-widget-controls"><label>View<select data-visualization>${options}</select></label><label>Size<select data-size>${sizeOptions}</select></label><button type="button" data-move="up" aria-label="Move ${PHFrame.escape(widget.title)} earlier">←</button><button type="button" data-move="down" aria-label="Move ${PHFrame.escape(widget.title)} later">→</button></div>${component}<button class="ph-resize-handle" type="button" aria-label="Resize ${PHFrame.escape(widget.title)}" title="Drag to resize"></button></article>`;
+    const handles = ["n", "e", "s", "w", "ne", "se", "sw", "nw"].map(direction => `<button class="ph-resize-handle ph-resize-${direction}" data-resize="${direction}" type="button" aria-label="Resize ${PHFrame.escape(widget.title)} ${direction}" title="Drag to resize"></button>`).join("");
+    return `<article class="ph-card ph-dashboard-card ph-size-${size}" style="--ph-widget-span:${span};--ph-widget-height:${height}px" data-widget-id="${id}" draggable="true"><header class="ph-widget-header"><div><p class="ph-widget-kind">${PHFrame.escape(widget.type === "epi_curve" ? "Trend" : widget.type)}</p><h3>${PHFrame.escape(widget.title)}</h3></div><div class="ph-card-actions"><button class="ph-drag-handle" type="button" aria-label="Drag ${PHFrame.escape(widget.title)}" title="Drag to reorder">⠿</button><button class="ph-remove-widget" type="button" aria-label="Remove ${PHFrame.escape(widget.title)}" title="Remove visualization">×</button></div></header><div class="ph-widget-controls"><label>View<select data-visualization>${options}</select></label><label>Size<select data-size>${sizeOptions}</select></label><button type="button" data-move="up" aria-label="Move ${PHFrame.escape(widget.title)} earlier">←</button><button type="button" data-move="down" aria-label="Move ${PHFrame.escape(widget.title)} later">→</button></div><div class="ph-widget-content">${component}</div>${handles}</article>`;
   }
   bind() {
     this.querySelector("[data-reset]").addEventListener("click", () => { localStorage.removeItem(this.storageKey); this.settings = {}; this.draw(); PHFrame.notify("Dashboard layout reset."); });
@@ -331,7 +344,7 @@ class PHDashboard extends PHElement {
       card.querySelector("[data-size]").addEventListener("change", event => this.updateCard(card, "size", event.target.value));
       card.querySelectorAll("[data-move]").forEach(button => button.addEventListener("click", () => this.move(card, button.dataset.move)));
       card.querySelector(".ph-remove-widget").addEventListener("click", () => this.removeWidget(card.dataset.widgetId));
-      card.querySelector(".ph-resize-handle").addEventListener("pointerdown", event => this.startResize(event, card));
+      card.querySelectorAll("[data-resize]").forEach(handle => handle.addEventListener("pointerdown", event => this.startResize(event, card, handle.dataset.resize)));
       card.addEventListener("dragstart", event => { card.classList.add("ph-dragging"); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", card.dataset.widgetId); });
       card.addEventListener("dragend", () => { card.classList.remove("ph-dragging"); this.querySelectorAll(".ph-drag-over").forEach(item => item.classList.remove("ph-drag-over")); });
       card.addEventListener("dragover", event => { event.preventDefault(); card.classList.add("ph-drag-over"); });
@@ -367,11 +380,11 @@ class PHDashboard extends PHElement {
     this.settings.hidden = [...new Set([...(this.settings.hidden || []), id])];
     this.saveSettings(); this.draw(); PHFrame.notify("Visualization removed. Reset layout to restore it.");
   }
-  startResize(event, card) {
+  startResize(event, card, direction) {
     event.preventDefault(); event.stopPropagation(); card.setAttribute("draggable", "false");
     const startX = event.clientX, startY = event.clientY, startSpan = Number(getComputedStyle(card).getPropertyValue("--ph-widget-span")) || 6, startHeight = card.offsetHeight;
     const gridWidth = this.querySelector(".ph-dashboard-grid").clientWidth, columnWidth = gridWidth / 12;
-    const move = pointer => { const span = Math.min(12, Math.max(3, Math.round(startSpan + (pointer.clientX - startX) / columnWidth))); const height = Math.min(720, Math.max(230, startHeight + pointer.clientY - startY)); card.style.setProperty("--ph-widget-span", span); card.style.setProperty("--ph-widget-height", `${height}px`); card.dataset.resizeSpan = span; card.dataset.resizeHeight = Math.round(height); };
+    const move = pointer => { const horizontal = direction.includes("e") ? pointer.clientX - startX : (direction.includes("w") ? startX - pointer.clientX : 0); const vertical = direction.includes("s") ? pointer.clientY - startY : (direction.includes("n") ? startY - pointer.clientY : 0); const span = Math.min(12, Math.max(2, Math.round(startSpan + horizontal / columnWidth))); const height = Math.min(720, Math.max(210, startHeight + vertical)); card.style.setProperty("--ph-widget-span", span); card.style.setProperty("--ph-widget-height", `${height}px`); card.dataset.resizeSpan = span; card.dataset.resizeHeight = Math.round(height); };
     const end = () => { removeEventListener("pointermove", move); removeEventListener("pointerup", end); card.setAttribute("draggable", "true"); const id = card.dataset.widgetId; this.settings[id] = { ...(this.settings[id] || {}), span: Number(card.dataset.resizeSpan || startSpan), height: Number(card.dataset.resizeHeight || startHeight) }; this.saveSettings(); PHFrame.notify("Widget size saved."); };
     addEventListener("pointermove", move); addEventListener("pointerup", end, { once: true });
   }
@@ -516,6 +529,34 @@ class PHDataBuilder extends PHElement {
   }
 }
 
+class PHSettingsPanel extends PHElement {
+  set settings(value) { this._settings = value; if (this.isConnected) this.render(); }
+  render() {
+    if (!this._settings) return;
+    const navigation = Object.entries(this._settings.navigation).map(([route, item]) => `<div class="ph-nav-setting"><label><input type="checkbox" name="nav_visible_${route}" ${item.visible ? "checked" : ""}> Show</label><div class="ph-field"><label for="ph-nav-${route}">${PHFrame.escape(route)}</label><input id="ph-nav-${route}" name="nav_label_${route}" value="${PHFrame.escape(item.label)}"></div></div>`).join("");
+    this.innerHTML = `<form class="ph-settings-grid"><section class="ph-card ph-stack"><div><p class="ph-eyebrow">Identity</p><h3>Brand and header</h3></div><div class="ph-field"><label>Brand name</label><input name="brand_name" value="${PHFrame.escape(this._settings.brand_name)}"></div><div class="ph-field"><label>Header title</label><input name="header_title" value="${PHFrame.escape(this._settings.header_title)}"></div><div class="ph-field"><label>Dashboard title</label><input name="dashboard_title" value="${PHFrame.escape(this._settings.dashboard_title)}" placeholder="Use configured dashboard title"></div><div class="ph-form-grid"><div class="ph-field"><label>Logo</label><input type="file" name="logo" accept=".png,.jpg,.jpeg,.webp"></div><div class="ph-field"><label>Favicon</label><input type="file" name="favicon" accept=".png,.jpg,.jpeg,.webp,.ico"></div></div></section><section class="ph-card ph-stack"><div><p class="ph-eyebrow">Appearance</p><h3>Colors and theme</h3></div><div class="ph-color-setting"><input name="primary_color_picker" type="color" value="${PHFrame.escape(this._settings.primary_color)}" aria-label="Primary color picker"><div class="ph-field"><label>Primary color code</label><input name="primary_color" value="${PHFrame.escape(this._settings.primary_color)}" pattern="#[0-9a-fA-F]{6}"></div></div><div class="ph-field"><label>Default theme</label><select name="default_theme"><option value="light">Light</option><option value="dark">Dark</option><option value="high-contrast">High contrast</option></select></div><label><input type="checkbox" name="show_footer" ${this._settings.show_footer ? "checked" : ""}> Show footer</label><div class="ph-field"><label>Footer text</label><input name="footer_text" value="${PHFrame.escape(this._settings.footer_text)}"></div></section><section class="ph-card ph-stack"><div><p class="ph-eyebrow">Navigation</p><h3>Menu labels and visibility</h3></div><div class="ph-nav-settings">${navigation}</div></section><section class="ph-card ph-stack"><div><p class="ph-eyebrow">Access</p><h3>Public or private mode</h3></div><div class="ph-field"><label>Access mode</label><select name="access_mode"><option value="public">Public — no login required</option><option value="private">Private — login required</option></select></div><p class="ph-muted">Create or update a login when enabling private mode. Passwords are securely hashed and never returned by the API.</p><div class="ph-form-grid"><div class="ph-field"><label>Username</label><input name="username" autocomplete="username" placeholder="admin"></div><div class="ph-field"><label>New password</label><input name="password" type="password" minlength="10" autocomplete="new-password" placeholder="At least 10 characters"></div></div></section><div class="ph-settings-save"><button class="ph-button" type="submit">Save system settings</button><p role="status" class="ph-status"></p></div></form>`;
+    this.querySelector('[name="default_theme"]').value = this._settings.default_theme;
+    this.querySelector('[name="access_mode"]').value = this._settings.access_mode;
+    const picker = this.querySelector('[name="primary_color_picker"]'), code = this.querySelector('[name="primary_color"]');
+    picker.addEventListener("input", () => code.value = picker.value); code.addEventListener("input", () => { if (/^#[0-9a-f]{6}$/i.test(code.value)) picker.value = code.value; });
+    this.addEventListener("submit", event => this.save(event));
+  }
+  async upload(kind, file) {
+    if (!file?.size) return;
+    const response = await fetch(`/api/settings/assets/${kind}?filename=${encodeURIComponent(file.name)}`, { method: "POST", headers: { "content-type": "application/octet-stream", accept: "application/json" }, body: file });
+    if (!response.ok) throw new Error((await response.json()).error?.message || `${kind} upload failed.`);
+  }
+  async save(event) {
+    event.preventDefault(); const form = event.currentTarget, status = form.querySelector("[role=status]"), data = new FormData(form);
+    try {
+      await this.upload("logo", data.get("logo")); await this.upload("favicon", data.get("favicon"));
+      const navigation = Object.fromEntries(Object.keys(this._settings.navigation).map(route => [route, { label: String(data.get(`nav_label_${route}`) || route), visible: data.has(`nav_visible_${route}`) }]));
+      const payload = { brand_name: data.get("brand_name"), header_title: data.get("header_title"), dashboard_title: data.get("dashboard_title"), primary_color: data.get("primary_color"), default_theme: data.get("default_theme"), footer_text: data.get("footer_text"), show_footer: data.has("show_footer"), access_mode: data.get("access_mode"), navigation, username: data.get("username"), password: data.get("password") };
+      await PHFrame.send("/api/settings", "PUT", payload); status.textContent = "Settings saved. Reloading…"; localStorage.removeItem("ph-theme"); setTimeout(() => location.reload(), 500);
+    } catch (error) { status.textContent = error.message; status.className = "ph-status ph-error"; }
+  }
+}
+
 class PHConnectorConsole extends PHElement {
   async render() {
     try {
@@ -524,21 +565,35 @@ class PHConnectorConsole extends PHElement {
       const cards = connectors.data.map(item => `<article class="ph-card"><div class="ph-widget-header"><div><p class="ph-eyebrow">${item.type.toUpperCase()}</p><h3>${PHFrame.escape(item.name)}</h3></div><button class="ph-icon-danger" data-delete="${item.name}" aria-label="Remove ${PHFrame.escape(item.name)}">×</button></div><p>Feeds <b>${PHFrame.escape(item.dataset)}</b></p><p class="ph-muted">${item.schedule_minutes ? `Every ${item.schedule_minutes} minutes · ${item.due ? "Due" : "Not due"}` : "Manual schedule"}</p><div class="ph-actions"><button class="ph-button ph-button-secondary" data-sync="${item.name}" data-dry="true">Test connection</button><ph-confirm label="Sync now" message="Pull and atomically import records from ${PHFrame.escape(item.name)}?" data-connector="${item.name}"></ph-confirm></div></article>`).join("") || `<div class="ph-empty-state"><span>⌁</span><p>No connectors yet. Create one below.</p></div>`;
       const rows = history.data.map(item => `<tr><td>${PHFrame.escape(item.created_at)}</td><td>${PHFrame.escape(item.connector)}</td><td>${item.status}</td><td>${item.imported_rows}/${item.fetched_rows}</td><td>${item.errors.map(error => PHFrame.escape(error.message)).join("; ")}</td></tr>`).join("") || `<tr><td colspan="5">No synchronization runs.</td></tr>`;
       const datasets = Object.entries(metadata.datasets).map(([name, item]) => `<option value="${name}">${PHFrame.escape(item.label)}</option>`).join("");
-      this.innerHTML = `<div class="ph-connector-layout"><section><div class="ph-grid">${cards}</div></section><section class="ph-card"><p class="ph-eyebrow">New data source</p><h3>Connect a REST API</h3><p class="ph-muted">Works with any JSON API plus optimized DHIS2, KoboToolbox, and ODK adapters. Map source paths to your typed dataset columns.</p><form class="ph-stack" data-connector-form><div class="ph-form-grid"><div class="ph-field"><label>Name</label><input name="name" required pattern="[a-z][a-z0-9_]*" placeholder="global_cases_api"></div><div class="ph-field"><label>Connector type</label><select name="type"><option value="api">Generic JSON API</option><option value="dhis2">DHIS2</option><option value="kobo">KoboToolbox</option><option value="odk">ODK Central</option></select></div><div class="ph-field"><label>Dataset</label><select name="dataset">${datasets}</select></div><div class="ph-field"><label>Base URL</label><input name="base_url" type="url" required placeholder="https://api.example.org"></div><div class="ph-field"><label>Resource path</label><input name="resource" required placeholder="v1/events"></div><div class="ph-field"><label>Records path</label><input name="records_path" placeholder="data.records"></div><div class="ph-field"><label>Token environment variable</label><input name="token_env" placeholder="HEALTH_API_TOKEN"></div><div class="ph-field"><label>Schedule (minutes)</label><input name="schedule_minutes" type="number" min="1" placeholder="60"></div></div><div class="ph-field"><label>Field mapping (JSON)</label><textarea name="mapping" rows="5" required placeholder='{"source.id":"record_id","source.country":"country"}'></textarea><small>Left: source JSON path. Right: destination dataset column.</small></div><button class="ph-button" type="submit">Create connector</button><p class="ph-status" role="status"></p></form></section></div><section class="ph-card"><h3>Synchronization history</h3><div class="ph-table-wrap"><table class="ph-table"><thead><tr><th>Time</th><th>Connector</th><th>Status</th><th>Rows</th><th>Errors</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
+      this.innerHTML = `<section class="ph-card ph-stack"><div><p class="ph-eyebrow">New data source</p><h3>Add a connector</h3><p class="ph-muted">Choose a provider for guided setup. Every connector maps remote fields into a typed PHFrame dataset.</p></div><form class="ph-stack" data-connector-form><div class="ph-provider-grid"><label><input type="radio" name="type" value="api" checked><b>REST API</b><small>Any JSON endpoint</small></label><label><input type="radio" name="type" value="dhis2"><b>DHIS2</b><small>Data value sets</small></label><label><input type="radio" name="type" value="kobo"><b>KoboToolbox</b><small>Form submissions</small></label><label><input type="radio" name="type" value="odk"><b>ODK Central</b><small>OData submissions</small></label></div><div class="ph-provider-guide" data-provider-guide></div><div class="ph-form-grid"><div class="ph-field"><label>Name</label><input name="name" required pattern="[a-z][a-z0-9_]*" placeholder="global_cases_api"></div><div class="ph-field"><label>Destination dataset</label><select name="dataset">${datasets}</select></div><div class="ph-field"><label>Server base URL</label><input name="base_url" type="url" required placeholder="https://api.example.org"></div><div class="ph-field"><label data-resource-label>Resource path</label><input name="resource" required placeholder="v1/events"></div><div class="ph-field" data-records-path><label>Records path</label><input name="records_path" placeholder="data.records"></div><div class="ph-field"><label>Schedule (minutes)</label><input name="schedule_minutes" type="number" min="1" placeholder="60"></div><div class="ph-field"><label>Token environment variable</label><input name="token_env" placeholder="HEALTH_API_TOKEN"></div><div class="ph-field"><label>Username environment variable</label><input name="username_env" placeholder="ODK_USERNAME"></div><div class="ph-field"><label>Password environment variable</label><input name="password_env" placeholder="ODK_PASSWORD"></div></div><div class="ph-field"><label>Field mapping (JSON)</label><textarea name="mapping" rows="5" required placeholder='{"source.id":"record_id","source.country":"country"}'></textarea><small>Left: provider source path. Right: destination dataset column.</small></div><button class="ph-button" type="submit">Create connector</button><p class="ph-status" role="status"></p></form></section><section><h3>Configured connectors</h3><div class="ph-grid">${cards}</div></section><section class="ph-card"><h3>Synchronization history</h3><div class="ph-table-wrap"><table class="ph-table"><thead><tr><th>Time</th><th>Connector</th><th>Status</th><th>Rows</th><th>Errors</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
       this.querySelectorAll("[data-sync]").forEach(button => button.addEventListener("click", () => this.sync(button.dataset.sync, true)));
       this.querySelectorAll("ph-confirm[data-connector]").forEach(confirm => confirm.addEventListener("ph-confirmed", () => this.sync(confirm.dataset.connector, false)));
       this.querySelectorAll("[data-delete]").forEach(button => button.addEventListener("click", () => this.remove(button.dataset.delete)));
       this.querySelector("[data-connector-form]").addEventListener("submit", event => this.create(event));
+      this.querySelectorAll('[name="type"]').forEach(input => input.addEventListener("change", () => this.providerChanged()));
+      this.providerChanged();
     } catch (error) { this.innerHTML = `<p class="ph-error" role="alert">${PHFrame.escape(error.message)}</p>`; }
   }
   async create(event) {
     event.preventDefault(); const form = event.currentTarget, status = form.querySelector("[role=status]");
     try {
       const raw = Object.fromEntries(new FormData(form));
-      const payload = { ...raw, mapping: JSON.parse(raw.mapping), auth: raw.token_env ? { token_env: raw.token_env } : {} };
-      delete payload.token_env; if (!payload.records_path) delete payload.records_path; if (!payload.schedule_minutes) delete payload.schedule_minutes;
+      const auth = {}; if (raw.token_env) auth.token_env = raw.token_env; if (raw.username_env) auth.username_env = raw.username_env; if (raw.password_env) auth.password_env = raw.password_env;
+      const payload = { ...raw, mapping: JSON.parse(raw.mapping), auth };
+      delete payload.token_env; delete payload.username_env; delete payload.password_env; if (!payload.records_path) delete payload.records_path; if (!payload.schedule_minutes) delete payload.schedule_minutes;
       await PHFrame.send("/api/connectors", "POST", payload); PHFrame.notify("Connector created."); this.render();
     } catch (error) { status.textContent = error.message; status.className = "ph-status ph-error"; }
+  }
+  providerChanged() {
+    const type = this.querySelector('[name="type"]:checked').value;
+    const presets = {
+      api: ["Generic REST API", "Enter the endpoint path and optional nested records path. Bearer token and basic authentication are supported through environment variables.", "v1/events", "Resource path", true],
+      dhis2: ["DHIS2 data value set", "Enter the DHIS2 server URL and Data Set UID. Use a token environment variable for an ApiToken or username/password environment variables for Basic authentication.", "BfMAe6Itzgt", "Data Set UID", false],
+      kobo: ["KoboToolbox submissions", "Enter the Kobo server URL and Asset UID. The token environment variable is sent using Kobo's Token authentication scheme.", "aR9xExampleAsset", "Asset UID", false],
+      odk: ["ODK Central submissions", "Enter the Central URL and PROJECT_ID/FORM_ID. Configure token or Basic authentication with environment-variable names.", "12/household_survey", "Project ID / Form ID", false]
+    }[type];
+    this.querySelector("[data-provider-guide]").innerHTML = `<b>${presets[0]}</b><span>${presets[1]}</span>`;
+    this.querySelector("[name=resource]").placeholder = presets[2]; this.querySelector("[data-resource-label]").textContent = presets[3]; this.querySelector("[data-records-path]").hidden = !presets[4];
   }
   async remove(name) {
     if (!confirm(`Remove connector ${name}? Imported records will remain.`)) return;
@@ -569,5 +624,6 @@ customElements.define("ph-modal", PHModal);
 customElements.define("ph-confirm", PHConfirm);
 customElements.define("ph-import-wizard", PHImportWizard);
 customElements.define("ph-data-builder", PHDataBuilder);
+customElements.define("ph-settings-panel", PHSettingsPanel);
 customElements.define("ph-connector-console", PHConnectorConsole);
 window.PHFrame = PHFrame;

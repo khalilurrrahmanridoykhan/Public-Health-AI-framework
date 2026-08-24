@@ -1,5 +1,7 @@
 # PHFrame
 
+<img src="src/public_health_framework/ui/phframe-logo.png" alt="PHFrame logo" width="112">
+
 [![CI](https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/actions/workflows/ci.yml/badge.svg)](https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -7,7 +9,7 @@
 
 PHFrame is an early-stage framework for building extensible public-health data systems. It combines generated projects, declarative health schemas, persistent storage, automatic APIs, a public-health engine, and a standards-based Web Component interface. The original CSV/Excel dashboard generator remains available as an export workflow.
 
-> Current version: `0.7.0a3` (dynamic workspace preview)
+> Current version: `0.7.0a4` (branded workspace and access-control preview)
 
 ## Why PHFrame?
 
@@ -24,6 +26,8 @@ Current capabilities include:
 - Drag-resizable dashboards with add/remove controls and browser-saved visualization choices
 - Browser-managed typed columns for worldwide, programme-specific data models
 - Browser imports with downloadable examples and scheduled generic API, DHIS2, KoboToolbox, and ODK synchronization
+- Editable branding, navigation, footer, themes, primary color, dashboard title, logo, and favicon
+- Optional private mode with PBKDF2-hashed local user credentials and signed, HTTP-only login sessions
 
 > [!IMPORTANT]
 > PHFrame is alpha software. Evaluate it with non-sensitive data before considering production use. It does not yet provide authentication or a complete deployment security model.
@@ -103,6 +107,25 @@ between appropriate number, gauge, bar, donut, line, column, tile, and table vie
 Use **Add visualization** to chart configured indicators, dimensions, or any typed
 numeric, categorical, and date field. Layout choices are stored in the browser.
 
+Resize cards from any edge or corner. The grid span, height, chart layout, legend,
+and content overflow adapt together; mobile layouts continue to collapse to a
+single column.
+
+## Branding and access settings
+
+Open **Settings** to edit the product name, header title, dashboard title,
+navigation labels and visibility, footer, primary color, default theme, logo,
+and favicon. Uploaded assets are stored in the project's ignored `data/branding/`
+directory, so each deployment can have independent branding.
+
+Projects are public by default. To enable private mode, create a username and a
+password of at least 10 characters in Settings and select **Private**. Passwords
+use PBKDF2-HMAC-SHA256 with per-user salts, and browser sessions use signed,
+HTTP-only, same-site cookies. Use HTTPS in any networked deployment. This local
+alpha authentication is appropriate for evaluation and controlled deployments;
+SSO, roles, account recovery, audit controls, and production hardening remain
+future work.
+
 Open `/app#/import` to import `.csv`, `.xlsx`, or `.xlsm` files through a guided workflow:
 
 1. Select the target dataset and file.
@@ -116,8 +139,10 @@ Browser uploads are limited to 25 MB. `GET /api/import-mappings` lists reusable 
 
 ## DHIS2, KoboToolbox, and ODK connectors
 
-The Connectors screen can create and remove generic JSON REST API connectors as
-well as DHIS2, KoboToolbox, and ODK connectors. Generic APIs accept a JSON array
+The Connectors screen provides separate guided setup choices for generic JSON
+REST APIs, DHIS2 data value sets, KoboToolbox assets, and ODK Central project/form
+OData feeds. It can create, test, schedule, synchronize, and remove each connector.
+Generic APIs accept a JSON array
 or common record containers such as `data`, `records`, `results`, `items`, and
 `value`. Source paths map into typed dataset fields; synchronized records then
 become available to dashboard visualizations. Credentials are referenced through

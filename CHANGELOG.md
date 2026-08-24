@@ -4,6 +4,20 @@ All notable changes to PHFrame will be documented here. The project intends to f
 
 ## [Unreleased]
 
+## [0.7.0a4] - 2026-08-24
+
+### Added
+
+- Add guided browser setup for generic REST API, DHIS2, KoboToolbox, and ODK Central connectors.
+- Add eight-direction dashboard resize handles with container-responsive chart content.
+- Add editable brand name, header title, dashboard title, navigation, footer, primary color, and default theme.
+- Add project logo and favicon uploads plus a packaged transparent PHFrame logo.
+- Add optional public/private access modes, salted PBKDF2 password storage, signed HTTP-only sessions, login, and logout.
+
+### Changed
+
+- Redesign the header around project branding and make it responsive across desktop, tablet, and mobile widths.
+
 ## [0.7.0a3] - 2026-08-24
 
 ### Added
@@ -81,7 +95,8 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Import audit history.
 - Portable HTML dashboard export.
 
-[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a3...HEAD
+[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a4...HEAD
+[0.7.0a4]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a3...v0.7.0a4
 [0.7.0a3]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a2...v0.7.0a3
 [0.7.0a2]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a1...v0.7.0a2
 [0.7.0a1]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.5.0a1...v0.7.0a1

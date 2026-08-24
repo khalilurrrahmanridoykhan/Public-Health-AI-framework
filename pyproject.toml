@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "public-health-framework"
-version = "0.7.0a3"
+version = "0.7.0a4"
 description = "Build extensible public-health data systems, APIs, and dashboards."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -45,7 +45,7 @@ Changelog = "https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framew
 where = ["src"]
 
 [tool.setuptools.package-data]
-"public_health_framework.ui" = ["*.css", "*.js"]
+"public_health_framework.ui" = ["*.css", "*.js", "*.png"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

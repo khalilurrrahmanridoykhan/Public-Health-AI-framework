@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from html import escape
+from http.cookies import SimpleCookie
 import json
+import mimetypes
 from pathlib import Path
 import re
 from typing import Any
@@ -12,7 +14,7 @@ import yaml
 
 from starlette.applications import Starlette
 from starlette.requests import Request
-from starlette.responses import HTMLResponse, JSONResponse, Response
+from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from starlette.routing import Route
 from starlette.concurrency import run_in_threadpool
 
@@ -22,7 +24,8 @@ from .plugins import load_plugins
 from .periods import resolve_period
 from .importer import import_frame, load_uploaded_frame, preview_frame
 from .storage import Storage
-from .ui import asset_text
+from .ui import asset_bytes, asset_text
+from .settings import SiteSettings
 from .sync import connector_due, sync_connector
 
 
@@ -33,12 +36,21 @@ class PHFrame:
         self.config = config
         self.storage = Storage(config)
         self.storage.initialize()
+        self.site_settings = SiteSettings(config.root, config.name)
         routes = [
             Route("/", self.home, methods=["GET"]),
             Route("/app", self.frontend, methods=["GET"]),
             Route("/assets/phframe.css", self.frontend_css, methods=["GET"]),
             Route("/assets/phframe.js", self.frontend_js, methods=["GET"]),
+            Route("/assets/phframe-logo.png", self.framework_logo, methods=["GET"]),
+            Route("/assets/project/{kind}", self.project_asset, methods=["GET"]),
+            Route("/login", self.login_page, methods=["GET"]),
             Route("/health", self.health, methods=["GET"]),
+            Route("/api/auth/status", self.auth_status, methods=["GET"]),
+            Route("/api/auth/login", self.auth_login, methods=["POST"]),
+            Route("/api/auth/logout", self.auth_logout, methods=["POST"]),
+            Route("/api/settings", self.settings_api, methods=["GET", "PUT"]),
+            Route("/api/settings/assets/{kind}", self.settings_asset_upload, methods=["POST"]),
             Route("/api", self.api_index, methods=["GET"]),
             Route("/api/imports", self.import_history, methods=["GET"]),
             Route("/api/imports/{run_id:int}/errors", self.import_errors, methods=["GET"]),
@@ -78,7 +90,24 @@ class PHFrame:
         return cls(ProjectConfig.load(path))
 
     async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
+        if scope.get("type") == "http" and not self._authorized_scope(scope):
+            path = scope.get("path", "")
+            response: Response = JSONResponse({"error": {"message": "Authentication required."}}, status_code=401) if path == "/api" or path.startswith("/api/") else RedirectResponse("/login", status_code=303)
+            await response(scope, receive, send)
+            return
         await self.asgi(scope, receive, send)
+
+    def _authorized_scope(self, scope: dict[str, Any]) -> bool:
+        settings = self.site_settings.load()
+        if settings["access_mode"] == "public":
+            return True
+        path = scope.get("path", "")
+        if path == "/login" or path == "/health" or path.startswith("/assets/") or path in {"/api/auth/login", "/api/auth/logout", "/api/auth/status"}:
+            return True
+        headers = {key.decode().lower(): value.decode() for key, value in scope.get("headers", [])}
+        cookie = SimpleCookie(); cookie.load(headers.get("cookie", ""))
+        token = cookie.get("phframe_session")
+        return bool(token and self.site_settings.verify_token(token.value))
 
     async def home(self, request: Request) -> HTMLResponse:
         datasets = "".join(
@@ -101,6 +130,7 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
     async def frontend(self, request: Request) -> HTMLResponse:
         return HTMLResponse("""<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>PHFrame</title>
+<link rel="icon" href="/assets/phframe-logo.png" data-ph-favicon>
 <link rel="stylesheet" href="/assets/phframe.css"></head><body><ph-app-shell></ph-app-shell>
 <noscript>PHFrame requires JavaScript for the application interface. Dataset APIs remain available at /api.</noscript>
 <script type="module" src="/assets/phframe.js"></script></body></html>""")
@@ -110,6 +140,59 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
 
     async def frontend_js(self, request: Request) -> Response:
         return Response(asset_text("phframe.js"), media_type="text/javascript")
+
+    async def framework_logo(self, request: Request) -> Response:
+        return Response(asset_bytes("phframe-logo.png"), media_type="image/png", headers={"cache-control": "public, max-age=86400"})
+
+    async def project_asset(self, request: Request) -> Response:
+        path = self.site_settings.asset(request.path_params["kind"])
+        if not path:
+            return _error("Brand asset not found.", 404)
+        return Response(path.read_bytes(), media_type=mimetypes.guess_type(path.name)[0] or "application/octet-stream", headers={"cache-control": "no-cache"})
+
+    async def login_page(self, request: Request) -> HTMLResponse:
+        settings = self.site_settings.public()
+        return HTMLResponse(f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sign in · {escape(settings['brand_name'])}</title><link rel="icon" href="{escape(settings['favicon_url'])}"><link rel="stylesheet" href="/assets/phframe.css"></head><body class="ph-login-page"><main class="ph-login-card"><img src="{escape(settings['logo_url'])}" alt=""><p class="ph-eyebrow">{escape(settings['brand_name'])}</p><h1>Welcome back</h1><p class="ph-muted">Sign in to access {escape(settings['header_title'])}.</p><form class="ph-stack"><div class="ph-field"><label>Username<input name="username" autocomplete="username" required></label></div><div class="ph-field"><label>Password<input name="password" type="password" autocomplete="current-password" required></label></div><button class="ph-button">Sign in</button><p role="alert" class="ph-error"></p></form></main><script>document.querySelector('form').addEventListener('submit',async e=>{{e.preventDefault();const r=await fetch('/api/auth/login',{{method:'POST',headers:{{'content-type':'application/json'}},body:JSON.stringify(Object.fromEntries(new FormData(e.target)))}});if(r.ok)location.href='/app';else document.querySelector('[role=alert]').textContent='Invalid username or password.'}})</script></body></html>""")
+
+    async def auth_status(self, request: Request) -> JSONResponse:
+        settings = self.site_settings.public()
+        cookie = request.cookies.get("phframe_session", "")
+        return JSONResponse({"data": {"access_mode": settings["access_mode"], "authenticated": bool(self.site_settings.verify_token(cookie))}})
+
+    async def auth_login(self, request: Request) -> Response:
+        try:
+            payload = await request.json()
+            username, password = str(payload.get("username", "")), str(payload.get("password", ""))
+        except (json.JSONDecodeError, AttributeError):
+            return _error("Invalid login request.", 400)
+        if not self.site_settings.verify_password(username, password):
+            return _error("Invalid username or password.", 401)
+        response = JSONResponse({"data": {"authenticated": True, "username": username}})
+        response.set_cookie("phframe_session", self.site_settings.token(username), max_age=86400, httponly=True, samesite="lax", secure=request.url.scheme == "https")
+        return response
+
+    async def auth_logout(self, request: Request) -> Response:
+        response = JSONResponse({"data": {"authenticated": False}})
+        response.delete_cookie("phframe_session")
+        return response
+
+    async def settings_api(self, request: Request) -> Response:
+        if request.method == "GET":
+            return JSONResponse({"data": self.site_settings.public()})
+        try:
+            payload = await request.json()
+            username = str(payload.pop("username", "")); password = str(payload.pop("password", ""))
+            return JSONResponse({"data": self.site_settings.update(payload, username, password)})
+        except (TypeError, ValueError) as error:
+            return _error(str(error), 422)
+
+    async def settings_asset_upload(self, request: Request) -> Response:
+        filename = request.query_params.get("filename", "")
+        try:
+            url = self.site_settings.save_asset(request.path_params["kind"], await request.body(), filename)
+            return JSONResponse({"data": {"url": url}})
+        except ValueError as error:
+            return _error(str(error), 422)
 
     async def api_index(self, request: Request) -> JSONResponse:
         return JSONResponse(

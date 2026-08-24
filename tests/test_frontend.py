@@ -51,7 +51,10 @@ def test_frontend_shell_and_assets(tmp_path: Path):
     assert "ph-resize-handle" in javascript.text
     assert "removeWidget" in javascript.text
     assert ".json,.xml" in javascript.text
-    assert "Generic JSON API" in javascript.text
+    assert "Generic REST API" in javascript.text
+    assert 'customElements.define("ph-settings-panel"' in javascript.text
+    assert '"ne", "se", "sw", "nw"' in javascript.text
+    assert "KoboToolbox submissions" in javascript.text
     assert ".ph-builder-layout" in css.text
 
 
