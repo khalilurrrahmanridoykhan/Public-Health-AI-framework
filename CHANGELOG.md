@@ -4,6 +4,18 @@ All notable changes to PHFrame will be documented here. The project intends to f
 
 ## [Unreleased]
 
+## [0.8.0a10] - 2026-08-24
+
+### Changed
+
+- Replace the long settings card grid with a focused, sticky sidebar and one content panel per configuration area.
+- Add accessible keyboard navigation, selected-tab session memory, and a compact horizontal mobile tab bar.
+- Refine settings typography, spacing, inputs, file selectors, navigation rows, focus states, and save controls.
+
+### Fixed
+
+- Keep the main settings save message attached to the save control instead of an unrelated panel status region.
+
 ## [0.8.0a9] - 2026-08-24
 
 ### Added
@@ -223,7 +235,8 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Import audit history.
 - Portable HTML dashboard export.
 
-[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a9...HEAD
+[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a10...HEAD
+[0.8.0a10]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a9...v0.8.0a10
 [0.8.0a9]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a8...v0.8.0a9
 [0.8.0a8]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a7...v0.8.0a8
 [0.8.0a7]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a6...v0.8.0a7

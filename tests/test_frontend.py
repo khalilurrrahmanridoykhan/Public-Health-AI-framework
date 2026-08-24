@@ -101,6 +101,11 @@ def test_frontend_shell_and_assets(tmp_path: Path):
     assert "ph-boundary-countries" in javascript.text
     assert "Search country name or ISO3" in javascript.text
     assert 'PHFrame.get("/api/boundaries/countries")' in javascript.text
+    assert "setupSettingsNavigation" in javascript.text
+    assert 'role="tablist"' in javascript.text
+    assert "data-settings-tab" in javascript.text
+    assert ".ph-settings-sidebar" in css.text
+    assert ".ph-settings-tab-active" in css.text
 
 
 def test_frontend_metadata_includes_ui_configuration(tmp_path: Path):
