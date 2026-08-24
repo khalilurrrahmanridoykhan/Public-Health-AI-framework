@@ -86,7 +86,7 @@ def answer_question(question: str, evidence: list[dict[str, Any]], previous_evid
     stop = {"what", "which", "where", "when", "show", "tell", "about", "give", "with", "from", "this", "that", "have", "does", "data", "please"}
     tokens = {token for token in re.findall(r"[a-z0-9_]+", query) if len(token) > 2 and token not in stop}
     intent = "overview"
-    if any(word in query for word in ("trend", "increase", "decrease", "change", "over time", "rising", "falling")): intent = "trend"
+    if any(word in query for word in ("trend", "increas", "decreas", "change", "over time", "rising", "falling")): intent = "trend"
     if any(word in query for word in ("unusual", "anomal", "spike", "outlier", "unexpected")): intent = "anomaly"
     if any(word in query for word in ("compare", "versus", " vs ", "difference", "highest", "lowest", "location", "district", "country")): intent = "comparison"
     if any(word in query for word in ("quality", "missing", "invalid", "complete")): intent = "quality"

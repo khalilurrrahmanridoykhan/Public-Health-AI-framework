@@ -76,6 +76,14 @@ def test_local_summary_contains_numbered_evidence_citations():
     assert "[1]" in content
 
 
+def test_simple_increasing_question_routes_to_trend_intent():
+    from public_health_framework.ai import answer_question, enrich_trend
+    trend = enrich_trend("Cases", [{"date": "2026-01", "value": 1}, {"date": "2026-02", "value": 3}], "/evidence")
+    answer, _, metadata = answer_question("Are cases increasing?", [trend])
+    assert metadata["intent"] == "trend"
+    assert "increasing" in answer
+
+
 def test_conversational_analyst_answers_targeted_questions_and_keeps_context(tmp_path: Path):
     root, client = _app(tmp_path)
     for index, cases in enumerate([1, 2, 3, 12], 20):
