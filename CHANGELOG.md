@@ -4,6 +4,14 @@ All notable changes to PHFrame will be documented here. The project intends to f
 
 ## [Unreleased]
 
+## [0.8.0a5] - 2026-08-24
+
+### Fixed
+
+- Open the dashboard template gallery from **Create new** instead of the nested visualization dialog.
+- Replace the unreliable browser prompt with a dedicated editable-copy dialog for **Customize this dashboard**.
+- Ignore stale asynchronous dashboard-manager renders so current buttons retain the correct event handlers.
+
 ## [0.8.0a4] - 2026-08-24
 
 ### Fixed
@@ -175,7 +183,8 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Import audit history.
 - Portable HTML dashboard export.
 
-[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a4...HEAD
+[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a5...HEAD
+[0.8.0a5]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a4...v0.8.0a5
 [0.8.0a4]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a3...v0.8.0a4
 [0.8.0a3]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a2...v0.8.0a3
 [0.8.0a2]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a1...v0.8.0a2

@@ -91,6 +91,9 @@ def test_frontend_shell_and_assets(tmp_path: Path):
     assert "this.metadata = this._metadata" not in javascript.text
     assert ".ph-spinner" in css.text
     assert "@keyframes ph-spin" in css.text
+    assert 'this.querySelector(":scope > .ph-dashboard-manager > .ph-template-dialog")' in javascript.text
+    assert "data-customize-form" in javascript.text
+    assert "Create editable copy" in javascript.text
 
 
 def test_frontend_metadata_includes_ui_configuration(tmp_path: Path):

@@ -329,6 +329,8 @@ class PHDashboardManager extends PHElement {
   set metadata(value) { this._metadata = value; if (this.isConnected) this.render(); }
   async render() {
     if (!this._metadata) return;
+    const renderId = (this._renderId || 0) + 1;
+    this._renderId = renderId;
     this.innerHTML = `<section class="ph-dashboard-loading">${PHFrame.loading("Loading dashboard and visualizations")}</section>`;
     let configured;
     try {
@@ -338,23 +340,29 @@ class PHDashboardManager extends PHElement {
       this.querySelector("button").addEventListener("click", () => this.render());
       return;
     }
+    if (renderId !== this._renderId) return;
     this.dashboards = [...configured.map(item => ({ ...item, title: item.label, description: "Configured project dashboard" })), ...(PHFrame.siteSettings.dashboards || [])];
     const selected = localStorage.getItem("ph-active-dashboard"), active = this.dashboards.find(item => item.id === selected) || this.dashboards[0];
     const options = this.dashboards.map(item => `<option value="${PHFrame.escape(item.id)}" ${item === active ? "selected" : ""}>${PHFrame.escape(item.title)}</option>`).join("");
-    this.innerHTML = `<section class="ph-dashboard-manager"><div class="ph-dashboard-switcher"><div class="ph-field"><label>Dashboard</label><select data-dashboard-select>${options}</select></div><button class="ph-button" data-new-dashboard>+ Create new</button>${active?.configured ? `<button class="ph-button ph-button-secondary" data-customize-dashboard>Customize this dashboard</button>` : (active ? `<button class="ph-button ph-button-secondary" data-edit-dashboard>Edit name</button><button class="ph-icon-danger" data-delete-dashboard title="Delete dashboard">×</button>` : "")}</div><div data-dashboard-host></div>${this.createDialog()}</section>`;
+    this.innerHTML = `<section class="ph-dashboard-manager"><div class="ph-dashboard-switcher"><div class="ph-field"><label>Dashboard</label><select data-dashboard-select>${options}</select></div><button class="ph-button" data-new-dashboard>+ Create new</button>${active?.configured ? `<button class="ph-button ph-button-secondary" data-customize-dashboard>Customize this dashboard</button>` : (active ? `<button class="ph-button ph-button-secondary" data-edit-dashboard>Edit name</button><button class="ph-icon-danger" data-delete-dashboard title="Delete dashboard">×</button>` : "")}</div><div data-dashboard-host></div>${this.createDialog()}${this.customizeDialog()}</section>`;
     if (active) this.show(active); else this.querySelector("[data-dashboard-host]").innerHTML = `<div class="ph-empty-state"><span>▦</span><p>Create your first dashboard from a professional template.</p></div>`;
     this.querySelector("[data-dashboard-select]").addEventListener("change", event => { localStorage.setItem("ph-active-dashboard", event.target.value); this.render(); });
-    const dialog = this.querySelector("dialog"); this.querySelector("[data-new-dashboard]").addEventListener("click", () => { dialog.showModal(); this.updateTemplateRecommendations(); });
+    const dialog = this.querySelector(":scope > .ph-dashboard-manager > .ph-template-dialog");
+    this.querySelector("[data-new-dashboard]").addEventListener("click", () => { dialog.showModal(); this.updateTemplateRecommendations(); });
     dialog.querySelector('[name="dataset"]').addEventListener("change", () => this.updateTemplateRecommendations());
     dialog.querySelectorAll("[data-template]").forEach(button => button.addEventListener("click", () => this.createDashboard(button.dataset.template)));
     this.querySelector("[data-edit-dashboard]")?.addEventListener("click", () => this.editDashboard(active));
-    this.querySelector("[data-customize-dashboard]")?.addEventListener("click", () => this.customizeDashboard(active));
+    this.querySelector("[data-customize-dashboard]")?.addEventListener("click", () => this.openCustomizeDialog(active));
+    this.querySelector("[data-customize-form]")?.addEventListener("submit", event => this.customizeDashboard(event, active));
     this.querySelector("[data-delete-dashboard]")?.addEventListener("click", () => this.deleteDashboard(active));
   }
   show(dashboard) { const component = document.createElement("ph-dashboard"); component.definition = dashboard; component.metadata = this._metadata; component.addEventListener("ph-dashboard-definition", event => this.updateDefinition(event.detail)); this.querySelector("[data-dashboard-host]").replaceChildren(component); }
   createDialog() {
     const datasets = Object.entries(this._metadata.datasets).map(([name, item]) => `<option value="${name}">${PHFrame.escape(item.label)}</option>`).join("");
     return `<dialog class="ph-dialog ph-template-dialog"><form method="dialog" class="ph-stack"><div class="ph-widget-header"><div><p class="ph-eyebrow">Dashboard templates</p><h2>Create a professional dashboard</h2></div><button value="cancel" class="ph-dialog-close">×</button></div><div class="ph-form-grid"><div class="ph-field"><label>Dashboard name</label><input name="title" required placeholder="National programme overview"></div><div class="ph-field"><label>Primary dataset</label><select name="dataset">${datasets}</select></div></div><div class="ph-template-grid"><button type="button" data-template="overview"><b>Executive overview</b><span>Headline metric, categories, and trend</span></button><button type="button" data-template="surveillance"><b>Surveillance operations</b><span>Indicators, alerts, locations, and time</span></button><button type="button" data-template="programme"><b>Programme monitoring</b><span>Coverage-style metrics and disaggregation</span></button><button type="button" data-template="dhis2"><b>DHIS2 aggregate</b><span>Data values, elements, and category combinations</span></button><button type="button" data-template="geospatial"><b>Worldwide geospatial</b><span>Coordinate map and geographic breakdown</span></button><button type="button" data-template="blank"><b>Blank canvas</b><span>Add text, links, tables, maps, and charts yourself</span></button></div><p class="ph-muted" data-template-advice></p></form></dialog>`;
+  }
+  customizeDialog() {
+    return `<dialog class="ph-dialog ph-customize-dialog"><form method="dialog" class="ph-stack" data-customize-form><div class="ph-widget-header"><div><p class="ph-eyebrow">Editable dashboard</p><h2>Customize this dashboard</h2></div><button value="cancel" class="ph-dialog-close" aria-label="Close">×</button></div><p class="ph-muted">PHFrame will create an editable copy. Your original configured dashboard remains unchanged.</p><div class="ph-field"><label for="ph-custom-dashboard-name">Dashboard name</label><input id="ph-custom-dashboard-name" name="title" required></div><div class="ph-actions"><button class="ph-button" value="default">Create editable copy</button><button value="cancel">Cancel</button></div></form></dialog>`;
   }
   capabilities(dataset) {
     const fields = this._metadata.datasets[dataset].fields, entries = Object.entries(fields);
@@ -383,11 +391,12 @@ class PHDashboardManager extends PHElement {
     const form = this.querySelector(".ph-template-dialog form"), title = form.elements.title.value.trim(), dataset = form.elements.dataset.value;
     if (!title) { form.elements.title.reportValidity(); return; }
     const dashboard = { id: `dashboard-${Date.now()}`, title, description: `${this._metadata.datasets[dataset].label} · ${template.replaceAll("_", " ")} template`, dataset, template, widgets: this.templateWidgets(template, dataset) };
-    await this.persist([...(PHFrame.siteSettings.dashboards || []), dashboard]); localStorage.setItem("ph-active-dashboard", dashboard.id); this.querySelector("dialog").close(); this.render();
+    await this.persist([...(PHFrame.siteSettings.dashboards || []), dashboard]); localStorage.setItem("ph-active-dashboard", dashboard.id); this.querySelector(".ph-template-dialog").close(); this.render();
   }
   async persist(dashboards) { const response = await PHFrame.send("/api/settings", "PUT", { dashboards }); PHFrame.siteSettings.dashboards = response.data.dashboards; }
   async updateDefinition(dashboard) { if (dashboard.configured) return; await this.persist(PHFrame.siteSettings.dashboards.map(item => item.id === dashboard.id ? dashboard : item)); }
-  async customizeDashboard(dashboard) { const title = prompt("Name your editable copy", dashboard.title); if (!title?.trim()) return; const copy = { id: `dashboard-${Date.now()}`, title: title.trim(), description: dashboard.description || "Customized project dashboard", dataset: "", template: "custom", widgets: dashboard.widgets.map((widget, index) => ({ ...widget, _id: widget._id || `widget-${index}-${Date.now()}` })) }; await this.persist([...(PHFrame.siteSettings.dashboards || []), copy]); localStorage.setItem("ph-active-dashboard", copy.id); this.render(); }
+  openCustomizeDialog(dashboard) { const dialog = this.querySelector(".ph-customize-dialog"); dialog.querySelector('[name="title"]').value = `${dashboard.title} — Custom`; dialog.showModal(); dialog.querySelector('[name="title"]').select(); }
+  async customizeDashboard(event, dashboard) { if (event.submitter?.value === "cancel") return; event.preventDefault(); const title = new FormData(event.currentTarget).get("title").trim(); if (!title) return; const copy = { id: `dashboard-${Date.now()}`, title, description: dashboard.description || "Customized project dashboard", dataset: "", template: "custom", widgets: dashboard.widgets.map((widget, index) => ({ ...widget, _id: widget._id || `widget-${index}-${Date.now()}` })) }; await this.persist([...(PHFrame.siteSettings.dashboards || []), copy]); localStorage.setItem("ph-active-dashboard", copy.id); this.querySelector(".ph-customize-dialog").close(); this.render(); }
   async editDashboard(dashboard) { const title = prompt("Dashboard name", dashboard.title); if (!title?.trim()) return; const description = prompt("Dashboard description", dashboard.description || "") ?? dashboard.description; await this.updateDefinition({ ...dashboard, title: title.trim(), description }); this.render(); }
   async deleteDashboard(dashboard) { if (!confirm(`Delete ${dashboard.title}?`)) return; await this.persist(PHFrame.siteSettings.dashboards.filter(item => item.id !== dashboard.id)); localStorage.removeItem("ph-active-dashboard"); this.render(); }
 }
