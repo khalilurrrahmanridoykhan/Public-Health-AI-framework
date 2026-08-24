@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from io import BytesIO
+import json
 from pathlib import Path
 from typing import Any
+from xml.etree import ElementTree
 
 import pandas as pd
 import yaml
@@ -68,14 +70,47 @@ def load_uploaded_frame(content: bytes, filename: str, sheet: str | int = 0) -> 
         frame = pd.read_csv(BytesIO(content))
     elif suffix in {".xlsx", ".xlsm"}:
         frame = pd.read_excel(BytesIO(content), sheet_name=sheet)
+    elif suffix == ".json":
+        try:
+            payload = json.loads(content.decode("utf-8-sig"))
+        except (UnicodeDecodeError, json.JSONDecodeError) as error:
+            raise ValueError(f"Invalid JSON file: {error}") from error
+        if isinstance(payload, dict):
+            payload = next(
+                (payload[key] for key in ("data", "records", "results", "items") if isinstance(payload.get(key), list)),
+                [payload],
+            )
+        if not isinstance(payload, list) or not all(isinstance(item, dict) for item in payload):
+            raise ValueError("JSON imports require an array of objects or a data/records/results/items array.")
+        frame = pd.json_normalize(payload, sep=".")
+    elif suffix == ".xml":
+        try:
+            root = ElementTree.fromstring(content)
+        except ElementTree.ParseError as error:
+            raise ValueError(f"Invalid XML file: {error}") from error
+        rows = list(root)
+        if not rows:
+            raise ValueError("XML imports require a root element containing record elements.")
+        frame = pd.DataFrame([_xml_record(row) for row in rows])
     else:
-        raise ValueError("Browser imports support .csv, .xlsx, and .xlsm files.")
+        raise ValueError("Browser imports support .csv, .xlsx, .xlsm, .json, and .xml files.")
     frame.columns = [str(column).strip() for column in frame.columns]
     if frame.empty:
         raise ValueError("The input file contains no data rows.")
     if len(set(frame.columns)) != len(frame.columns):
         raise ValueError("Column names must be unique after surrounding spaces are removed.")
     return frame
+
+
+def _xml_record(element: ElementTree.Element, prefix: str = "") -> dict[str, Any]:
+    record: dict[str, Any] = {}
+    for child in element:
+        name = f"{prefix}.{child.tag}" if prefix else child.tag
+        if list(child):
+            record.update(_xml_record(child, name))
+        else:
+            record[name] = (child.text or "").strip() or None
+    return record
 
 
 def import_frame(

@@ -56,6 +56,7 @@ def test_legacy_sqlite_schema_remains_compatible(tmp_path: Path):
     connection.close()
     storage = Storage(ProjectConfig.load(config_path))
     assert storage.migrate() == [
+        "add field case_reports.country",
         "add field case_reports.patient_age",
         "add field case_reports.epi_week",
         "add field case_reports.reporting_unit",

@@ -354,6 +354,7 @@ class ConnectorSchema:
     base_url: str
     resource: str
     mapping: dict[str, str]
+    records_path: str | None = None
     token_env: str | None = None
     username_env: str | None = None
     password_env: str | None = None
@@ -367,7 +368,7 @@ class ConnectorSchema:
     ) -> "ConnectorSchema":
         _validate_identifier(name, "connector")
         connector_type = str(value.get("type", "")).lower()
-        if connector_type not in {"dhis2", "kobo", "odk"}:
+        if connector_type not in {"api", "dhis2", "kobo", "odk"}:
             raise ValueError(f"Connector '{name}' has unsupported type '{connector_type}'.")
         dataset_name = str(value.get("dataset", ""))
         if dataset_name not in datasets:
@@ -398,7 +399,7 @@ class ConnectorSchema:
             raise ValueError(f"Connector '{name}' parameters must be an object.")
         return cls(
             name=name, type=connector_type, dataset=dataset_name, base_url=base_url,
-            resource=resource, mapping=mapping, token_env=auth.get("token_env"),
+            resource=resource, mapping=mapping, records_path=value.get("records_path"), token_env=auth.get("token_env"),
             username_env=auth.get("username_env"), password_env=auth.get("password_env"),
             parameters={str(key): str(item) for key, item in parameters.items()}, timeout=timeout,
             schedule_minutes=int(schedule) if schedule is not None else None,

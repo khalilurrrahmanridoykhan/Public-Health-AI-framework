@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 
 import pandas as pd
 from starlette.testclient import TestClient
@@ -7,6 +8,21 @@ from public_health_framework.application import PHFrame
 from public_health_framework.config import ProjectConfig
 from public_health_framework.importer import import_dataset, load_mapping, save_mapping
 from public_health_framework.project import create_project
+
+
+def test_file_import_supports_json_and_xml(tmp_path: Path):
+    root = create_project("Structured Files", tmp_path / "structured-files")
+    config = ProjectConfig.load(root / "phframe.yaml")
+    record = {
+        "case_id": "JSON-1", "disease": "Influenza", "status": "confirmed",
+        "report_date": "2026-08-24", "district": "Region 1", "cases": 2,
+    }
+    json_path = tmp_path / "records.json"
+    json_path.write_text(json.dumps([record]), encoding="utf-8")
+    assert import_dataset(config, "case_reports", json_path).imported_rows == 1
+    xml_path = tmp_path / "records.xml"
+    xml_path.write_text("""<records><record><case_id>XML-1</case_id><disease>Influenza</disease><status>suspected</status><report_date>2026-08-24</report_date><district>Region 2</district><cases>3</cases></record></records>""", encoding="utf-8")
+    assert import_dataset(config, "case_reports", xml_path).imported_rows == 1
 from public_health_framework.storage import Storage
 
 

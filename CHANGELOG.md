@@ -4,6 +4,21 @@ All notable changes to PHFrame will be documented here. The project intends to f
 
 ## [Unreleased]
 
+## [0.7.0a3] - 2026-08-24
+
+### Added
+
+- Add freeform pointer resizing plus dashboard visualization add/remove controls.
+- Add browser-managed optional typed columns with safe additive database migrations.
+- Add direct dashboard visualizations for typed numeric, categorical, and date fields.
+- Add JSON and XML imports in the browser and CLI plus downloadable CSV, JSON, and XML examples.
+- Add browser-managed generic JSON REST API connectors with nested paths, mapping, scheduling, and environment-based authentication.
+
+### Changed
+
+- Replace Bangladesh-specific generated-project defaults with a worldwide-neutral country, administrative-area, and example organisation hierarchy.
+- Expand the import and connector screens with guided formats, creation forms, removal controls, and clearer empty states.
+
 ## [0.7.0a2] - 2026-08-24
 
 ### Added
@@ -66,7 +81,8 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Import audit history.
 - Portable HTML dashboard export.
 
-[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a2...HEAD
+[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a3...HEAD
+[0.7.0a3]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a2...v0.7.0a3
 [0.7.0a2]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.7.0a1...v0.7.0a2
 [0.7.0a1]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.5.0a1...v0.7.0a1
 [0.5.0a1]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.2.0a1...v0.5.0a1

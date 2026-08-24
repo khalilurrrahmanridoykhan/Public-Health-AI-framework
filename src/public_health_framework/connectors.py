@@ -107,6 +107,33 @@ def _nested_value(record: dict[str, Any], path: str) -> Any:
     return value
 
 
+@register_connector("api")
+class APIConnector(Connector):
+    """Pull records from a generic JSON REST API."""
+
+    def endpoint(self) -> str:
+        return self.url(self.config.resource)
+
+    def extract(self, payload: Any) -> list[dict[str, Any]]:
+        value = payload
+        if self.config.records_path:
+            value = _nested_value(payload, self.config.records_path) if isinstance(payload, dict) else None
+        elif isinstance(payload, dict):
+            for key in ("data", "records", "results", "items", "value"):
+                if isinstance(payload.get(key), list):
+                    value = payload[key]
+                    break
+        if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
+            raise ValueError("API response must be a JSON list of objects or contain data, records, results, items, or value.")
+        return value
+
+    def next_page(self, payload: Any) -> str | None:
+        if not isinstance(payload, dict):
+            return None
+        value = payload.get("next") or payload.get("next_url")
+        return str(value) if value else None
+
+
 @register_connector("dhis2")
 class DHIS2Connector(Connector):
     """Pull data values from the DHIS2 Web API."""

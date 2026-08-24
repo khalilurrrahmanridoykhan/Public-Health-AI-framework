@@ -7,7 +7,7 @@
 
 PHFrame is an early-stage framework for building extensible public-health data systems. It combines generated projects, declarative health schemas, persistent storage, automatic APIs, a public-health engine, and a standards-based Web Component interface. The original CSV/Excel dashboard generator remains available as an export workflow.
 
-> Current version: `0.7.0a1` (Phase 4 connector preview)
+> Current version: `0.7.0a3` (dynamic workspace preview)
 
 ## Why PHFrame?
 
@@ -17,12 +17,13 @@ Current capabilities include:
 
 - Declarative datasets and validation in `phframe.yaml`
 - Generated CRUD APIs backed by SQLite or PostgreSQL
-- Atomic CSV and Excel imports with reusable column mappings
+- Atomic CSV, Excel, JSON, and XML imports with reusable column mappings
 - Import audit history and safe schema migration checks
 - Portable HTML dashboards for offline sharing
 - Declarative indicators with count, sum, average, rate, ratio, and percentage calculations
-- Configurable Web Component dashboards, forms, tables, filters, charts, maps, and epidemiological curves
-- Browser CSV/Excel imports and scheduled DHIS2, KoboToolbox, and ODK synchronization
+- Drag-resizable dashboards with add/remove controls and browser-saved visualization choices
+- Browser-managed typed columns for worldwide, programme-specific data models
+- Browser imports with downloadable examples and scheduled generic API, DHIS2, KoboToolbox, and ODK synchronization
 
 > [!IMPORTANT]
 > PHFrame is alpha software. Evaluate it with non-sensitive data before considering production use. It does not yet provide authentication or a complete deployment security model.
@@ -89,6 +90,19 @@ dashboards:
 
 ## Browser imports
 
+The browser import workspace accepts `.csv`, `.xlsx`, `.xlsm`, `.json`, and `.xml`.
+It provides downloadable examples for the selected dataset before upload. JSON may
+be an array of objects or contain a `data`, `records`, `results`, or `items` array;
+XML uses a root element containing one child element per record.
+
+Use **Data builder** in the application to add optional typed columns. Additions
+are migrated safely and persisted to `phframe.yaml`; existing records are retained.
+
+Dashboard cards can be reordered and resized, removed or restored, and switched
+between appropriate number, gauge, bar, donut, line, column, tile, and table views.
+Use **Add visualization** to chart configured indicators, dimensions, or any typed
+numeric, categorical, and date field. Layout choices are stored in the browser.
+
 Open `/app#/import` to import `.csv`, `.xlsx`, or `.xlsm` files through a guided workflow:
 
 1. Select the target dataset and file.
@@ -101,6 +115,13 @@ Open `/app#/import` to import `.csv`, `.xlsx`, or `.xlsm` files through a guided
 Browser uploads are limited to 25 MB. `GET /api/import-mappings` lists reusable mappings, and `GET /api/imports/{run_id}/errors` provides structured error reports.
 
 ## DHIS2, KoboToolbox, and ODK connectors
+
+The Connectors screen can create and remove generic JSON REST API connectors as
+well as DHIS2, KoboToolbox, and ODK connectors. Generic APIs accept a JSON array
+or common record containers such as `data`, `records`, `results`, `items`, and
+`value`. Source paths map into typed dataset fields; synchronized records then
+become available to dashboard visualizations. Credentials are referenced through
+environment-variable names and are never written into project configuration.
 
 Connectors pull JSON records, apply nested source-to-dataset mappings, validate every record, and write atomically. Credentials are read only from environment variables and are never returned through metadata APIs.
 

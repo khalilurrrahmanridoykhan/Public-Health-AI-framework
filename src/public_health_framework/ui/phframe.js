@@ -48,7 +48,7 @@ class PHAppShell extends PHElement {
   draw() {
     this.innerHTML = `<a class="ph-skip-link" href="#main">Skip to content</a>
       <div class="ph-shell"><header class="ph-header"><h1 class="ph-brand">PHFrame · ${PHFrame.escape(this.metadata.project)}</h1>
-      <nav class="ph-nav" aria-label="Primary"><a href="#/dashboard" data-route="dashboard">${PHFrame.t("dashboard")}</a><a href="#/records" data-route="records">${PHFrame.t("records")}</a><a href="#/import" data-route="import">Import</a><a href="#/connectors" data-route="connectors">Connectors</a><a href="#/quality" data-route="quality">${PHFrame.t("quality")}</a></nav>
+      <nav class="ph-nav" aria-label="Primary"><a href="#/dashboard" data-route="dashboard">${PHFrame.t("dashboard")}</a><a href="#/records" data-route="records">${PHFrame.t("records")}</a><a href="#/builder" data-route="builder">Data builder</a><a href="#/import" data-route="import">Import</a><a href="#/connectors" data-route="connectors">Connectors</a><a href="#/quality" data-route="quality">${PHFrame.t("quality")}</a></nav>
       <label>${PHFrame.t("theme")} <select class="ph-theme" aria-label="${PHFrame.t("theme")}"><option value="light">Light</option><option value="dark">Dark</option><option value="high-contrast">High contrast</option></select></label></header>
       <main class="ph-main" id="main" tabindex="-1"><div id="ph-view"></div></main><ph-notification-center></ph-notification-center></div>`;
     const theme = this.querySelector(".ph-theme");
@@ -70,6 +70,9 @@ class PHAppShell extends PHElement {
         const query = event.detail.filter ? `?filter=${encodeURIComponent(event.detail.filter)}` : "";
         view.querySelector("ph-case-table").load(query);
       });
+    } else if (route === "builder") {
+      view.innerHTML = `<h2>Data builder</h2><ph-data-builder></ph-data-builder>`;
+      view.querySelector("ph-data-builder").metadata = this.metadata;
     } else if (route === "import") {
       view.innerHTML = `<h2>Import data</h2><ph-import-wizard></ph-import-wizard>`;
       view.querySelector("ph-import-wizard").metadata = this.metadata;
@@ -164,7 +167,8 @@ class PHQualityPanel extends PHElement {
 class PHKPI extends PHElement {
   async render() {
     try {
-      const response = await PHFrame.get(`/api/indicators/${this.getAttribute("indicator")}`);
+      const endpoint = this.getAttribute("field") ? `/api/visualize/${this.getAttribute("dataset")}?field=${encodeURIComponent(this.getAttribute("field"))}&operation=${this.getAttribute("operation") || "sum"}` : `/api/indicators/${this.getAttribute("indicator")}`;
+      const response = await PHFrame.get(endpoint);
       const value = response.data.value;
       const formatted = value == null ? "—" : new Intl.NumberFormat().format(value);
       const visualization = this.getAttribute("visualization") || "number";
@@ -181,7 +185,8 @@ class PHKPI extends PHElement {
 class PHIndicatorChart extends PHElement {
   async render() {
     try {
-      const response = await PHFrame.get(`/api/dimensions/${this.getAttribute("dimension")}`);
+      const endpoint = this.getAttribute("field") ? `/api/visualize/${this.getAttribute("dataset")}?field=${encodeURIComponent(this.getAttribute("field"))}` : `/api/dimensions/${this.getAttribute("dimension")}`;
+      const response = await PHFrame.get(endpoint);
       const values = response.data.values;
       const visualization = this.getAttribute("visualization") || "bar";
       if (!values.length) { this.innerHTML = this.empty("No dimension data yet"); return; }
@@ -256,17 +261,18 @@ class PHMap extends PHElement {
 class PHDashboard extends PHElement {
   async render() {
     try {
-      const response = await PHFrame.get(`/api/dashboards/${this.getAttribute("name")}`);
+      const [response, metadata] = await Promise.all([PHFrame.get(`/api/dashboards/${this.getAttribute("name")}`), PHFrame.get("/api")]);
       this.dashboard = response.data;
+      this.metadata = metadata;
       this.storageKey = `ph-dashboard-layout:${this.getAttribute("name")}`;
       this.settings = this.loadSettings();
       this.draw();
     } catch (error) { this.innerHTML = `<p class="ph-error" role="alert">${PHFrame.escape(error.message)}</p>`; }
   }
-  widgetId(widget, index) { return `${widget.type}-${widget.indicator || widget.dimension || widget.dataset || index}-${index}`; }
+  widgetId(widget, index) { return widget._id || `${widget.type}-${widget.indicator || widget.dimension || widget.dataset || index}-${index}`; }
   defaults(widget) {
-    if (widget.type === "kpi") return { visualization: "number", size: "compact", choices: [["number", "Number"], ["gauge", "Gauge"]] };
-    if (widget.type === "chart") return { visualization: "bar", size: "medium", choices: [["bar", "Bar chart"], ["donut", "Donut chart"], ["table", "Data table"]] };
+    if (widget.type === "kpi" || widget.type === "field_kpi") return { visualization: "number", size: "compact", choices: [["number", "Number"], ["gauge", "Gauge"]] };
+    if (widget.type === "chart" || widget.type === "field_chart") return { visualization: "bar", size: "medium", choices: [["bar", "Bar chart"], ["donut", "Donut chart"], ["table", "Data table"]] };
     if (widget.type === "map") return { visualization: "tiles", size: "medium", choices: [["tiles", "Tile map"], ["bar", "Bar chart"], ["donut", "Donut chart"], ["table", "Data table"]] };
     return { visualization: "line", size: "wide", choices: [["line", "Line chart"], ["column", "Column chart"], ["table", "Data table"]] };
   }
@@ -279,12 +285,26 @@ class PHDashboard extends PHElement {
     localStorage.setItem(this.storageKey, JSON.stringify(this.settings));
   }
   draw() {
-    const indexed = this.dashboard.widgets.map((widget, index) => ({ widget, index, id: this.widgetId(widget, index) }));
+    const allWidgets = [...this.dashboard.widgets, ...(this.settings.customWidgets || [])];
+    const hidden = new Set(this.settings.hidden || []);
+    const indexed = allWidgets.map((widget, index) => ({ widget, index, id: this.widgetId(widget, index) })).filter(item => !hidden.has(item.id));
     const order = this.settings.order || [];
     indexed.sort((a, b) => { const ai = order.indexOf(a.id), bi = order.indexOf(b.id); return (ai < 0 ? 999 + a.index : ai) - (bi < 0 ? 999 + b.index : bi); });
     const cards = indexed.map(item => this.card(item.widget, item.index, item.id)).join("");
-    this.innerHTML = `<section class="ph-dashboard-heading"><div><p class="ph-eyebrow">Surveillance overview</p><h2>${PHFrame.escape(this.dashboard.label)}</h2><p class="ph-muted">Live operational metrics and trends</p></div><div class="ph-dashboard-actions"><button class="ph-button ph-button-secondary" type="button" data-reset>Reset layout</button><span class="ph-save-state" role="status">Changes save automatically</span></div></section><div class="ph-dashboard-grid" aria-label="Customizable dashboard">${cards}</div>`;
+    this.innerHTML = `<section class="ph-dashboard-heading"><div><p class="ph-eyebrow">Data overview</p><h2>${PHFrame.escape(this.dashboard.label)}</h2><p class="ph-muted">Live metrics and trends from your configured datasets</p></div><div class="ph-dashboard-actions"><button class="ph-button" type="button" data-add-widget>+ Add visualization</button><button class="ph-button ph-button-secondary" type="button" data-reset>Reset layout</button><span class="ph-save-state" role="status">Changes save automatically</span></div></section><div class="ph-dashboard-grid" aria-label="Customizable dashboard">${cards}</div>${this.widgetDialog()}`;
     this.bind();
+  }
+  widgetDialog() {
+    const indicators = Object.entries(this.metadata.indicators || {}).map(([name, item]) => `<option value="kpi|${name}">Metric · ${PHFrame.escape(item.label)}</option>`).join("");
+    const dimensions = Object.entries(this.metadata.dimensions || {}).map(([name, item]) => `<option value="chart|${name}">Category · ${PHFrame.escape(item.label)}</option>`).join("");
+    const fields = Object.entries(this.metadata.datasets || {}).flatMap(([dataset, item]) => Object.entries(item.fields).filter(([, field]) => !["integer", "number", "date", "datetime"].includes(field.type)).map(([name, field]) => `<option value="field_chart|${dataset}|${name}">Column · ${PHFrame.escape(item.label)} · ${PHFrame.escape(field.label || name)}</option>`)).join("");
+    const numericFields = Object.entries(this.metadata.datasets || {}).flatMap(([dataset, item]) => Object.entries(item.fields).filter(([, field]) => ["integer", "number", "age"].includes(field.type)).map(([name, field]) => `<option value="field_kpi|${dataset}|${name}">Metric · Sum of ${PHFrame.escape(field.label || name)}</option>`)).join("");
+    const trends = Object.entries(this.metadata.datasets || {}).flatMap(([dataset, item]) => {
+      const dates = Object.entries(item.fields).filter(([, field]) => ["date", "datetime"].includes(field.type));
+      const numbers = Object.entries(item.fields).filter(([, field]) => ["integer", "number", "age"].includes(field.type));
+      return dates.flatMap(([date]) => numbers.map(([value]) => `<option value="epi_curve|${dataset}|${date}|${value}">Trend · ${PHFrame.escape(item.label)} · ${PHFrame.escape(value)}</option>`));
+    }).join("");
+    return `<dialog class="ph-dialog ph-widget-dialog"><form method="dialog" class="ph-stack" data-widget-form><div class="ph-widget-header"><div><p class="ph-eyebrow">Dashboard builder</p><h2>Add visualization</h2></div><button value="cancel" class="ph-dialog-close" aria-label="Close">×</button></div><div class="ph-field"><label for="ph-widget-title">Title</label><input id="ph-widget-title" name="title" required placeholder="My visualization"></div><div class="ph-field"><label for="ph-widget-source">Data source</label><select id="ph-widget-source" name="source" required>${indicators}${numericFields}${dimensions}${fields}${trends}</select></div><div class="ph-actions"><button class="ph-button" value="default" data-create-widget>Add to dashboard</button><button value="cancel">Cancel</button></div></form></dialog>`;
   }
   card(widget, index, id) {
     const defaults = this.defaults(widget), saved = this.settings[id] || {};
@@ -293,17 +313,25 @@ class PHDashboard extends PHElement {
     const sizeOptions = [["compact", "Small"], ["medium", "Medium"], ["wide", "Wide"]].map(([value, label]) => `<option value="${value}" ${value === size ? "selected" : ""}>${label}</option>`).join("");
     let component;
     if (widget.type === "kpi") component = `<ph-kpi indicator="${widget.indicator}" visualization="${visualization}"></ph-kpi>`;
+    else if (widget.type === "field_kpi") component = `<ph-kpi dataset="${widget.dataset}" field="${widget.field}" operation="${widget.operation || "sum"}" visualization="${visualization}"></ph-kpi>`;
     else if (widget.type === "chart") component = `<ph-indicator-chart dimension="${widget.dimension}" visualization="${visualization}"></ph-indicator-chart>`;
+    else if (widget.type === "field_chart") component = `<ph-indicator-chart dataset="${widget.dataset}" field="${widget.field}" visualization="${visualization}"></ph-indicator-chart>`;
     else if (widget.type === "map") component = `<ph-map dimension="${widget.dimension}" visualization="${visualization}"></ph-map>`;
     else component = `<ph-epi-curve dataset="${widget.dataset}" date-field="${widget.date_field}" value-field="${widget.value_field || ""}" visualization="${visualization}"></ph-epi-curve>`;
-    return `<article class="ph-card ph-dashboard-card ph-size-${size}" data-widget-id="${id}" draggable="true"><header class="ph-widget-header"><div><p class="ph-widget-kind">${PHFrame.escape(widget.type === "epi_curve" ? "Trend" : widget.type)}</p><h3>${PHFrame.escape(widget.title)}</h3></div><button class="ph-drag-handle" type="button" aria-label="Drag ${PHFrame.escape(widget.title)}" title="Drag to reorder">⠿</button></header><div class="ph-widget-controls"><label>View<select data-visualization>${options}</select></label><label>Size<select data-size>${sizeOptions}</select></label><button type="button" data-move="up" aria-label="Move ${PHFrame.escape(widget.title)} earlier">←</button><button type="button" data-move="down" aria-label="Move ${PHFrame.escape(widget.title)} later">→</button></div>${component}</article>`;
+    const span = saved.span || { compact: 3, medium: 6, wide: 12 }[size], height = saved.height || 285;
+    return `<article class="ph-card ph-dashboard-card ph-size-${size}" style="--ph-widget-span:${span};--ph-widget-height:${height}px" data-widget-id="${id}" draggable="true"><header class="ph-widget-header"><div><p class="ph-widget-kind">${PHFrame.escape(widget.type === "epi_curve" ? "Trend" : widget.type)}</p><h3>${PHFrame.escape(widget.title)}</h3></div><div class="ph-card-actions"><button class="ph-drag-handle" type="button" aria-label="Drag ${PHFrame.escape(widget.title)}" title="Drag to reorder">⠿</button><button class="ph-remove-widget" type="button" aria-label="Remove ${PHFrame.escape(widget.title)}" title="Remove visualization">×</button></div></header><div class="ph-widget-controls"><label>View<select data-visualization>${options}</select></label><label>Size<select data-size>${sizeOptions}</select></label><button type="button" data-move="up" aria-label="Move ${PHFrame.escape(widget.title)} earlier">←</button><button type="button" data-move="down" aria-label="Move ${PHFrame.escape(widget.title)} later">→</button></div>${component}<button class="ph-resize-handle" type="button" aria-label="Resize ${PHFrame.escape(widget.title)}" title="Drag to resize"></button></article>`;
   }
   bind() {
     this.querySelector("[data-reset]").addEventListener("click", () => { localStorage.removeItem(this.storageKey); this.settings = {}; this.draw(); PHFrame.notify("Dashboard layout reset."); });
+    const dialog = this.querySelector(".ph-widget-dialog");
+    this.querySelector("[data-add-widget]").addEventListener("click", () => dialog.showModal());
+    this.querySelector("[data-widget-form]").addEventListener("submit", event => { if (event.submitter?.value === "cancel") return; event.preventDefault(); this.addWidget(event.currentTarget); dialog.close(); });
     this.querySelectorAll(".ph-dashboard-card").forEach(card => {
       card.querySelector("[data-visualization]").addEventListener("change", event => this.updateCard(card, "visualization", event.target.value));
       card.querySelector("[data-size]").addEventListener("change", event => this.updateCard(card, "size", event.target.value));
       card.querySelectorAll("[data-move]").forEach(button => button.addEventListener("click", () => this.move(card, button.dataset.move)));
+      card.querySelector(".ph-remove-widget").addEventListener("click", () => this.removeWidget(card.dataset.widgetId));
+      card.querySelector(".ph-resize-handle").addEventListener("pointerdown", event => this.startResize(event, card));
       card.addEventListener("dragstart", event => { card.classList.add("ph-dragging"); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", card.dataset.widgetId); });
       card.addEventListener("dragend", () => { card.classList.remove("ph-dragging"); this.querySelectorAll(".ph-drag-over").forEach(item => item.classList.remove("ph-drag-over")); });
       card.addEventListener("dragover", event => { event.preventDefault(); card.classList.add("ph-drag-over"); });
@@ -314,7 +342,7 @@ class PHDashboard extends PHElement {
   updateCard(card, property, value) {
     const id = card.dataset.widgetId;
     this.settings[id] = { ...(this.settings[id] || {}), [property]: value };
-    if (property === "size") { card.className = `ph-card ph-dashboard-card ph-size-${value}`; }
+    if (property === "size") { const span = { compact: 3, medium: 6, wide: 12 }[value]; this.settings[id].span = span; card.className = `ph-card ph-dashboard-card ph-size-${value}`; card.style.setProperty("--ph-widget-span", span); }
     else { const visualization = card.querySelector("[data-visualization]").value; const component = card.querySelector("ph-kpi, ph-indicator-chart, ph-map, ph-epi-curve"); component.setAttribute("visualization", visualization); component.render(); }
     this.saveSettings();
   }
@@ -323,6 +351,29 @@ class PHDashboard extends PHElement {
     if (!sibling) return;
     if (direction === "up") sibling.before(card); else sibling.after(card);
     this.saveSettings(); card.querySelector(".ph-drag-handle").focus(); PHFrame.notify("Dashboard layout saved.");
+  }
+  addWidget(form) {
+    const data = new FormData(form), parts = String(data.get("source")).split("|");
+    const widget = { _id: `custom-${Date.now()}`, type: parts[0], title: String(data.get("title")) };
+    if (widget.type === "kpi") widget.indicator = parts[1];
+    else if (widget.type === "field_kpi") { widget.dataset = parts[1]; widget.field = parts[2]; widget.operation = "sum"; }
+    else if (widget.type === "chart") widget.dimension = parts[1];
+    else if (widget.type === "field_chart") { widget.dataset = parts[1]; widget.field = parts[2]; }
+    else { widget.dataset = parts[1]; widget.date_field = parts[2]; widget.value_field = parts[3]; }
+    this.settings.customWidgets = [...(this.settings.customWidgets || []), widget];
+    localStorage.setItem(this.storageKey, JSON.stringify(this.settings)); this.draw(); PHFrame.notify("Visualization added.");
+  }
+  removeWidget(id) {
+    this.settings.hidden = [...new Set([...(this.settings.hidden || []), id])];
+    this.saveSettings(); this.draw(); PHFrame.notify("Visualization removed. Reset layout to restore it.");
+  }
+  startResize(event, card) {
+    event.preventDefault(); event.stopPropagation(); card.setAttribute("draggable", "false");
+    const startX = event.clientX, startY = event.clientY, startSpan = Number(getComputedStyle(card).getPropertyValue("--ph-widget-span")) || 6, startHeight = card.offsetHeight;
+    const gridWidth = this.querySelector(".ph-dashboard-grid").clientWidth, columnWidth = gridWidth / 12;
+    const move = pointer => { const span = Math.min(12, Math.max(3, Math.round(startSpan + (pointer.clientX - startX) / columnWidth))); const height = Math.min(720, Math.max(230, startHeight + pointer.clientY - startY)); card.style.setProperty("--ph-widget-span", span); card.style.setProperty("--ph-widget-height", `${height}px`); card.dataset.resizeSpan = span; card.dataset.resizeHeight = Math.round(height); };
+    const end = () => { removeEventListener("pointermove", move); removeEventListener("pointerup", end); card.setAttribute("draggable", "true"); const id = card.dataset.widgetId; this.settings[id] = { ...(this.settings[id] || {}), span: Number(card.dataset.resizeSpan || startSpan), height: Number(card.dataset.resizeHeight || startHeight) }; this.saveSettings(); PHFrame.notify("Widget size saved."); };
+    addEventListener("pointermove", move); addEventListener("pointerup", end, { once: true });
   }
 }
 
@@ -369,12 +420,14 @@ class PHImportWizard extends PHElement {
     const templates = await PHFrame.get("/api/import-mappings");
     this.templates = Object.fromEntries(templates.data.map(item => [item.name, item]));
     const templateOptions = templates.data.map(item => `<option value="${item.name}">${PHFrame.escape(item.name)}</option>`).join("");
-    this.innerHTML = `<section class="ph-card ph-stack"><div class="ph-import-step"><h3>1. Choose a file</h3><div class="ph-actions"><div class="ph-field"><label for="ph-import-dataset">Dataset</label><select id="ph-import-dataset">${datasets}</select></div><div class="ph-field"><label for="ph-import-template">Saved mapping</label><select id="ph-import-template"><option value="">Automatic mapping</option>${templateOptions}</select></div><div class="ph-field"><label for="ph-import-file">CSV or Excel file</label><input id="ph-import-file" type="file" accept=".csv,.xlsx,.xlsm"></div><button class="ph-button" type="button" data-preview>Preview</button></div></div><div data-workspace></div><p role="status" class="ph-status"></p></section>`;
+    this.innerHTML = `<section class="ph-card ph-stack"><div class="ph-import-guide"><div><p class="ph-eyebrow">Supported formats</p><h3>Bring your data in safely</h3><p class="ph-muted">Upload CSV, Excel, JSON, or XML. Preview and map every column before anything is saved.</p></div><div class="ph-example-links"><span>Download an example:</span><a data-example="csv">CSV</a><a data-example="json">JSON</a><a data-example="xml">XML</a></div></div><div class="ph-format-cards"><div><b>CSV / Excel</b><small>One record per row with headers</small></div><div><b>JSON</b><small>Array of objects or a records/data array</small></div><div><b>XML</b><small>&lt;records&gt; containing &lt;record&gt; elements</small></div></div><div class="ph-import-step"><h3>1. Choose a file</h3><div class="ph-actions"><div class="ph-field"><label for="ph-import-dataset">Dataset</label><select id="ph-import-dataset">${datasets}</select></div><div class="ph-field"><label for="ph-import-template">Saved mapping</label><select id="ph-import-template"><option value="">Automatic mapping</option>${templateOptions}</select></div><div class="ph-field ph-file-field"><label for="ph-import-file">Data file</label><input id="ph-import-file" type="file" accept=".csv,.xlsx,.xlsm,.json,.xml"></div><button class="ph-button" type="button" data-preview>Preview</button></div></div><div data-workspace></div><p role="status" class="ph-status"></p></section>`;
     this.querySelector("[data-preview]").addEventListener("click", () => this.preview());
+    this.querySelectorAll("[data-example]").forEach(link => { link.href = `/api/import-example/${this.querySelector("#ph-import-dataset").value}?format=${link.dataset.example}`; link.setAttribute("download", ""); });
+    this.querySelector("#ph-import-dataset").addEventListener("change", event => this.querySelectorAll("[data-example]").forEach(link => { link.href = `/api/import-example/${event.target.value}?format=${link.dataset.example}`; }));
   }
   async upload(path) {
     const file = this.querySelector("input[type=file]").files[0];
-    if (!file) throw new Error("Choose a CSV or Excel file.");
+    if (!file) throw new Error("Choose a CSV, Excel, JSON, or XML file.");
     const separator = path.includes("?") ? "&" : "?";
     const response = await fetch(`${path}${separator}filename=${encodeURIComponent(file.name)}`, {
       method: "POST", headers: { "content-type": "application/octet-stream", accept: "application/json" }, body: file
@@ -433,16 +486,63 @@ class PHImportWizard extends PHElement {
   }
 }
 
+class PHDataBuilder extends PHElement {
+  set metadata(value) { this._metadata = value; if (this.isConnected) this.render(); }
+  render() {
+    if (!this._metadata) return;
+    const datasets = Object.entries(this._metadata.datasets).map(([name, item]) => `<option value="${name}">${PHFrame.escape(item.label)}</option>`).join("");
+    const types = (this._metadata.field_types || ["string", "integer", "number", "boolean", "date", "datetime", "location"]).map(type => `<option value="${type}">${PHFrame.escape(type.replaceAll("_", " "))}</option>`).join("");
+    this.innerHTML = `<div class="ph-builder-layout"><section class="ph-card"><p class="ph-eyebrow">Schema</p><h3>Custom columns</h3><p class="ph-muted">Add typed fields for any country, programme, or workflow. PHFrame uses the type for validation, forms, storage, imports, and visualization choices.</p><div class="ph-field"><label for="ph-builder-dataset">Dataset</label><select id="ph-builder-dataset">${datasets}</select></div><div data-fields></div></section><section class="ph-card"><p class="ph-eyebrow">Add column</p><h3>Define a field</h3><form class="ph-stack"><div class="ph-field"><label for="ph-field-name">Column name</label><input id="ph-field-name" name="name" required pattern="[a-z][a-z0-9_]*" placeholder="country_code"><small>Lowercase letters, numbers, and underscores</small></div><div class="ph-field"><label for="ph-field-label">Display label</label><input id="ph-field-label" name="label" placeholder="Country code"></div><div class="ph-field"><label for="ph-field-type">Data type</label><select id="ph-field-type" name="type">${types}</select></div><button class="ph-button" type="submit">Add column</button><p role="status" class="ph-status"></p></form></section></div>`;
+    this.querySelector("#ph-builder-dataset").addEventListener("change", () => this.drawFields());
+    this.querySelector("form").addEventListener("submit", event => this.addField(event));
+    this.drawFields();
+  }
+  drawFields() {
+    const dataset = this.querySelector("#ph-builder-dataset").value;
+    const fields = this._metadata.datasets[dataset].fields;
+    this.querySelector("[data-fields]").innerHTML = `<div class="ph-field-list">${Object.entries(fields).map(([name, schema]) => `<div><span class="ph-type-badge">${PHFrame.escape(schema.type)}</span><b>${PHFrame.escape(schema.label || name.replaceAll("_", " "))}</b><code>${PHFrame.escape(name)}</code></div>`).join("")}</div>`;
+  }
+  async addField(event) {
+    event.preventDefault();
+    const form = event.currentTarget, status = form.querySelector("[role=status]");
+    const dataset = this.querySelector("#ph-builder-dataset").value;
+    try {
+      const payload = Object.fromEntries(new FormData(form));
+      const response = await PHFrame.send(`/api/project/datasets/${dataset}/fields`, "POST", payload);
+      this._metadata.datasets[dataset].fields[response.data.name] = response.data;
+      status.textContent = `Column ${response.data.name} added and database updated.`;
+      form.reset(); this.drawFields(); PHFrame.notify("Custom column added.");
+    } catch (error) { status.textContent = error.message; status.className = "ph-status ph-error"; }
+  }
+}
+
 class PHConnectorConsole extends PHElement {
   async render() {
     try {
       const [connectors, history] = await Promise.all([PHFrame.get("/api/connectors"), PHFrame.get("/api/syncs")]);
-      const cards = connectors.data.map(item => `<article class="ph-card"><h3>${PHFrame.escape(item.name)}</h3><p>${item.type.toUpperCase()} → ${PHFrame.escape(item.dataset)}</p><p class="ph-muted">${item.schedule_minutes ? `Every ${item.schedule_minutes} minutes · ${item.due ? "Due" : "Not due"}` : "Manual schedule"}</p><div class="ph-actions"><button class="ph-button" data-sync="${item.name}" data-dry="true">Validate pull</button><ph-confirm label="Synchronize" message="Pull and atomically import records from ${PHFrame.escape(item.name)}?" data-connector="${item.name}"></ph-confirm></div></article>`).join("") || `<p class="ph-muted">No connectors configured.</p>`;
+      const metadata = await PHFrame.get("/api");
+      const cards = connectors.data.map(item => `<article class="ph-card"><div class="ph-widget-header"><div><p class="ph-eyebrow">${item.type.toUpperCase()}</p><h3>${PHFrame.escape(item.name)}</h3></div><button class="ph-icon-danger" data-delete="${item.name}" aria-label="Remove ${PHFrame.escape(item.name)}">×</button></div><p>Feeds <b>${PHFrame.escape(item.dataset)}</b></p><p class="ph-muted">${item.schedule_minutes ? `Every ${item.schedule_minutes} minutes · ${item.due ? "Due" : "Not due"}` : "Manual schedule"}</p><div class="ph-actions"><button class="ph-button ph-button-secondary" data-sync="${item.name}" data-dry="true">Test connection</button><ph-confirm label="Sync now" message="Pull and atomically import records from ${PHFrame.escape(item.name)}?" data-connector="${item.name}"></ph-confirm></div></article>`).join("") || `<div class="ph-empty-state"><span>⌁</span><p>No connectors yet. Create one below.</p></div>`;
       const rows = history.data.map(item => `<tr><td>${PHFrame.escape(item.created_at)}</td><td>${PHFrame.escape(item.connector)}</td><td>${item.status}</td><td>${item.imported_rows}/${item.fetched_rows}</td><td>${item.errors.map(error => PHFrame.escape(error.message)).join("; ")}</td></tr>`).join("") || `<tr><td colspan="5">No synchronization runs.</td></tr>`;
-      this.innerHTML = `<div class="ph-grid">${cards}</div><section class="ph-card"><h3>Synchronization history</h3><div class="ph-table-wrap"><table class="ph-table"><thead><tr><th>Time</th><th>Connector</th><th>Status</th><th>Rows</th><th>Errors</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
+      const datasets = Object.entries(metadata.datasets).map(([name, item]) => `<option value="${name}">${PHFrame.escape(item.label)}</option>`).join("");
+      this.innerHTML = `<div class="ph-connector-layout"><section><div class="ph-grid">${cards}</div></section><section class="ph-card"><p class="ph-eyebrow">New data source</p><h3>Connect a REST API</h3><p class="ph-muted">Works with any JSON API plus optimized DHIS2, KoboToolbox, and ODK adapters. Map source paths to your typed dataset columns.</p><form class="ph-stack" data-connector-form><div class="ph-form-grid"><div class="ph-field"><label>Name</label><input name="name" required pattern="[a-z][a-z0-9_]*" placeholder="global_cases_api"></div><div class="ph-field"><label>Connector type</label><select name="type"><option value="api">Generic JSON API</option><option value="dhis2">DHIS2</option><option value="kobo">KoboToolbox</option><option value="odk">ODK Central</option></select></div><div class="ph-field"><label>Dataset</label><select name="dataset">${datasets}</select></div><div class="ph-field"><label>Base URL</label><input name="base_url" type="url" required placeholder="https://api.example.org"></div><div class="ph-field"><label>Resource path</label><input name="resource" required placeholder="v1/events"></div><div class="ph-field"><label>Records path</label><input name="records_path" placeholder="data.records"></div><div class="ph-field"><label>Token environment variable</label><input name="token_env" placeholder="HEALTH_API_TOKEN"></div><div class="ph-field"><label>Schedule (minutes)</label><input name="schedule_minutes" type="number" min="1" placeholder="60"></div></div><div class="ph-field"><label>Field mapping (JSON)</label><textarea name="mapping" rows="5" required placeholder='{"source.id":"record_id","source.country":"country"}'></textarea><small>Left: source JSON path. Right: destination dataset column.</small></div><button class="ph-button" type="submit">Create connector</button><p class="ph-status" role="status"></p></form></section></div><section class="ph-card"><h3>Synchronization history</h3><div class="ph-table-wrap"><table class="ph-table"><thead><tr><th>Time</th><th>Connector</th><th>Status</th><th>Rows</th><th>Errors</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
       this.querySelectorAll("[data-sync]").forEach(button => button.addEventListener("click", () => this.sync(button.dataset.sync, true)));
       this.querySelectorAll("ph-confirm[data-connector]").forEach(confirm => confirm.addEventListener("ph-confirmed", () => this.sync(confirm.dataset.connector, false)));
+      this.querySelectorAll("[data-delete]").forEach(button => button.addEventListener("click", () => this.remove(button.dataset.delete)));
+      this.querySelector("[data-connector-form]").addEventListener("submit", event => this.create(event));
     } catch (error) { this.innerHTML = `<p class="ph-error" role="alert">${PHFrame.escape(error.message)}</p>`; }
+  }
+  async create(event) {
+    event.preventDefault(); const form = event.currentTarget, status = form.querySelector("[role=status]");
+    try {
+      const raw = Object.fromEntries(new FormData(form));
+      const payload = { ...raw, mapping: JSON.parse(raw.mapping), auth: raw.token_env ? { token_env: raw.token_env } : {} };
+      delete payload.token_env; if (!payload.records_path) delete payload.records_path; if (!payload.schedule_minutes) delete payload.schedule_minutes;
+      await PHFrame.send("/api/connectors", "POST", payload); PHFrame.notify("Connector created."); this.render();
+    } catch (error) { status.textContent = error.message; status.className = "ph-status ph-error"; }
+  }
+  async remove(name) {
+    if (!confirm(`Remove connector ${name}? Imported records will remain.`)) return;
+    try { await PHFrame.send(`/api/connectors/${name}`, "DELETE"); PHFrame.notify("Connector removed."); this.render(); } catch (error) { PHFrame.notify(error.message); }
   }
   async sync(name, dryRun) {
     try {
@@ -468,5 +568,6 @@ customElements.define("ph-notification-center", PHNotificationCenter);
 customElements.define("ph-modal", PHModal);
 customElements.define("ph-confirm", PHConfirm);
 customElements.define("ph-import-wizard", PHImportWizard);
+customElements.define("ph-data-builder", PHDataBuilder);
 customElements.define("ph-connector-console", PHConnectorConsole);
 window.PHFrame = PHFrame;

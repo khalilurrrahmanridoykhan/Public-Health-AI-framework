@@ -12,14 +12,14 @@ def test_organisation_unit_hierarchy_api(tmp_path: Path):
     root = create_project("Hierarchy Test", tmp_path / "hierarchy-test")
     client = TestClient(PHFrame.from_file(str(root / "phframe.yaml")))
     listing = client.get("/api/organisation-units").json()
-    assert listing["count"] == 4
-    assert listing["roots"] == ["bangladesh"]
+    assert listing["count"] == 3
+    assert listing["roots"] == ["global"]
 
-    district = client.get("/api/organisation-units/bandarban").json()["data"]
-    assert district["parent"] == "chattogram_division"
-    assert [item["code"] for item in district["ancestors"]] == ["bangladesh", "chattogram_division"]
-    division = client.get("/api/organisation-units/chattogram_division").json()["data"]
-    assert division["children"] == ["bandarban", "rangamati"]
+    site = client.get("/api/organisation-units/example_site").json()["data"]
+    assert site["parent"] == "example_region"
+    assert [item["code"] for item in site["ancestors"]] == ["global", "example_region"]
+    region = client.get("/api/organisation-units/example_region").json()["data"]
+    assert region["children"] == ["example_site"]
     assert client.get("/api/organisation-units/missing").status_code == 404
 
 
@@ -29,7 +29,7 @@ def test_organisation_unit_referential_validation(tmp_path: Path):
     payload = {
         "case_id": "MAL-300", "disease": "Malaria", "status": "confirmed",
         "report_date": "2026-08-15", "district": "Bandarban", "cases": 1,
-        "reporting_unit": "bandarban",
+        "reporting_unit": "example_site",
     }
     assert client.post("/api/case_reports", json=payload).status_code == 201
     invalid = client.post(
@@ -43,8 +43,8 @@ def test_hierarchy_rejects_cycles(tmp_path: Path):
     root = create_project("Hierarchy Config", tmp_path / "hierarchy-config")
     path = root / "phframe.yaml"
     text = path.read_text(encoding="utf-8").replace(
-        "  bangladesh:\n    name: Bangladesh\n    level: country\n",
-        "  bangladesh:\n    name: Bangladesh\n    level: country\n    parent: bandarban\n",
+        "  global:\n    name: Global\n    level: global\n",
+        "  global:\n    name: Global\n    level: global\n    parent: example_site\n",
     )
     path.write_text(text, encoding="utf-8")
     with pytest.raises(ValueError, match="contains a cycle"):

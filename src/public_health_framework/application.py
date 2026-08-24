@@ -8,6 +8,8 @@ from pathlib import Path
 import re
 from typing import Any
 
+import yaml
+
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, Response
@@ -15,7 +17,7 @@ from starlette.routing import Route
 from starlette.concurrency import run_in_threadpool
 
 from . import __version__
-from .config import DatasetSchema, ProjectConfig
+from .config import ConnectorSchema, DatasetSchema, FIELD_TYPES, FieldSchema, ProjectConfig
 from .plugins import load_plugins
 from .periods import resolve_period
 from .importer import import_frame, load_uploaded_frame, preview_frame
@@ -44,6 +46,8 @@ class PHFrame:
             Route("/api/import-mappings/{name}", self.import_mapping_save, methods=["PUT"]),
             Route("/api/browser-import/{dataset}/preview", self.browser_import_preview, methods=["POST"]),
             Route("/api/browser-import/{dataset}", self.browser_import, methods=["POST"]),
+            Route("/api/import-example/{dataset}", self.import_example, methods=["GET"]),
+            Route("/api/project/datasets/{dataset}/fields", self.dataset_field_create, methods=["POST"]),
             Route("/api/indicators", self.indicator_index, methods=["GET"]),
             Route("/api/indicators/{indicator}", self.indicator_result, methods=["GET"]),
             Route("/api/data-quality", self.data_quality_index, methods=["GET"]),
@@ -57,8 +61,10 @@ class PHFrame:
             Route("/api/organisation-units/{code}", self.organisation_unit_detail, methods=["GET"]),
             Route("/api/dashboards/{dashboard}", self.dashboard, methods=["GET"]),
             Route("/api/epi-curve/{dataset}", self.epi_curve, methods=["GET"]),
-            Route("/api/connectors", self.connector_index, methods=["GET"]),
+            Route("/api/visualize/{dataset}", self.visualize_field, methods=["GET"]),
+            Route("/api/connectors", self.connector_index, methods=["GET", "POST"]),
             Route("/api/connectors/{connector}/sync", self.connector_sync, methods=["POST"]),
+            Route("/api/connectors/{connector}", self.connector_delete, methods=["DELETE"]),
             Route("/api/syncs", self.sync_history, methods=["GET"]),
             Route("/api/{dataset}", self.collection, methods=["GET", "POST"]),
             Route("/api/{dataset}/{record_id:int}", self.detail, methods=["GET", "PUT", "PATCH", "DELETE"]),
@@ -109,6 +115,7 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
         return JSONResponse(
             {
                 "project": self.config.name,
+                "field_types": sorted(FIELD_TYPES),
                 "datasets": {
                     dataset.name: {
                         "label": dataset.label,
@@ -356,15 +363,62 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
         except ValueError as error:
             return _error(str(error), 422)
 
+    async def visualize_field(self, request: Request) -> Response:
+        dataset = self._dataset(request)
+        if dataset is None:
+            return _error("Dataset not found.", 404)
+        field = request.query_params.get("field", "")
+        if field not in dataset.fields:
+            return _error("Visualization field not found.", 422)
+        records = self.storage.list(dataset, limit=1000)
+        operation = request.query_params.get("operation")
+        if operation:
+            if operation not in {"sum", "average", "count"}:
+                return _error("operation must be sum, average, or count.", 422)
+            if operation in {"sum", "average"} and dataset.fields[field].type not in {"integer", "number", "age"}:
+                return _error("sum and average require a numeric field.", 422)
+            numbers = [float(record[field]) for record in records if record.get(field) is not None]
+            value = len(numbers) if operation == "count" else (sum(numbers) if operation == "sum" else (sum(numbers) / len(numbers) if numbers else None))
+            return JSONResponse({"data": {"label": dataset.fields[field].label or field.replace("_", " ").title(), "value": value, "operation": operation}})
+        counts: dict[str, int] = {}
+        for record in records:
+            value = str(record.get(field) if record.get(field) not in {None, ""} else "Unknown")
+            counts[value] = counts.get(value, 0) + 1
+        values = [{"value": value, "count": count} for value, count in sorted(counts.items(), key=lambda item: (-item[1], item[0]))]
+        return JSONResponse({"data": {"label": dataset.fields[field].label or field.replace("_", " ").title(), "values": values, "total": len(records)}})
+
     async def connector_index(self, request: Request) -> JSONResponse:
+        if request.method == "POST":
+            try:
+                payload = await request.json()
+                name = str(payload.pop("name", ""))
+                connector = ConnectorSchema.from_dict(name, payload, self.config.datasets)
+                if name in self.config.connectors:
+                    raise ValueError(f"Connector already exists: {name}")
+                self.config.connectors[name] = connector
+                self._update_config("connectors", name, payload)
+                return JSONResponse({"data": self._connector_data(connector)}, status_code=201)
+            except (TypeError, ValueError) as error:
+                return _error(str(error), 422)
         return JSONResponse({"data": [
-            {
-                "name": item.name, "type": item.type, "dataset": item.dataset,
-                "schedule_minutes": item.schedule_minutes, "due": connector_due(self.config, item.name),
-                "sync_endpoint": f"/api/connectors/{item.name}/sync",
-            }
+            self._connector_data(item)
             for item in self.config.connectors.values()
         ]})
+
+    def _connector_data(self, item: Any) -> dict[str, Any]:
+        return {
+            "name": item.name, "type": item.type, "dataset": item.dataset,
+            "schedule_minutes": item.schedule_minutes, "due": connector_due(self.config, item.name),
+            "sync_endpoint": f"/api/connectors/{item.name}/sync",
+        }
+
+    async def connector_delete(self, request: Request) -> Response:
+        name = request.path_params["connector"]
+        if name not in self.config.connectors:
+            return _error("Connector not found.", 404)
+        del self.config.connectors[name]
+        self._update_config("connectors", name, None)
+        return Response(status_code=204)
 
     async def connector_sync(self, request: Request) -> Response:
         name = request.path_params["connector"]
@@ -462,6 +516,85 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
         sheet_value = request.query_params.get("sheet", "0")
         sheet = int(sheet_value) if sheet_value.isdigit() else sheet_value
         return load_uploaded_frame(content, filename, sheet), Path(filename).name
+
+    async def import_example(self, request: Request) -> Response:
+        dataset = self._dataset(request)
+        if dataset is None:
+            return _error("Dataset not found.", 404)
+        file_format = request.query_params.get("format", "csv").lower()
+        example = {name: self._example_value(name, schema.type) for name, schema in dataset.fields.items()}
+        if file_format == "json":
+            content, media = json.dumps([example], indent=2), "application/json"
+        elif file_format == "xml":
+            fields = "".join(f"    <{name}>{escape(str(value))}</{name}>\n" for name, value in example.items())
+            content, media = f"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<records>\n  <record>\n{fields}  </record>\n</records>\n", "application/xml"
+        elif file_format == "csv":
+            import csv
+            from io import StringIO
+            output = StringIO()
+            writer = csv.DictWriter(output, fieldnames=example)
+            writer.writeheader(); writer.writerow(example)
+            content, media = output.getvalue(), "text/csv"
+        else:
+            return _error("format must be csv, json, or xml.", 422)
+        return Response(content, media_type=media, headers={"content-disposition": f'attachment; filename="{dataset.name}-example.{file_format}"'})
+
+    @staticmethod
+    def _example_value(name: str, field_type: str) -> Any:
+        if field_type in {"integer", "age"}: return 1
+        if field_type == "number": return 1.5
+        if field_type == "boolean": return True
+        if field_type == "date": return "2026-08-24"
+        if field_type == "datetime": return "2026-08-24T10:00:00Z"
+        if field_type == "sex": return "unknown"
+        if field_type == "case_classification": return "suspected"
+        if field_type == "epi_week": return "2026-W35"
+        if field_type == "reporting_period": return "2026-08"
+        return f"example_{name}"
+
+    async def dataset_field_create(self, request: Request) -> Response:
+        dataset = self._dataset(request)
+        if dataset is None:
+            return _error("Dataset not found.", 404)
+        try:
+            payload = await request.json()
+            name = str(payload.get("name", ""))
+            if not re.fullmatch(r"[a-z][a-z0-9_]*", name):
+                raise ValueError("Field name must use lowercase letters, numbers, and underscores.")
+            if name in dataset.fields:
+                raise ValueError(f"Field already exists: {name}")
+            if payload.get("required"):
+                raise ValueError("New browser-created fields must be optional so existing records remain valid.")
+            definition = {"type": payload.get("type", "string"), "label": payload.get("label") or name.replace("_", " ").title()}
+            schema = FieldSchema.from_value(definition)
+            dataset.fields[name] = schema
+            try:
+                storage = Storage(self.config)
+                storage.initialize()
+            except Exception:
+                del dataset.fields[name]
+                raise
+            self.storage = storage
+            self._update_config("datasets", dataset.name, {"fields": {name: definition}}, merge=True)
+            return JSONResponse({"data": {"name": name, **definition, "required": False}}, status_code=201)
+        except ValueError as error:
+            return _error(str(error), 422)
+
+    def _update_config(self, section: str, name: str, value: Any, merge: bool = False) -> None:
+        path = self.config.root / "phframe.yaml"
+        raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        target = raw.setdefault(section, {})
+        if value is None:
+            target.pop(name, None)
+        elif merge and name in target:
+            for key, nested in value.items():
+                if isinstance(nested, dict): target[name].setdefault(key, {}).update(nested)
+                else: target[name][key] = nested
+        else:
+            target[name] = value
+        temporary = path.with_suffix(".yaml.tmp")
+        temporary.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
+        temporary.replace(path)
 
     def _dataset(self, request: Request) -> DatasetSchema | None:
         return self.config.datasets.get(request.path_params["dataset"])

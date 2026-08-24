@@ -19,6 +19,31 @@ def _csv() -> bytes:
     return b"Case Number,Disease,Status,Reported,District,Cases\nM-1,Malaria,confirmed,2026-08-20,Bandarban,2\n"
 
 
+def test_browser_import_supports_json_xml_and_examples(tmp_path: Path):
+    root = create_project("Structured Import", tmp_path / "structured-import")
+    client = TestClient(PHFrame.from_file(str(root / "phframe.yaml")))
+    record = {
+        "case_id": "GLOBAL-1", "disease": "Influenza", "status": "confirmed",
+        "report_date": "2026-08-24", "district": "Northern Region",
+        "country": "Exampleland", "cases": 3,
+    }
+    preview = client.post(
+        "/api/browser-import/case_reports/preview?filename=records.json",
+        content=json.dumps([record]), headers={"content-type": "application/octet-stream"},
+    )
+    assert preview.status_code == 200
+    assert preview.json()["data"]["sample"][0]["country"] == "Exampleland"
+    xml = """<records><record><case_id>GLOBAL-2</case_id><disease>Influenza</disease><status>suspected</status><report_date>2026-08-24</report_date><district>Western Region</district><country>Exampleland</country><cases>2</cases></record></records>"""
+    assert client.post(
+        "/api/browser-import/case_reports/preview?filename=records.xml",
+        content=xml, headers={"content-type": "application/octet-stream"},
+    ).status_code == 200
+    for file_format, media in [("csv", "text/csv"), ("json", "application/json"), ("xml", "application/xml")]:
+        response = client.get(f"/api/import-example/case_reports?format={file_format}")
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith(media)
+
+
 def test_browser_csv_preview_validate_and_import(tmp_path: Path):
     root = create_project("Browser Import", tmp_path / "browser-import")
     client = TestClient(PHFrame.from_file(str(root / "phframe.yaml")))

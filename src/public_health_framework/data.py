@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
+from xml.etree import ElementTree
 
 import pandas as pd
 
 
-SUPPORTED_EXTENSIONS = {".csv", ".xlsx", ".xlsm"}
+SUPPORTED_EXTENSIONS = {".csv", ".xlsx", ".xlsm", ".json", ".xml"}
 
 
 @dataclass(frozen=True)
@@ -28,10 +30,28 @@ def load_dataset(path: str | Path, sheet: str | int | None = 0) -> pd.DataFrame:
         supported = ", ".join(sorted(SUPPORTED_EXTENSIONS))
         raise ValueError(f"Unsupported file type '{source.suffix}'. Use: {supported}")
 
-    if source.suffix.lower() == ".csv":
+    suffix = source.suffix.lower()
+    if suffix == ".csv":
         frame = pd.read_csv(source)
-    else:
+    elif suffix in {".xlsx", ".xlsm"}:
         frame = pd.read_excel(source, sheet_name=sheet)
+    elif suffix == ".json":
+        payload = json.loads(source.read_text(encoding="utf-8-sig"))
+        if isinstance(payload, dict):
+            payload = next(
+                (payload[key] for key in ("data", "records", "results", "items") if isinstance(payload.get(key), list)),
+                [payload],
+            )
+        if not isinstance(payload, list) or not all(isinstance(item, dict) for item in payload):
+            raise ValueError("JSON imports require an array of objects or a data/records/results/items array.")
+        frame = pd.json_normalize(payload, sep=".")
+    else:
+        try:
+            root = ElementTree.parse(source).getroot()
+        except ElementTree.ParseError as error:
+            raise ValueError(f"Invalid XML file: {error}") from error
+        rows = list(root)
+        frame = pd.DataFrame([_xml_record(row) for row in rows])
 
     frame.columns = [str(column).strip() for column in frame.columns]
     if frame.empty:
@@ -39,6 +59,17 @@ def load_dataset(path: str | Path, sheet: str | int | None = 0) -> pd.DataFrame:
     if not len(set(frame.columns)) == len(frame.columns):
         raise ValueError("Column names must be unique after surrounding spaces are removed.")
     return frame
+
+
+def _xml_record(element: ElementTree.Element, prefix: str = "") -> dict[str, object]:
+    record: dict[str, object] = {}
+    for child in element:
+        name = f"{prefix}.{child.tag}" if prefix else child.tag
+        if list(child):
+            record.update(_xml_record(child, name))
+        else:
+            record[name] = (child.text or "").strip() or None
+    return record
 
 
 def validate_config(frame: pd.DataFrame, config: DashboardConfig) -> None:
@@ -62,4 +93,3 @@ def prepare_dataset(frame: pd.DataFrame, config: DashboardConfig) -> pd.DataFram
         if column:
             prepared[column] = pd.to_numeric(prepared[column], errors="coerce")
     return prepared
-

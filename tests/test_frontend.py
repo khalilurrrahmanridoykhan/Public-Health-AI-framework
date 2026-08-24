@@ -46,6 +46,13 @@ def test_frontend_shell_and_assets(tmp_path: Path):
     assert ':root[data-theme="high-contrast"]' in css.text
     assert 'customElements.define("ph-import-wizard"' in javascript.text
     assert 'customElements.define("ph-connector-console"' in javascript.text
+    assert 'customElements.define("ph-data-builder"' in javascript.text
+    assert "data-add-widget" in javascript.text
+    assert "ph-resize-handle" in javascript.text
+    assert "removeWidget" in javascript.text
+    assert ".json,.xml" in javascript.text
+    assert "Generic JSON API" in javascript.text
+    assert ".ph-builder-layout" in css.text
 
 
 def test_frontend_metadata_includes_ui_configuration(tmp_path: Path):

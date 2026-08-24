@@ -41,7 +41,11 @@ datasets:
         required: true
       district:
         type: location
+        label: Administrative area
         required: true
+      country:
+        type: location
+        label: Country or territory
       cases:
         type: integer
         required: true
@@ -92,8 +96,12 @@ filters:
       status: confirmed
 
 dimensions:
+  cases_by_country:
+    label: Cases by country or territory
+    dataset: case_reports
+    field: country
   cases_by_district:
-    label: Cases by district
+    label: Cases by administrative area
     dataset: case_reports
     field: district
   confirmed_cases_by_district:
@@ -112,25 +120,21 @@ thresholds:
     message: Weekly case count has reached the surveillance alert level.
 
 organisation_units:
-  bangladesh:
-    name: Bangladesh
-    level: country
-  chattogram_division:
-    name: Chattogram Division
-    level: division
-    parent: bangladesh
-  bandarban:
-    name: Bandarban
-    level: district
-    parent: chattogram_division
-  rangamati:
-    name: Rangamati
-    level: district
-    parent: chattogram_division
+  global:
+    name: Global
+    level: global
+  example_region:
+    name: Example Region
+    level: region
+    parent: global
+  example_site:
+    name: Example Reporting Site
+    level: site
+    parent: example_region
 
 dashboards:
   main:
-    label: Malaria Surveillance Dashboard
+    label: Global Public Health Dashboard
     widgets:
       - type: kpi
         title: Total cases
@@ -139,11 +143,11 @@ dashboards:
         title: Incidence per 100,000
         indicator: incidence_per_100000
       - type: chart
-        title: Cases by district
-        dimension: cases_by_district
+        title: Cases by country or territory
+        dimension: cases_by_country
       - type: map
         title: Geographic distribution
-        dimension: cases_by_district
+        dimension: cases_by_country
       - type: epi_curve
         title: Cases over time
         dataset: case_reports
