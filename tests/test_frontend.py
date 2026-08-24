@@ -60,6 +60,13 @@ def test_frontend_shell_and_assets(tmp_path: Path):
     for component in ["ph-rich-editor", "ph-page-table", "ph-custom-page", "ph-page-builder"]:
         assert f'customElements.define("{component}"' in javascript.text
     assert "data-add-block" in javascript.text
+    assert "data-page-tab" in javascript.text
+    assert 'data-page-panel="create"' in javascript.text
+    assert 'data-page-panel="all"' in javascript.text
+    assert 'data-page-panel="customize"' in javascript.text
+    assert "toggleUrl" in javascript.text
+    assert ".ph-pages-sidebar" in css.text
+    assert ".ph-field[hidden]" in css.text
     assert "footer_html" in javascript.text
     assert "applyColor" in javascript.text
     assert ".ph-page-canvas" in css.text

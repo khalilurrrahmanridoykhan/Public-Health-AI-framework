@@ -1,6 +1,6 @@
 """Public Health Framework."""
 
-__version__ = "0.8.0a12"
+__version__ = "0.8.0a13"
 
 from .application import PHFrame
 from .config import DatasetSchema, FieldSchema, ProjectConfig

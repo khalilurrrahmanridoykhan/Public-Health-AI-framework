@@ -4,6 +4,19 @@ All notable changes to PHFrame will be documented here. The project intends to f
 
 ## [Unreleased]
 
+## [0.8.0a13] - 2026-08-24
+
+### Changed
+
+- Replace the split Pages screen with a responsive sidebar workspace for Create page, All pages, and Customize page.
+- Open newly created internal pages and existing page-design actions directly in the customization panel.
+- Add title and navigation-label editing to the page designer and preserve the active designer after saving.
+- Improve page cards, empty states, automatic slug/label suggestions, form layout, and mobile navigation.
+
+### Fixed
+
+- Hide and disable the External URL field for drag-and-drop pages; reveal and require it only for external redirects.
+
 ## [0.8.0a12] - 2026-08-24
 
 ### Changed
@@ -255,7 +268,8 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Import audit history.
 - Portable HTML dashboard export.
 
-[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a12...HEAD
+[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a13...HEAD
+[0.8.0a13]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a12...v0.8.0a13
 [0.8.0a12]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a11...v0.8.0a12
 [0.8.0a11]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a10...v0.8.0a11
 [0.8.0a10]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a9...v0.8.0a10
