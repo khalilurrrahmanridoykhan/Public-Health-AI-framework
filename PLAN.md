@@ -550,6 +550,8 @@ Deliverables:
 - Human approval interface
 - Complete audit trail
 
+**Status: Completed in the 0.8.0 alpha series.** The delivered workspace uses aggregate evidence, de-identification, provider controls, cited answers, human-reviewed report drafts, and AI audit history.
+
 ### Phase 6: Production Readiness
 
 Deliverables:
@@ -565,6 +567,8 @@ Deliverables:
 - Internationalization
 - Accessibility testing
 - Reference production applications
+
+**Status: Completed as a production-readiness preview in 0.9.0a1.** The preview adds hardened HTTP defaults, request IDs, write-token support, rate and upload limits, operational audit logs, readiness checks, consistent SQLite backup/restore, production diagnostics, scheduled workers with retries, database pagination totals, response compression and caching, Docker/PostgreSQL deployment templates, plugin scaffolding and entry-point discovery, accessibility/internationalization guidance, and production upgrade documentation. Independent security, accessibility, recovery, and load validation remain release gates before the stable 1.0 designation.
 
 ## First Vertical Slice: Malaria Surveillance
 

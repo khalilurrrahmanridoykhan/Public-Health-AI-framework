@@ -4,6 +4,19 @@ All notable changes to PHFrame will be documented here. The project intends to f
 
 ## [Unreleased]
 
+## [0.9.0a1] - 2026-08-25
+
+### Added
+
+- Add production request IDs, security headers, API write tokens, rate limiting, upload limits, and append-only operational audit logs.
+- Add `/ready`, `phframe doctor`, SQLite backup/restore, scheduled workers with retries, and database collection totals.
+- Add gzip responses, static-asset caching, Docker/PostgreSQL web and worker templates, and production operations documentation.
+- Add `phframe plugin new`, installed plugin discovery, and accessibility/internationalization guidance.
+
+### Security
+
+- Harden browser responses with CSP, frame denial, content-type protection, referrer restrictions, and browser capability restrictions.
+
 ## [0.8.0a16] - 2026-08-25
 
 ### Added
@@ -298,7 +311,8 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Import audit history.
 - Portable HTML dashboard export.
 
-[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a16...HEAD
+[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.9.0a1...HEAD
+[0.9.0a1]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a16...v0.9.0a1
 [0.8.0a16]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a15...v0.8.0a16
 [0.8.0a15]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a14...v0.8.0a15
 [0.8.0a14]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a13...v0.8.0a14
