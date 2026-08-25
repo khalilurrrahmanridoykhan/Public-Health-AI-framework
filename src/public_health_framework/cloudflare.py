@@ -22,7 +22,7 @@ class CloudflareOAuth:
     token_url = "https://dash.cloudflare.com/oauth2/token"
     revoke_url = "https://dash.cloudflare.com/oauth2/revoke"
     api_url = "https://api.cloudflare.com/client/v4"
-    default_broker_url = "https://phframe-auth.82.25.92.211.nip.io"
+    default_broker_url = "https://phframe-auth.krrkhan.com"
 
     def __init__(self, root: Path):
         self.directory = Path(root) / "data"
