@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "public-health-framework"
-version = "0.9.0a1"
+version = "0.9.0a2"
 description = "Build extensible public-health data systems, APIs, and dashboards."
 readme = "README.md"
 requires-python = ">=3.10"

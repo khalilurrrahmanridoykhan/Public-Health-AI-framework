@@ -4,6 +4,19 @@ All notable changes to PHFrame will be documented here. The project intends to f
 
 ## [Unreleased]
 
+## [0.9.0a2] - 2026-08-25
+
+### Security
+
+- Upgrade to a patched Starlette 1.3.1+ release line after dependency audit findings.
+- Replace standard XML parsing with `defusedxml` and validate connector/download URL schemes.
+- Add mandatory CI gates for dependency vulnerabilities and medium/high static-security findings.
+
+### Added
+
+- Add repeatable performance, recovery, security-header, pagination, and accessibility-contract tests.
+- Add a certification evidence standard separating automated framework gates from deployment-specific independent assessment.
+
 ## [0.9.0a1] - 2026-08-25
 
 ### Added
@@ -311,7 +324,8 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Import audit history.
 - Portable HTML dashboard export.
 
-[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.9.0a1...HEAD
+[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.9.0a2...HEAD
+[0.9.0a2]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.9.0a1...v0.9.0a2
 [0.9.0a1]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a16...v0.9.0a1
 [0.8.0a16]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a15...v0.8.0a16
 [0.8.0a15]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a14...v0.8.0a15
