@@ -66,10 +66,28 @@ def test_dhis2_oauth_import_creates_new_typed_dataset_and_connector(tmp_path: Pa
     root = create_project("DHIS2 Import", tmp_path / "dhis2-import")
     app = PHFrame.from_file(str(root / "phframe.yaml"))
     monkeypatch.setattr(app.dhis2_oauth, "status", lambda: {"connected": True, "server_url": "https://dhis.example", "user": {}})
+    monkeypatch.setattr(app.dhis2_oauth, "data_set_sync_parameters", lambda _: {"period": "202501", "orgUnit": "root", "children": "true"})
     response = TestClient(app).post("/api/integrations/dhis2/import-data-set", json={"data_set_id": "abc123", "data_set_name": "Malaria Monthly", "local_name": "malaria_monthly", "schedule_minutes": 30})
     assert response.status_code == 201
     assert response.json()["data"]["dataset"] == "malaria_monthly"
     raw = yaml.safe_load((root / "phframe.yaml").read_text(encoding="utf-8"))
-    assert raw["datasets"]["malaria_monthly"]["fields"]["org_unit"]["type"] == "organisation_unit"
+    assert raw["datasets"]["malaria_monthly"]["fields"]["org_unit"]["type"] == "identifier"
     assert raw["connectors"]["malaria_monthly_dhis2"]["resource"] == "abc123"
+    assert raw["connectors"]["malaria_monthly_dhis2"]["parameters"]["period"] == "202501"
     assert raw["connectors"]["malaria_monthly_dhis2"]["auth"]["token_env"] == "PHFRAME_DHIS2_OAUTH_TOKEN"
+
+
+def test_dhis2_password_connect_and_import_uses_encrypted_basic_auth(tmp_path: Path, monkeypatch):
+    root = create_project("DHIS2 Password", tmp_path / "dhis2-password")
+    app = PHFrame.from_file(str(root / "phframe.yaml"))
+    monkeypatch.setattr(app.dhis2_oauth, "_request_json", lambda url, **kwargs: {"id": "u1", "username": "admin"})
+    client = TestClient(app)
+    connected = client.post("/api/integrations/dhis2/password-connect", json={"server_url": "https://dhis.example", "username": "admin", "password": "district"})
+    assert connected.status_code == 200
+    assert connected.json()["data"]["method"] == "password"
+    assert b"district" not in app.dhis2_oauth.credentials_path.read_bytes()
+    monkeypatch.setattr(app.dhis2_oauth, "data_set_sync_parameters", lambda _: {"period": "202501", "orgUnit": "root", "children": "true"})
+    response = client.post("/api/integrations/dhis2/import-data-set", json={"data_set_id": "abc123", "data_set_name": "Child Health", "local_name": "child_health"})
+    assert response.status_code == 201
+    auth = yaml.safe_load((root / "phframe.yaml").read_text(encoding="utf-8"))["connectors"]["child_health_dhis2"]["auth"]
+    assert auth == {"username_env": "PHFRAME_DHIS2_BASIC_USERNAME", "password_env": "PHFRAME_DHIS2_BASIC_PASSWORD"}

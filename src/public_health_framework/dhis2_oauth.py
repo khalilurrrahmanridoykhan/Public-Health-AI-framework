@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import base64
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 import json
 import os
 from pathlib import Path
@@ -18,6 +18,8 @@ from cryptography.fernet import Fernet, InvalidToken
 
 class DHIS2OAuth:
     token_environment = "PHFRAME_DHIS2_OAUTH_TOKEN"
+    username_environment = "PHFRAME_DHIS2_BASIC_USERNAME"
+    password_environment = "PHFRAME_DHIS2_BASIC_PASSWORD"
 
     def __init__(self, root: Path):
         self.directory = Path(root) / "data"
@@ -40,11 +42,30 @@ class DHIS2OAuth:
         credentials = self._load(self.credentials_path) or {}
         return {
             "available": bool(self.client_id and self.client_secret),
-            "connected": bool(credentials.get("access_token") and credentials.get("server_url")),
+            "connected": bool(credentials.get("server_url") and (credentials.get("access_token") or credentials.get("username"))),
+            "method": str(credentials.get("method", "oauth" if credentials.get("access_token") else "")),
             "server_url": str(credentials.get("server_url", "")),
             "user": credentials.get("user", {}),
             "expires_at": str(credentials.get("expires_at", "")),
         }
+
+    def connect_password(self, server_url: str, username: str, password: str) -> dict[str, Any]:
+        """Validate and encrypt a DHIS2 username/password connection."""
+        server_url = self._server(server_url)
+        username = username.strip()
+        if not username or not password: raise ValueError("DHIS2 username and password are required.")
+        user = self._request_json(server_url + "/api/me?fields=id,username,displayName", basic=(username, password))
+        self._save(self.credentials_path, {"method": "password", "server_url": server_url, "username": username, "password": password, "user": user})
+        return self.status()
+
+    def basic_credentials(self, server_url: str = "") -> tuple[str, str]:
+        credentials = self._load(self.credentials_path) or {}
+        if credentials.get("method") != "password" or not credentials.get("username") or not credentials.get("password"):
+            raise ValueError("Connect PHFrame to DHIS2 with a username and password first.")
+        if server_url and self._server(server_url) != credentials.get("server_url"): raise ValueError("This connector uses a different DHIS2 server than the saved connection.")
+        os.environ[self.username_environment] = str(credentials["username"])
+        os.environ[self.password_environment] = str(credentials["password"])
+        return str(credentials["username"]), str(credentials["password"])
 
     def begin(self, server_url: str, redirect_uri: str) -> str:
         server_url = self._server(server_url)
@@ -88,12 +109,31 @@ class DHIS2OAuth:
         return str(credentials["access_token"])
 
     def data_sets(self) -> list[dict[str, str]]:
-        credentials = self._load(self.credentials_path) or {}; token = self.access_token()
-        result = self._request_json(str(credentials["server_url"]) + "/api/dataSets?fields=id,name,displayName&paging=false", bearer=token)
+        credentials = self._load(self.credentials_path) or {}
+        if credentials.get("method") == "password":
+            basic = self.basic_credentials(); result = self._request_json(str(credentials["server_url"]) + "/api/dataSets?fields=id,name,displayName&paging=false", basic=basic)
+        else:
+            token = self.access_token(); result = self._request_json(str(credentials["server_url"]) + "/api/dataSets?fields=id,name,displayName&paging=false", bearer=token)
         return [{"id": str(item.get("id", "")), "name": str(item.get("displayName") or item.get("name") or item.get("id", ""))} for item in result.get("dataSets", []) if item.get("id")]
 
+    def data_set_sync_parameters(self, data_set_id: str) -> dict[str, str]:
+        """Discover the root organisation unit and latest completed period."""
+        credentials = self._load(self.credentials_path) or {}
+        if not credentials.get("server_url"): raise ValueError("Connect PHFrame to DHIS2 first.")
+        def get(path: str) -> dict[str, Any]:
+            if credentials.get("method") == "password": return self._request_json(str(credentials["server_url"]) + path, basic=self.basic_credentials())
+            return self._request_json(str(credentials["server_url"]) + path, bearer=self.access_token())
+        units = get("/api/organisationUnits?filter=level:eq:1&fields=id,displayName&paging=false").get("organisationUnits", [])
+        if not units or not units[0].get("id"): raise ValueError("DHIS2 has no accessible root organisation unit.")
+        root = str(units[0]["id"])
+        query = urlencode({"dataSet": data_set_id, "startDate": "2000-01-01", "endDate": date.today().isoformat(), "orgUnit": root, "children": "true", "limit": "1"})
+        registrations = get("/api/completeDataSetRegistrations?" + query).get("completeDataSetRegistrations", [])
+        if not registrations or not registrations[0].get("period"): raise ValueError("No completed reporting period is available for this DHIS2 dataset.")
+        return {"period": str(registrations[0]["period"]), "orgUnit": root, "children": "true"}
+
     def disconnect(self) -> None:
-        self.credentials_path.unlink(missing_ok=True); os.environ.pop(self.token_environment, None)
+        self.credentials_path.unlink(missing_ok=True)
+        for name in (self.token_environment, self.username_environment, self.password_environment): os.environ.pop(name, None)
 
     def _server(self, value: str) -> str:
         parsed = urlparse(value.strip().rstrip("/"))

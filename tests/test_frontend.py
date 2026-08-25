@@ -49,8 +49,8 @@ def test_frontend_shell_and_assets(tmp_path: Path):
     assert ':root[data-theme="high-contrast"]' in css.text
     assert 'customElements.define("ph-import-wizard"' in javascript.text
     assert 'customElements.define("ph-connector-console"' in javascript.text
-    assert "Connect with DHIS2" in javascript.text
-    assert "/api/integrations/dhis2/connect" in javascript.text
+    assert "Connect and load datasets" in javascript.text
+    assert "/api/integrations/dhis2/password-connect" in javascript.text
     assert "data-theme-choice" in javascript.text
     assert 'data-theme-choice="light"' in javascript.text
     assert 'data-theme-choice="dark"' in javascript.text

@@ -100,6 +100,7 @@ class PHFrame:
             Route("/api/integrations/cloudflare/disconnect", self.cloudflare_disconnect, methods=["POST"]),
             Route("/api/integrations/dhis2/status", self.dhis2_status, methods=["GET"]),
             Route("/api/integrations/dhis2/connect", self.dhis2_connect, methods=["GET"]),
+            Route("/api/integrations/dhis2/password-connect", self.dhis2_password_connect, methods=["POST"]),
             Route("/api/integrations/dhis2/callback", self.dhis2_callback, methods=["GET"]),
             Route("/api/integrations/dhis2/data-sets", self.dhis2_data_sets, methods=["GET"]),
             Route("/api/integrations/dhis2/import-data-set", self.dhis2_import_data_set, methods=["POST"]),
@@ -340,6 +341,13 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
             return RedirectResponse(self.dhis2_oauth.begin(str(request.query_params.get("server_url", "")), redirect_uri), status_code=303)
         except ValueError as error: return _error(str(error), 503)
 
+    async def dhis2_password_connect(self, request: Request) -> Response:
+        try:
+            payload = await request.json()
+            status = await run_in_threadpool(self.dhis2_oauth.connect_password, str(payload.get("server_url", "")), str(payload.get("username", "")), str(payload.get("password", "")))
+            return JSONResponse({"data": status})
+        except (json.JSONDecodeError, AttributeError, ValueError) as error: return _error(str(error), 422)
+
     async def dhis2_callback(self, request: Request) -> Response:
         if request.query_params.get("error"): return RedirectResponse("/app#/connectors?dhis2=denied", status_code=303)
         try:
@@ -361,15 +369,18 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
             connector_name = f"{local_name}_dhis2"; schedule = int(payload.get("schedule_minutes", 60))
             fields = {
                 "data_element": {"type": "identifier", "label": "Data element"}, "period": {"type": "reporting_period", "label": "Period"},
-                "org_unit": {"type": "organisation_unit", "label": "Organisation unit"}, "category_option_combo": {"type": "string", "label": "Category option combination"},
+                "org_unit": {"type": "identifier", "label": "DHIS2 organisation unit UID"}, "category_option_combo": {"type": "string", "label": "Category option combination"},
                 "attribute_option_combo": {"type": "string", "label": "Attribute option combination"}, "value": {"type": "string", "label": "Value"},
                 "stored_by": {"type": "string", "label": "Stored by"}, "created": {"type": "datetime", "label": "Created"},
                 "last_updated": {"type": "datetime", "label": "Last updated"}, "comment": {"type": "string", "label": "Comment"},
                 "follow_up": {"type": "boolean", "label": "Follow up"},
             }
             mapping = {"dataElement": "data_element", "period": "period", "orgUnit": "org_unit", "categoryOptionCombo": "category_option_combo", "attributeOptionCombo": "attribute_option_combo", "value": "value", "storedBy": "stored_by", "created": "created", "lastUpdated": "last_updated", "comment": "comment", "followUp": "follow_up"}
+            parameters = await run_in_threadpool(self.dhis2_oauth.data_set_sync_parameters, remote_id)
             dataset_value = {"label": remote_name or local_name.replace("_", " ").title(), "fields": fields}
-            connector_value = {"type": "dhis2", "dataset": local_name, "base_url": self.dhis2_oauth.status()["server_url"], "resource": remote_id, "mapping": mapping, "schedule_minutes": schedule, "auth": {"token_env": DHIS2OAuth.token_environment}}
+            connection = self.dhis2_oauth.status()
+            auth = ({"username_env": DHIS2OAuth.username_environment, "password_env": DHIS2OAuth.password_environment} if connection.get("method") == "password" else {"token_env": DHIS2OAuth.token_environment})
+            connector_value = {"type": "dhis2", "dataset": local_name, "base_url": connection["server_url"], "resource": remote_id, "parameters": parameters, "mapping": mapping, "schedule_minutes": schedule, "auth": auth}
             dataset = DatasetSchema.from_dict(local_name, dataset_value); connector = ConnectorSchema.from_dict(connector_name, connector_value, {**self.config.datasets, local_name: dataset})
             self._update_config_many({"datasets": {local_name: dataset_value}, "connectors": {connector_name: connector_value}})
             self.config.datasets[local_name] = dataset; self.config.connectors[connector_name] = connector

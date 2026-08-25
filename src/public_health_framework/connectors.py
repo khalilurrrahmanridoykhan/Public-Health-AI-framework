@@ -7,6 +7,7 @@ import base64
 import json
 import os
 from typing import Any, Callable
+from urllib.error import HTTPError
 from urllib.parse import urlencode, urlparse
 from urllib.request import Request, urlopen
 
@@ -29,9 +30,16 @@ def json_transport(url: str, headers: dict[str, str], timeout: int) -> Any:
     if parsed.scheme not in {"http", "https"} or not parsed.hostname:
         raise ValueError("Connector URL must use HTTP or HTTPS.")
     request = Request(url, headers={"accept": "application/json", **headers})
-    with urlopen(request, timeout=timeout) as response:  # nosec B310 - scheme and host validated above
-        charset = response.headers.get_content_charset() or "utf-8"
-        return json.loads(response.read().decode(charset))
+    try:
+        with urlopen(request, timeout=timeout) as response:  # nosec B310 - scheme and host validated above
+            charset = response.headers.get_content_charset() or "utf-8"
+            return json.loads(response.read().decode(charset))
+    except HTTPError as error:
+        detail = error.read().decode("utf-8", errors="replace")[:500]
+        try:
+            payload = json.loads(detail); detail = str(payload.get("message") or payload.get("error") or detail)
+        except json.JSONDecodeError: pass
+        raise ValueError(f"Remote API returned HTTP {error.code}: {detail or error.reason}") from error
 
 
 class Connector(ABC):

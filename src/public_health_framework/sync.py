@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -36,6 +36,12 @@ def sync_connector(
     if connector_config.type == "dhis2" and connector_config.token_env == "PHFRAME_DHIS2_OAUTH_TOKEN":
         from .dhis2_oauth import DHIS2OAuth
         DHIS2OAuth(config.root).access_token(connector_config.base_url)
+    if connector_config.type == "dhis2" and connector_config.username_env == "PHFRAME_DHIS2_BASIC_USERNAME":
+        from .dhis2_oauth import DHIS2OAuth
+        DHIS2OAuth(config.root).basic_credentials(connector_config.base_url)
+    if connector_config.type == "dhis2" and not connector_config.parameters.get("period"):
+        from .dhis2_oauth import DHIS2OAuth
+        connector_config = replace(connector_config, parameters=DHIS2OAuth(config.root).data_set_sync_parameters(connector_config.resource))
     storage = Storage(config)
     storage.initialize()
     fetched = imported = 0

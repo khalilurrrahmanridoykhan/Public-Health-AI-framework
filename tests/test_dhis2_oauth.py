@@ -47,3 +47,31 @@ def test_dhis2_oauth_can_use_encrypted_project_client_configuration(tmp_path: Pa
     assert oauth.status()["available"] is True
     assert oauth.client_id == "project-client"
     assert b"project-secret" not in oauth.client_path.read_bytes()
+
+
+def test_dhis2_password_connection_encrypts_credentials_and_discovers_data_sets(tmp_path: Path, monkeypatch):
+    connection = DHIS2OAuth(tmp_path)
+
+    def request(url, **kwargs):
+        assert kwargs["basic"] == ("admin", "district")
+        if "/api/me" in url: return {"id": "u1", "username": "admin", "displayName": "System Administrator"}
+        return {"dataSets": [{"id": "abc123", "displayName": "Child Health"}]}
+
+    monkeypatch.setattr(connection, "_request_json", request)
+    status = connection.connect_password("https://dhis.example", "admin", "district")
+    assert status["connected"] is True
+    assert status["method"] == "password"
+    assert b"district" not in connection.credentials_path.read_bytes()
+    assert connection.data_sets() == [{"id": "abc123", "name": "Child Health"}]
+    assert connection.basic_credentials("https://dhis.example") == ("admin", "district")
+
+
+def test_dhis2_discovers_latest_period_and_root_org_unit(tmp_path: Path, monkeypatch):
+    connection = DHIS2OAuth(tmp_path)
+    connection._save(connection.credentials_path, {"method": "password", "server_url": "https://dhis.example", "username": "admin", "password": "district", "user": {}})
+    def request(url, **kwargs):
+        if "organisationUnits" in url: return {"organisationUnits": [{"id": "root", "displayName": "Country"}]}
+        assert "limit=1" in url
+        return {"completeDataSetRegistrations": [{"period": "202501"}]}
+    monkeypatch.setattr(connection, "_request_json", request)
+    assert connection.data_set_sync_parameters("abc123") == {"period": "202501", "orgUnit": "root", "children": "true"}
