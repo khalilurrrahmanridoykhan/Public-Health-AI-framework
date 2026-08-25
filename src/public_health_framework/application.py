@@ -9,6 +9,7 @@ import mimetypes
 import os
 from pathlib import Path
 import re
+import secrets
 import subprocess
 import tempfile
 from typing import Any
@@ -33,6 +34,7 @@ from .ui import asset_bytes, asset_text
 from .settings import SiteSettings
 from .sync import connector_due, sync_connector
 from .ai import answer_question, deidentify_records, enrich_trend, evidence_digest, generate_summary
+from .production import ProductionControls, validate_production_environment
 
 
 class PHFrame:
@@ -43,6 +45,7 @@ class PHFrame:
         self.storage = Storage(config)
         self.storage.initialize()
         self.site_settings = SiteSettings(config.root, config.name)
+        self.production = ProductionControls(config.root)
         routes = [
             Route("/", self.home, methods=["GET"]),
             Route("/app", self.frontend, methods=["GET"]),
@@ -52,6 +55,8 @@ class PHFrame:
             Route("/assets/project/{kind}", self.project_asset, methods=["GET"]),
             Route("/login", self.login_page, methods=["GET"]),
             Route("/health", self.health, methods=["GET"]),
+            Route("/ready", self.ready, methods=["GET"]),
+            Route("/api/operations/audit", self.operations_audit, methods=["GET"]),
             Route("/api/auth/status", self.auth_status, methods=["GET"]),
             Route("/api/auth/login", self.auth_login, methods=["POST"]),
             Route("/api/auth/logout", self.auth_logout, methods=["POST"]),
@@ -118,16 +123,21 @@ class PHFrame:
             response: Response = JSONResponse({"error": {"message": "Authentication required."}}, status_code=401) if path == "/api" or path.startswith("/api/") else RedirectResponse("/login", status_code=303)
             await response(scope, receive, send)
             return
-        await self.asgi(scope, receive, send)
+        headers = {key.decode().lower(): value.decode() for key, value in scope.get("headers", [])}
+        actor = "api-token" if headers.get("authorization", "").startswith("Bearer ") else "session"
+        await self.production.serve(self.asgi, scope, receive, send, actor)
 
     def _authorized_scope(self, scope: dict[str, Any]) -> bool:
         settings = self.site_settings.load()
-        if settings["access_mode"] == "public":
-            return True
         path = scope.get("path", "")
         if path == "/login" or path == "/health" or path.startswith("/assets/") or path in {"/api/auth/login", "/api/auth/logout", "/api/auth/status"}:
             return True
         headers = {key.decode().lower(): value.decode() for key, value in scope.get("headers", [])}
+        api_token = os.getenv("PHFRAME_API_TOKEN", "")
+        if path.startswith("/api/") and scope.get("method") not in {"GET", "HEAD", "OPTIONS"} and api_token:
+            supplied = headers.get("authorization", "").removeprefix("Bearer ")
+            if secrets.compare_digest(supplied, api_token): return True
+        if settings["access_mode"] == "public": return True
         cookie = SimpleCookie(); cookie.load(headers.get("cookie", ""))
         token = cookie.get("phframe_session")
         return bool(token and self.site_settings.verify_token(token.value))
@@ -149,6 +159,14 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
 
     async def health(self, request: Request) -> JSONResponse:
         return JSONResponse({"status": "ok", "framework": "PHFrame", "version": __version__, "project": self.config.name})
+
+    async def ready(self, request: Request) -> JSONResponse:
+        try: self.storage.initialize(); issues = validate_production_environment(self.config)
+        except Exception as error: return JSONResponse({"status": "not-ready", "error": str(error)}, status_code=503)
+        return JSONResponse({"status": "ready" if not issues else "warning", "database": "ready", "issues": issues}, status_code=200)
+
+    async def operations_audit(self, request: Request) -> JSONResponse:
+        return JSONResponse({"data": self.production.history(int(request.query_params.get("limit", "100")))})
 
     async def frontend(self, request: Request) -> HTMLResponse:
         return HTMLResponse("""<!doctype html><html lang="en"><head><meta charset="utf-8">
