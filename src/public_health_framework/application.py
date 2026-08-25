@@ -360,7 +360,7 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
 
     async def publication_deploy(self, request: Request) -> Response:
         try:
-            payload = await request.json(); dashboard, audit, mode, upstream, refresh = self._publication_payload(payload); settings = self.site_settings.load(); project = safe_project_name(str(payload.get("project_name") or settings.get("cloudflare_project_name") or dashboard.get("title")))
+            payload = await request.json(); dashboard, audit, mode, upstream, refresh = self._publication_payload(payload); settings = self.site_settings.load(); previous = self.site_settings.latest_publication(str(dashboard.get("id", ""))) or {}; project = safe_project_name(str(payload.get("project_name") or previous.get("project_name") or settings.get("cloudflare_project_name") or dashboard.get("title")))
             try: account, token = self.cloudflare.deployment_credentials()
             except ValueError:
                 account = str(settings.get("cloudflare_account_id", "")); token_env = str(settings.get("cloudflare_token_env", "CLOUDFLARE_API_TOKEN")); token = os.getenv(token_env, "")

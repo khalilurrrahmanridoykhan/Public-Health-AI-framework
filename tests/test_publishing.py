@@ -91,6 +91,8 @@ def test_publication_history_is_recorded_without_tokens(tmp_path: Path):
     assert response["data"][0] == item
     stored = json.loads(app.site_settings.path.read_text())
     assert "secret-token-value" not in json.dumps(stored)
+    assert app.site_settings.latest_publication("configured-main") == item
+    assert app.site_settings.latest_publication("not-published") is None
 
 
 def test_publication_uses_canonical_pages_project_url():

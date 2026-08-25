@@ -150,6 +150,13 @@ class SiteSettings:
         self._save(settings)
         return item
 
+    def latest_publication(self, dashboard_id: str) -> dict[str, Any] | None:
+        """Return the newest publication target remembered for a dashboard."""
+        return next(
+            (item for item in self.load().get("publications", []) if str(item.get("dashboard_id", "")) == dashboard_id),
+            None,
+        )
+
     def _validate_dashboards(self, dashboards: Any) -> list[dict[str, Any]]:
         if not isinstance(dashboards, list) or len(dashboards) > 50:
             raise ValueError("dashboards must contain at most 50 dashboards.")
