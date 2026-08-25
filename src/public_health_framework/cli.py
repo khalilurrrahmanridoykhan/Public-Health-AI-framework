@@ -57,6 +57,10 @@ def _parser() -> argparse.ArgumentParser:
     migrate = subparsers.add_parser("migrate", help="Apply safe dataset schema changes.")
     migrate.add_argument("--config", default="phframe.yaml", help="Project configuration path")
     migrate.add_argument("--check", action="store_true", help="Report changes without applying them")
+    for command, help_text in [("doctor", "Check production configuration and dependencies."), ("backup", "Create a consistent database backup."), ("restore", "Restore a database backup.")]:
+        item = subparsers.add_parser(command, help=help_text); item.add_argument("--config", default="phframe.yaml")
+        if command == "backup": item.add_argument("--output")
+        if command == "restore": item.add_argument("source")
 
     importer = subparsers.add_parser("import", help="Import CSV or Excel records into a dataset.")
     importer.add_argument("dataset", help="Configured dataset name")
@@ -124,6 +128,13 @@ def main(argv: list[str] | None = None) -> int:
                 return 1 if args.check else 0
             print("Database schema is up to date.")
             return 0
+        if args.command in {"doctor", "backup", "restore"}:
+            from .config import ProjectConfig
+            from .operations import backup, doctor, restore
+            config = ProjectConfig.load(args.config)
+            if args.command == "doctor": print(json.dumps(doctor(config), indent=2)); return 0
+            if args.command == "backup": print(f"Backup created: {backup(config, args.output)}"); return 0
+            print(f"Database restored: {restore(config, args.source)}"); return 0
         if args.command == "imports":
             from .config import ProjectConfig
 
