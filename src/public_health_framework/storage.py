@@ -150,6 +150,13 @@ class Storage:
             Column("model_json", Text, nullable=False), Column("created_at", DateTime(timezone=True), nullable=False),
             Column("approved_at", DateTime(timezone=True)),
         )
+        self.generated_dashboards_table = Table(
+            "_phframe_generated_dashboards", self.metadata,
+            Column("id", Integer, primary_key=True, autoincrement=True), Column("version_id", Integer, nullable=False),
+            Column("semantic_model_id", Integer, nullable=False), Column("variant", String(32), nullable=False),
+            Column("status", String(32), nullable=False), Column("spec_json", Text, nullable=False),
+            Column("created_at", DateTime(timezone=True), nullable=False), Column("approved_at", DateTime(timezone=True)),
+        )
         self.ai_summaries_table = Table(
             "_phframe_ai_summaries", self.metadata,
             Column("id", Integer, primary_key=True, autoincrement=True),
@@ -212,7 +219,7 @@ class Storage:
     def migrate(self, check_only: bool = False) -> list[str]:
         """Create metadata/tables and apply safe additive schema changes."""
         self.metadata.create_all(
-            self.engine, tables=[self.schema_table, self.imports_table, self.syncs_table, self.mappings_table, self.dataset_versions_table, self.staged_rows_table, self.column_profiles_table, self.quality_runs_table, self.quality_issues_table, self.transformations_table, self.geography_models_table, self.semantic_models_table, self.ai_summaries_table, self.ai_audit_table, self.ai_chat_table]
+            self.engine, tables=[self.schema_table, self.imports_table, self.syncs_table, self.mappings_table, self.dataset_versions_table, self.staged_rows_table, self.column_profiles_table, self.quality_runs_table, self.quality_issues_table, self.transformations_table, self.geography_models_table, self.semantic_models_table, self.generated_dashboards_table, self.ai_summaries_table, self.ai_audit_table, self.ai_chat_table]
         )
         actions: list[str] = []
         inspector = inspect(self.engine)
@@ -556,6 +563,28 @@ class Storage:
             connection.execute(update(self.semantic_models_table).where(and_(self.semantic_models_table.c.version_id == version_id, self.semantic_models_table.c.status == "approved")).values(status="superseded"))
             result = connection.execute(update(self.semantic_models_table).where(and_(self.semantic_models_table.c.id == model_id, self.semantic_models_table.c.version_id == version_id, self.semantic_models_table.c.status == "draft")).values(status="approved", approved_at=_now()))
         return self.semantic_model(version_id, model_id) if result.rowcount else None
+
+    def record_generated_dashboard(self, version_id: int, semantic_model_id: int, variant: str, spec: dict[str, Any]) -> dict[str, Any]:
+        with self.engine.begin() as connection:
+            result = connection.execute(insert(self.generated_dashboards_table).values(version_id=version_id, semantic_model_id=semantic_model_id, variant=variant, status="draft", spec_json=json.dumps(spec), created_at=_now(), approved_at=None))
+            item_id = int(result.inserted_primary_key[0])
+        return self.generated_dashboard(version_id, item_id) or {}
+
+    def generated_dashboard(self, version_id: int, dashboard_id: int) -> dict[str, Any] | None:
+        with self.engine.connect() as connection: row = connection.execute(select(self.generated_dashboards_table).where(and_(self.generated_dashboards_table.c.version_id == version_id, self.generated_dashboards_table.c.id == dashboard_id))).mappings().first()
+        if not row: return None
+        item = _serialize(dict(row)); item["spec"] = json.loads(item.pop("spec_json")); return item
+
+    def generated_dashboards(self, version_id: int) -> list[dict[str, Any]]:
+        with self.engine.connect() as connection: rows = connection.execute(select(self.generated_dashboards_table).where(self.generated_dashboards_table.c.version_id == version_id).order_by(self.generated_dashboards_table.c.id.desc())).mappings().all()
+        result = []
+        for row in rows:
+            item = _serialize(dict(row)); item["spec"] = json.loads(item.pop("spec_json")); result.append(item)
+        return result
+
+    def approve_generated_dashboard(self, version_id: int, dashboard_id: int) -> dict[str, Any] | None:
+        with self.engine.begin() as connection: result = connection.execute(update(self.generated_dashboards_table).where(and_(self.generated_dashboards_table.c.version_id == version_id, self.generated_dashboards_table.c.id == dashboard_id, self.generated_dashboards_table.c.status == "draft")).values(status="approved", approved_at=_now()))
+        return self.generated_dashboard(version_id, dashboard_id) if result.rowcount else None
 
     def create_ai_summary(self, values: dict[str, Any]) -> dict[str, Any]:
         now = _now()

@@ -57,6 +57,7 @@ from .intelligence_quality import evaluate_quality
 from .intelligence_repair import apply_repair, repair_proposals
 from .intelligence_geo import infer_geography
 from .intelligence_semantic import compile_semantic_model
+from .intelligence_dashboard import generate_dashboard
 
 
 class PHFrame:
@@ -128,6 +129,8 @@ class PHFrame:
             Route("/api/transformations", self.transformation_index, methods=["GET"]),
             Route("/api/staging/{version_id:int}/geography", self.staging_geography, methods=["GET", "POST"]),
             Route("/api/staging/{version_id:int}/semantic", self.staging_semantic, methods=["GET", "POST", "PATCH"]),
+            Route("/api/staging/{version_id:int}/dashboards", self.staging_dashboards, methods=["GET", "POST"]),
+            Route("/api/staging/{version_id:int}/dashboards/{dashboard_id:int}", self.staging_dashboard_detail, methods=["PATCH"]),
             Route("/api/import-mappings", self.import_mapping_index, methods=["GET"]),
             Route("/api/import-mappings/{name}", self.import_mapping_save, methods=["PUT"]),
             Route("/api/browser-import/{dataset}/preview", self.browser_import_preview, methods=["POST"]),
@@ -1068,6 +1071,20 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
         if not version: return _error("Staged dataset version not found.", 404)
         model = compile_semantic_model(version["profile"], self.storage.latest_quality_run(version_id), self.storage.geography_model(version_id))
         return JSONResponse({"data": self.storage.record_semantic_model(version_id, model)}, status_code=201)
+
+    async def staging_dashboards(self, request: Request) -> Response:
+        version_id = request.path_params["version_id"]
+        if request.method == "GET": return JSONResponse({"data": self.storage.generated_dashboards(version_id)})
+        semantic = self.storage.semantic_model(version_id)
+        if not semantic: return _error("Compile a semantic model before generating dashboards.", 409)
+        try: payload = await request.json(); variant = str(payload.get("variant", "recommended")); spec = generate_dashboard(semantic["model"], variant)
+        except (ValueError, json.JSONDecodeError) as error: return _error(str(error), 422)
+        if not spec["lint"]["valid"]: return _error("Generated dashboard did not pass linting.", 422)
+        return JSONResponse({"data": self.storage.record_generated_dashboard(version_id, semantic["id"], variant, spec)}, status_code=201)
+
+    async def staging_dashboard_detail(self, request: Request) -> Response:
+        item = self.storage.approve_generated_dashboard(request.path_params["version_id"], request.path_params["dashboard_id"])
+        return JSONResponse({"data": item}) if item else _error("Draft generated dashboard not found.", 404)
 
     async def import_mapping_index(self, request: Request) -> JSONResponse:
         return JSONResponse({"data": self.storage.mappings(request.query_params.get("dataset"))})
