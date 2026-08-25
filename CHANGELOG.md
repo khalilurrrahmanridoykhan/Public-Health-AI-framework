@@ -4,6 +4,19 @@ All notable changes to PHFrame will be documented here. The project intends to f
 
 ## [Unreleased]
 
+## [0.8.0a16] - 2026-08-25
+
+### Added
+
+- Add dataset selection, workspace navigation, full-table search, sticky headers, and 25-row pagination to Records.
+- Add schema search and dataset field summaries to Data Builder.
+- Add a guided three-step import sidebar and accessible file drop zone.
+
+### Changed
+
+- Redesign Records, Data Builder, and Import as responsive, consistent professional workspaces.
+- Separate record browsing from record entry so large datasets no longer create an excessively long page.
+
 ## [0.8.0a15] - 2026-08-25
 
 ### Changed
@@ -285,7 +298,8 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Import audit history.
 - Portable HTML dashboard export.
 
-[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a15...HEAD
+[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a16...HEAD
+[0.8.0a16]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a15...v0.8.0a16
 [0.8.0a15]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a14...v0.8.0a15
 [0.8.0a14]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a13...v0.8.0a14
 [0.8.0a13]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a12...v0.8.0a13

@@ -68,6 +68,11 @@ def test_frontend_shell_and_assets(tmp_path: Path):
     assert '"ne", "se", "sw", "nw"' in javascript.text
     assert "KoboToolbox submissions" in javascript.text
     assert ".ph-builder-layout" in css.text
+    assert "data-records-tab" in javascript.text
+    assert "data-builder-tab" in javascript.text
+    assert "ph-table-pagination" in javascript.text
+    assert ".ph-import-shell" in css.text
+    assert ".ph-records-workspace" in css.text
     for component in ["ph-rich-editor", "ph-page-table", "ph-custom-page", "ph-page-builder"]:
         assert f'customElements.define("{component}"' in javascript.text
     assert "data-add-block" in javascript.text
