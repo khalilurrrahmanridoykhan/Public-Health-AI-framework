@@ -18,12 +18,13 @@ def test_brand_settings_and_assets_are_persisted(tmp_path: Path):
     response = client.put("/api/settings", json={
         "brand_name": "Global Health Hub", "header_title": "Operations",
         "dashboard_title": "Worldwide Event Overview", "primary_color": "#1257a6",
-        "default_theme": "dark", "footer_html": "<p><strong>Example</strong> footer</p>", "show_footer": True,
+        "default_theme": "dark", "basemap": "esri-imagery", "footer_html": "<p><strong>Example</strong> footer</p>", "show_footer": True,
         "access_mode": "public",
     })
     assert response.status_code == 200
     assert response.json()["data"]["dashboard_title"] == "Worldwide Event Overview"
     assert response.json()["data"]["footer_html"] == "<p><strong>Example</strong> footer</p>"
+    assert response.json()["data"]["basemap"] == "esri-imagery"
     assert client.post(
         "/api/settings/assets/logo?filename=brand.png", content=b"valid-enough-image-bytes"
     ).status_code == 200

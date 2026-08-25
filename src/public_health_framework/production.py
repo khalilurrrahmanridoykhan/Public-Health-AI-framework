@@ -52,7 +52,7 @@ class ProductionControls:
         async def secured_send(message: dict[str, Any]) -> None:
             nonlocal status
             if message["type"] == "http.response.start":
-                status = message["status"]; headers = list(message.get("headers", [])); headers.extend([(b"x-request-id", request_id.encode()), (b"x-content-type-options", b"nosniff"), (b"x-frame-options", b"DENY"), (b"referrer-policy", b"same-origin"), (b"permissions-policy", b"camera=(), microphone=(), geolocation=()"), (b"content-security-policy", b"default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'")]); message["headers"] = headers
+                status = message["status"]; headers = list(message.get("headers", [])); headers.extend([(b"x-request-id", request_id.encode()), (b"x-content-type-options", b"nosniff"), (b"x-frame-options", b"DENY"), (b"referrer-policy", b"same-origin"), (b"permissions-policy", b"camera=(), microphone=(), geolocation=()"), (b"content-security-policy", b"default-src 'self'; img-src 'self' data: https://*.tile.openstreetmap.org https://*.basemaps.cartocdn.com https://server.arcgisonline.com; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self'")]); message["headers"] = headers
             await send(message)
         try: await app(scope, receive, secured_send)
         finally: self.audit(scope, status, actor)

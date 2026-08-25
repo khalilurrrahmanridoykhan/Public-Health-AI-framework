@@ -8,10 +8,12 @@ import json
 import mimetypes
 import os
 from pathlib import Path
+import re
 import secrets
 import subprocess  # nosec B404 - only fixed npx/wrangler argv lists are executed
 import tempfile
 from typing import Any
+from urllib.request import Request as URLRequest, urlopen
 from zipfile import ZipFile
 
 import yaml
@@ -22,6 +24,20 @@ from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse, Re
 from starlette.routing import Route
 from starlette.concurrency import run_in_threadpool
 from starlette.middleware.gzip import GZipMiddleware
+
+
+_LEAFLET_CACHE: dict[str, bytes] = {}
+
+
+def _leaflet_asset(name: str) -> bytes:
+    """Serve pinned Leaflet assets through PHFrame so strict CSP remains self-only."""
+    if name not in {"leaflet.css", "leaflet.js"}:
+        raise ValueError("Unknown map asset.")
+    if name not in _LEAFLET_CACHE:
+        url = f"https://unpkg.com/leaflet@1.9.4/dist/{name}"
+        with urlopen(URLRequest(url, headers={"User-Agent": "PHFrame/0.9"}), timeout=30) as response:  # nosec B310 fixed trusted origin
+            _LEAFLET_CACHE[name] = response.read()
+    return _LEAFLET_CACHE[name]
 
 from . import __version__
 from .config import ConnectorSchema, DatasetSchema, FIELD_TYPES, FieldSchema, ProjectConfig
@@ -53,6 +69,8 @@ class PHFrame:
             Route("/app", self.frontend, methods=["GET"]),
             Route("/assets/phframe.css", self.frontend_css, methods=["GET"]),
             Route("/assets/phframe.js", self.frontend_js, methods=["GET"]),
+            Route("/assets/leaflet.css", self.leaflet_css, methods=["GET"]),
+            Route("/assets/leaflet.js", self.leaflet_js, methods=["GET"]),
             Route("/assets/phframe-logo.png", self.framework_logo, methods=["GET"]),
             Route("/assets/project/{kind}", self.project_asset, methods=["GET"]),
             Route("/login", self.login_page, methods=["GET"]),
@@ -191,6 +209,12 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
     async def frontend_js(self, request: Request) -> Response:
         return Response(asset_text("phframe.js"), media_type="text/javascript", headers={"cache-control": "public, max-age=3600"})
 
+    async def leaflet_css(self, request: Request) -> Response:
+        return Response(_leaflet_asset("leaflet.css"), media_type="text/css", headers={"cache-control": "public, max-age=86400"})
+
+    async def leaflet_js(self, request: Request) -> Response:
+        return Response(_leaflet_asset("leaflet.js"), media_type="text/javascript", headers={"cache-control": "public, max-age=86400"})
+
     async def framework_logo(self, request: Request) -> Response:
         return Response(asset_bytes("phframe-logo.png"), media_type="image/png", headers={"cache-control": "public, max-age=86400"})
 
@@ -318,6 +342,8 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
 
     def _publication_snapshot(self, dashboard: dict[str, Any]) -> dict[str, Any]:
         widgets = []
+        boundary_layers = self.site_settings.boundaries()
+        boundary = self.site_settings.boundary(str(boundary_layers[-1]["id"])) if boundary_layers else None
         for widget in dashboard.get("widgets", []):
             kind, result = widget.get("type"), {"type": widget.get("type"), "title": widget.get("title", widget.get("type", "Widget"))}
             if kind == "content": result["html"] = widget.get("html", "")
@@ -325,6 +351,9 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
                 result.update(self.storage.indicator(self.config.indicators[widget["indicator"]]))
             elif kind in {"chart", "map"} and widget.get("dimension") in self.config.dimensions:
                 result.update(self.storage.dimension(self.config.dimensions[widget["dimension"]]))
+                if kind == "map" and boundary:
+                    result["boundary"] = {key: boundary.get(key) for key in ("country", "level", "source", "license")}
+                    result["geojson"] = boundary.get("geojson")
             elif kind in {"field_kpi", "field_chart"} and widget.get("dataset") in self.config.datasets:
                 records = self.storage.list(self.config.datasets[widget["dataset"]], limit=1000); field = widget.get("field")
                 if kind == "field_kpi":

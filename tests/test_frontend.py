@@ -11,6 +11,7 @@ def test_frontend_shell_and_assets(tmp_path: Path):
     client = TestClient(PHFrame.from_file(str(root / "phframe.yaml")))
     app = client.get("/app")
     assert app.status_code == 200
+    assert "basemaps.cartocdn.com" in app.headers["content-security-policy"]
     assert "<ph-app-shell>" in app.text
     assert 'href="/assets/phframe.css"' in app.text
     css = client.get("/assets/phframe.css")
@@ -18,6 +19,8 @@ def test_frontend_shell_and_assets(tmp_path: Path):
     assert "--ph-color-primary" in css.text
     javascript = client.get("/assets/phframe.js")
     assert javascript.status_code == 200
+    assert 'script.src = "/assets/leaflet.js"' in javascript.text
+    assert 'style.href = "/assets/leaflet.css"' in javascript.text
     assert 'customElements.define("ph-app-shell"' in javascript.text
     assert "ph-route" in javascript.text
     for component in ["ph-data-form", "ph-case-table", "ph-filter-bar", "ph-org-unit-select", "ph-quality-panel"]:
@@ -124,7 +127,10 @@ def test_frontend_shell_and_assets(tmp_path: Path):
     assert 'this.querySelector(":scope > .ph-dashboard-manager > .ph-template-dialog")' in javascript.text
     assert "data-customize-form" in javascript.text
     assert "Create editable copy" in javascript.text
-    assert "Built-in country boundary downloads" in javascript.text
+    assert "Basemap and country boundaries" in javascript.text
+    assert "carto-light" in javascript.text
+    assert "esri-imagery" in javascript.text
+    assert "ph-map-legend" in javascript.text
     assert 'PHFrame.send("/api/boundaries", "POST"' in javascript.text
     assert "renderBoundary" in javascript.text
     assert ".ph-boundary-map" in css.text

@@ -47,6 +47,7 @@ class SiteSettings:
             "dashboard_title": "",
             "primary_color": "#087e8b",
             "default_theme": "light",
+            "basemap": "carto-light",
             "logo_url": "/assets/phframe-logo.png",
             "favicon_url": "/assets/phframe-logo.png",
             "footer_html": 'Powered by PHFrame · Developed by <a href="https://krrkhan.com">Khalilur Rahman Ridoy Khan</a>',
@@ -90,7 +91,7 @@ class SiteSettings:
         settings = self.load()
         allowed = {
             "brand_name", "header_title", "dashboard_title", "primary_color",
-            "default_theme", "footer_html", "show_footer", "navigation", "pages", "access_mode",
+            "default_theme", "basemap", "footer_html", "show_footer", "navigation", "pages", "access_mode",
             "ai_provider", "ai_model", "ai_endpoint", "ai_api_key_env", "allow_external_ai",
             "dashboards", "cloudflare_account_id", "cloudflare_project_name", "cloudflare_token_env",
         }
@@ -99,6 +100,8 @@ class SiteSettings:
             raise ValueError("access_mode must be public or private.")
         if settings["default_theme"] not in {"light", "dark", "high-contrast"}:
             raise ValueError("default_theme is invalid.")
+        if settings["basemap"] not in {"openstreetmap", "carto-light", "carto-dark", "esri-imagery"}:
+            raise ValueError("basemap is invalid.")
         color = str(settings["primary_color"])
         if len(color) != 7 or not color.startswith("#") or any(char not in "0123456789abcdefABCDEF" for char in color[1:]):
             raise ValueError("primary_color must be a six-digit hex color.")
