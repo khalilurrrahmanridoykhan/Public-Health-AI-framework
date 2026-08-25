@@ -52,6 +52,7 @@ from .sync import connector_due, sync_connector
 from .ai import answer_question, deidentify_records, enrich_trend, evidence_digest, generate_summary
 from .production import ProductionControls, validate_production_environment
 from .cloudflare import CloudflareOAuth
+from .dhis2_oauth import DHIS2OAuth
 
 
 class PHFrame:
@@ -64,6 +65,7 @@ class PHFrame:
         self.site_settings = SiteSettings(config.root, config.name)
         self.production = ProductionControls(config.root)
         self.cloudflare = CloudflareOAuth(config.root)
+        self.dhis2_oauth = DHIS2OAuth(config.root)
         routes = [
             Route("/", self.home, methods=["GET"]),
             Route("/app", self.frontend, methods=["GET"]),
@@ -96,6 +98,12 @@ class PHFrame:
             Route("/api/integrations/cloudflare/broker/callback", self.cloudflare_broker_callback, methods=["GET"]),
             Route("/api/integrations/cloudflare/account", self.cloudflare_account, methods=["PUT"]),
             Route("/api/integrations/cloudflare/disconnect", self.cloudflare_disconnect, methods=["POST"]),
+            Route("/api/integrations/dhis2/status", self.dhis2_status, methods=["GET"]),
+            Route("/api/integrations/dhis2/connect", self.dhis2_connect, methods=["GET"]),
+            Route("/api/integrations/dhis2/callback", self.dhis2_callback, methods=["GET"]),
+            Route("/api/integrations/dhis2/data-sets", self.dhis2_data_sets, methods=["GET"]),
+            Route("/api/integrations/dhis2/import-data-set", self.dhis2_import_data_set, methods=["POST"]),
+            Route("/api/integrations/dhis2/disconnect", self.dhis2_disconnect, methods=["POST"]),
             Route("/api/ai/deidentify/{dataset}", self.ai_deidentify, methods=["POST"]),
             Route("/api/ai/chat", self.ai_chat, methods=["GET", "POST"]),
             Route("/api/ai/chat/{chat_id:int}/report", self.ai_chat_report, methods=["POST"]),
@@ -322,6 +330,55 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
     async def cloudflare_disconnect(self, request: Request) -> Response:
         self.cloudflare.disconnect()
         return JSONResponse({"data": self.cloudflare.status()})
+
+    async def dhis2_status(self, request: Request) -> Response:
+        return JSONResponse({"data": self.dhis2_oauth.status()})
+
+    async def dhis2_connect(self, request: Request) -> Response:
+        try:
+            redirect_uri = os.getenv("PHFRAME_DHIS2_REDIRECT_URI", str(request.url_for("dhis2_callback")))
+            return RedirectResponse(self.dhis2_oauth.begin(str(request.query_params.get("server_url", "")), redirect_uri), status_code=303)
+        except ValueError as error: return _error(str(error), 503)
+
+    async def dhis2_callback(self, request: Request) -> Response:
+        if request.query_params.get("error"): return RedirectResponse("/app#/connectors?dhis2=denied", status_code=303)
+        try:
+            self.dhis2_oauth.complete(str(request.query_params.get("code", "")), str(request.query_params.get("state", "")))
+            return RedirectResponse("/app#/connectors?dhis2=connected", status_code=303)
+        except ValueError: return RedirectResponse("/app#/connectors?dhis2=failed", status_code=303)
+
+    async def dhis2_data_sets(self, request: Request) -> Response:
+        try: return JSONResponse({"data": await run_in_threadpool(self.dhis2_oauth.data_sets)})
+        except ValueError as error: return _error(str(error), 502)
+
+    async def dhis2_import_data_set(self, request: Request) -> Response:
+        try:
+            payload = await request.json(); remote_id = str(payload.get("data_set_id", "")).strip(); remote_name = str(payload.get("data_set_name", remote_id)).strip()
+            local_name = re.sub(r"[^a-z0-9_]+", "_", str(payload.get("local_name", "")).strip().lower()).strip("_")
+            if not remote_id: raise ValueError("Select a DHIS2 data set.")
+            if not re.fullmatch(r"[a-z][a-z0-9_]*", local_name): raise ValueError("New dataset name must begin with a letter and use lowercase letters, numbers, and underscores.")
+            if local_name in self.config.datasets: raise ValueError(f"Dataset already exists: {local_name}")
+            connector_name = f"{local_name}_dhis2"; schedule = int(payload.get("schedule_minutes", 60))
+            fields = {
+                "data_element": {"type": "identifier", "label": "Data element"}, "period": {"type": "reporting_period", "label": "Period"},
+                "org_unit": {"type": "organisation_unit", "label": "Organisation unit"}, "category_option_combo": {"type": "string", "label": "Category option combination"},
+                "attribute_option_combo": {"type": "string", "label": "Attribute option combination"}, "value": {"type": "string", "label": "Value"},
+                "stored_by": {"type": "string", "label": "Stored by"}, "created": {"type": "datetime", "label": "Created"},
+                "last_updated": {"type": "datetime", "label": "Last updated"}, "comment": {"type": "string", "label": "Comment"},
+                "follow_up": {"type": "boolean", "label": "Follow up"},
+            }
+            mapping = {"dataElement": "data_element", "period": "period", "orgUnit": "org_unit", "categoryOptionCombo": "category_option_combo", "attributeOptionCombo": "attribute_option_combo", "value": "value", "storedBy": "stored_by", "created": "created", "lastUpdated": "last_updated", "comment": "comment", "followUp": "follow_up"}
+            dataset_value = {"label": remote_name or local_name.replace("_", " ").title(), "fields": fields}
+            connector_value = {"type": "dhis2", "dataset": local_name, "base_url": self.dhis2_oauth.status()["server_url"], "resource": remote_id, "mapping": mapping, "schedule_minutes": schedule, "auth": {"token_env": DHIS2OAuth.token_environment}}
+            dataset = DatasetSchema.from_dict(local_name, dataset_value); connector = ConnectorSchema.from_dict(connector_name, connector_value, {**self.config.datasets, local_name: dataset})
+            self._update_config_many({"datasets": {local_name: dataset_value}, "connectors": {connector_name: connector_value}})
+            self.config.datasets[local_name] = dataset; self.config.connectors[connector_name] = connector
+            self.storage = Storage(self.config); self.storage.initialize()
+            return JSONResponse({"data": {"dataset": local_name, "label": dataset.label, "connector": self._connector_data(connector)}}, status_code=201)
+        except (json.JSONDecodeError, TypeError, ValueError) as error: return _error(str(error), 422)
+
+    async def dhis2_disconnect(self, request: Request) -> Response:
+        self.dhis2_oauth.disconnect(); return JSONResponse({"data": self.dhis2_oauth.status()})
 
     async def publication_feed(self, request: Request) -> Response:
         try:
@@ -1050,6 +1107,11 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
         temporary = path.with_suffix(".yaml.tmp")
         temporary.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8")
         temporary.replace(path)
+
+    def _update_config_many(self, changes: dict[str, dict[str, Any]]) -> None:
+        path = self.config.root / "phframe.yaml"; raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        for section, values in changes.items(): raw.setdefault(section, {}).update(values)
+        temporary = path.with_suffix(".yaml.tmp"); temporary.write_text(yaml.safe_dump(raw, sort_keys=False), encoding="utf-8"); temporary.replace(path)
 
     def _dataset(self, request: Request) -> DatasetSchema | None:
         return self.config.datasets.get(request.path_params["dataset"])

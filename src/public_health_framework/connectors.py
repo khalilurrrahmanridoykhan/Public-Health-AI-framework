@@ -146,7 +146,8 @@ class DHIS2Connector(Connector):
 
     def headers(self) -> dict[str, str]:
         if self.config.token_env:
-            return {"authorization": f"ApiToken {_required_env(self.config.token_env)}"}
+            scheme = "Bearer" if self.config.token_env == "PHFRAME_DHIS2_OAUTH_TOKEN" else "ApiToken"
+            return {"authorization": f"{scheme} {_required_env(self.config.token_env)}"}
         return super().headers()
 
     def extract(self, payload: Any) -> list[dict[str, Any]]:

@@ -276,6 +276,32 @@ or common record containers such as `data`, `records`, `results`, `items`, and
 become available to dashboard visualizations. Credentials are referenced through
 environment-variable names and are never written into project configuration.
 
+### One-click DHIS2 OAuth
+
+Register PHFrame as an OAuth2 authorization-code client on the DHIS2 instance.
+Use this callback URL (replace the origin for a deployed PHFrame server):
+
+```text
+http://127.0.0.1:8000/api/integrations/dhis2/callback
+```
+
+Configure the client outside the project, restart PHFrame, then select **DHIS2**
+and **Connect with DHIS2** on the Connectors screen:
+
+```bash
+export PHFRAME_DHIS2_CLIENT_ID="your-dhis2-oauth-client-id"
+export PHFRAME_DHIS2_CLIENT_SECRET="your-dhis2-oauth-client-secret"
+export PHFRAME_DHIS2_REDIRECT_URI="https://your-phframe-host/api/integrations/dhis2/callback"
+phframe serve
+```
+
+PHFrame validates callback state, encrypts access and refresh tokens at rest,
+discovers the authorized user's data sets, refreshes expiring tokens, and uses
+OAuth Bearer authentication for connector tests and synchronizations. The default
+DHIS2 endpoints are `/uaa/oauth/authorize` and `/uaa/oauth/token`; installations
+using different paths can set `PHFRAME_DHIS2_AUTHORIZE_PATH` and
+`PHFRAME_DHIS2_TOKEN_PATH`.
+
 Connectors pull JSON records, apply nested source-to-dataset mappings, validate every record, and write atomically. Credentials are read only from environment variables and are never returned through metadata APIs.
 
 Example KoboToolbox connector:

@@ -33,6 +33,9 @@ def sync_connector(
     if name not in config.connectors:
         raise ValueError(f"Connector not found: {name}")
     connector_config = config.connectors[name]
+    if connector_config.type == "dhis2" and connector_config.token_env == "PHFRAME_DHIS2_OAUTH_TOKEN":
+        from .dhis2_oauth import DHIS2OAuth
+        DHIS2OAuth(config.root).access_token(connector_config.base_url)
     storage = Storage(config)
     storage.initialize()
     fetched = imported = 0

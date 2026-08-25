@@ -60,3 +60,16 @@ def test_generic_api_connector_extracts_common_and_configured_paths():
     )
     connector = create_connector(schema, lambda *_: {"payload": {"records": [{"source": {"id": "A-1"}}]}})
     assert connector.pull() == [{"record_id": "A-1"}]
+
+
+def test_dhis2_oauth_import_creates_new_typed_dataset_and_connector(tmp_path: Path, monkeypatch):
+    root = create_project("DHIS2 Import", tmp_path / "dhis2-import")
+    app = PHFrame.from_file(str(root / "phframe.yaml"))
+    monkeypatch.setattr(app.dhis2_oauth, "status", lambda: {"connected": True, "server_url": "https://dhis.example", "user": {}})
+    response = TestClient(app).post("/api/integrations/dhis2/import-data-set", json={"data_set_id": "abc123", "data_set_name": "Malaria Monthly", "local_name": "malaria_monthly", "schedule_minutes": 30})
+    assert response.status_code == 201
+    assert response.json()["data"]["dataset"] == "malaria_monthly"
+    raw = yaml.safe_load((root / "phframe.yaml").read_text(encoding="utf-8"))
+    assert raw["datasets"]["malaria_monthly"]["fields"]["org_unit"]["type"] == "organisation_unit"
+    assert raw["connectors"]["malaria_monthly_dhis2"]["resource"] == "abc123"
+    assert raw["connectors"]["malaria_monthly_dhis2"]["auth"]["token_env"] == "PHFRAME_DHIS2_OAUTH_TOKEN"

@@ -301,6 +301,11 @@ button, a { touch-action: manipulation; }
 .ph-provider-grid label { position: relative; display: grid; gap: .2rem; padding: .9rem; background: var(--ph-color-background); border: 2px solid transparent; border-radius: .7rem; cursor: pointer; }
 .ph-provider-grid label:has(input:checked) { background: var(--ph-color-accent-soft); border-color: var(--ph-color-primary); }
 .ph-provider-grid input { position: absolute; opacity: 0; }
+.ph-oauth-connected { display: inline-flex; align-items: center; gap: .45rem; color: #16875c; font-weight: 750; }
+.ph-oauth-connected i { width: .65rem; height: .65rem; background: #22c77a; border-radius: 50%; box-shadow: 0 0 0 4px rgb(34 199 122 / 15%); }
+.ph-oauth-setup { display: grid; gap: .3rem; width: 100%; padding: .85rem 1rem; color: var(--ph-color-text); background: color-mix(in srgb, #f59e0b 10%, var(--ph-color-background)); border-left: 4px solid #f59e0b; border-radius: .55rem; }
+.ph-dhis2-import { display: grid; grid-template-columns: minmax(14rem, 1.2fr) minmax(12rem, 1fr) minmax(9rem, .5fr) auto; gap: .7rem; align-items: end; width: 100%; margin-top: .75rem; padding: 1rem; background: var(--ph-color-background); border: 1px solid var(--ph-color-border); border-radius: .75rem; }
+@media (max-width: 900px) { .ph-dhis2-import { grid-template-columns: 1fr; } }
 .ph-provider-grid small { color: var(--ph-color-muted); }
 .ph-provider-guide { display: grid; gap: .2rem; padding: .8rem 1rem; color: var(--ph-color-text); background: var(--ph-color-accent-soft); border-left: 4px solid var(--ph-color-primary); border-radius: .4rem; }
 .ph-provider-guide span { color: var(--ph-color-muted); font-size: .86rem; }

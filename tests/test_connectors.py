@@ -110,3 +110,9 @@ def test_builtin_token_auth_schemes(monkeypatch, connector_type, expected):
         type=connector_type, resource=resource, token_env="CONNECTOR_TOKEN"
     ))
     assert connector.headers()["authorization"] == expected
+
+
+def test_dhis2_oauth_token_uses_bearer_scheme(monkeypatch):
+    monkeypatch.setenv("PHFRAME_DHIS2_OAUTH_TOKEN", "oauth-access")
+    connector = create_connector(_schema(type="dhis2", resource="resource", token_env="PHFRAME_DHIS2_OAUTH_TOKEN"))
+    assert connector.headers()["authorization"] == "Bearer oauth-access"
