@@ -178,12 +178,16 @@ names and descriptions can be edited without changing `phframe.yaml`.
 
 ### Publish a dashboard with Cloudflare Pages
 
-Open **Settings → Cloudflare Pages** and enter the Cloudflare account ID, a
-default Pages project name, and the name of the environment variable that holds
-the API token. Keep the secret outside the project:
+Create a Cloudflare OAuth application for the PHFrame installation, register its
+exact callback URL, and keep the client secret and encryption key outside the
+project:
 
 ```bash
-export CLOUDFLARE_API_TOKEN="your-cloudflare-api-token"
+export PHFRAME_CLOUDFLARE_CLIENT_ID="your-oauth-client-id"
+export PHFRAME_CLOUDFLARE_CLIENT_SECRET="your-oauth-client-secret"
+export PHFRAME_CLOUDFLARE_REDIRECT_URI="https://your-phframe-host/api/integrations/cloudflare/callback"
+# Generate once with: python -c 'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())'
+export PHFRAME_CREDENTIAL_KEY="your-fernet-key"
 phframe serve
 ```
 
@@ -197,8 +201,12 @@ Every bundle and deployment first runs a privacy review. Unsupported widgets,
 protected dimensions, and protected source fields are blocked. The generated
 site contains zero row-level records. **Download bundle** provides the same
 privacy-reviewed ZIP for manual deployment with Wrangler. One-click deployment
-requires Node.js/`npx`, a Cloudflare account ID, and a token with Pages edit
-permission. PHFrame stores publication URLs and audit results, never API tokens.
+requires Node.js/`npx` and an OAuth client with Pages edit permission. Users can
+then choose **Connect with Cloudflare** in Settings and approve access without
+copying an account ID or token. PHFrame stores OAuth tokens encrypted at rest
+and never returns them through its API. For installations without an OAuth
+client, the prior account-ID/environment-token method remains available under
+**Advanced API-token fallback**.
 
 An externally reachable public PHFrame server can supply its reviewed aggregate
 feed at:

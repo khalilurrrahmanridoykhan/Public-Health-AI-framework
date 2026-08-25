@@ -64,4 +64,7 @@ def validate_production_environment(config: Any) -> list[str]:
     if config.host in {"127.0.0.1", "localhost"}: issues.append("Production host is loopback-only.")
     if str(config.database_url).startswith("sqlite:"): issues.append("Use PostgreSQL for multi-user production deployments.")
     if not os.getenv("PHFRAME_API_TOKEN"): issues.append("PHFRAME_API_TOKEN is not configured for API writes.")
+    if os.getenv("PHFRAME_CLOUDFLARE_CLIENT_ID") and not os.getenv("PHFRAME_CLOUDFLARE_CLIENT_SECRET"): issues.append("PHFRAME_CLOUDFLARE_CLIENT_SECRET is required for Cloudflare OAuth.")
+    if os.getenv("PHFRAME_CLOUDFLARE_CLIENT_ID") and not os.getenv("PHFRAME_CREDENTIAL_KEY"): issues.append("PHFRAME_CREDENTIAL_KEY is required to protect Cloudflare OAuth tokens in production.")
+    if os.getenv("PHFRAME_CLOUDFLARE_CLIENT_ID") and not os.getenv("PHFRAME_CLOUDFLARE_REDIRECT_URI", "").startswith("https://"): issues.append("PHFRAME_CLOUDFLARE_REDIRECT_URI must be an HTTPS callback in production.")
     return issues

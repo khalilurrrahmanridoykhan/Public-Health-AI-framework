@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "public-health-framework"
-version = "0.9.0a2"
+version = "0.9.0a3"
 description = "Build extensible public-health data systems, APIs, and dashboards."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -23,6 +23,7 @@ dependencies = [
   "pandas>=2.0",
   "openpyxl>=3.1",
   "defusedxml>=0.7.1",
+  "cryptography>=45.0",
   "PyYAML>=6.0",
   "SQLAlchemy>=2.0,<3.0",
   "starlette>=1.3.1,<2.0",

@@ -4,6 +4,18 @@ All notable changes to PHFrame will be documented here. The project intends to f
 
 ## [Unreleased]
 
+## [0.9.0a3] - 2026-08-25
+
+### Added
+
+- Add one-click Cloudflare OAuth authorization with PKCE, callback validation, automatic account discovery, account selection, token refresh, and disconnect controls.
+- Encrypt Cloudflare access and refresh tokens at rest; production deployments can supply `PHFRAME_CREDENTIAL_KEY` to keep the encryption key outside the project.
+
+### Changed
+
+- Use an authorized Cloudflare account automatically when publishing dashboards, while retaining the environment-token method under an advanced fallback.
+- Replace the prominent manual account/token settings with a guided **Connect with Cloudflare** experience.
+
 ## [0.9.0a2] - 2026-08-25
 
 ### Security
@@ -324,7 +336,8 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Import audit history.
 - Portable HTML dashboard export.
 
-[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.9.0a2...HEAD
+[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.9.0a3...HEAD
+[0.9.0a3]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.9.0a2...v0.9.0a3
 [0.9.0a2]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.9.0a1...v0.9.0a2
 [0.9.0a1]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a16...v0.9.0a1
 [0.8.0a16]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a15...v0.8.0a16

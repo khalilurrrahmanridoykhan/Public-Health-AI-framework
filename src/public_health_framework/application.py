@@ -36,6 +36,7 @@ from .settings import SiteSettings
 from .sync import connector_due, sync_connector
 from .ai import answer_question, deidentify_records, enrich_trend, evidence_digest, generate_summary
 from .production import ProductionControls, validate_production_environment
+from .cloudflare import CloudflareOAuth
 
 
 class PHFrame:
@@ -47,6 +48,7 @@ class PHFrame:
         self.storage.initialize()
         self.site_settings = SiteSettings(config.root, config.name)
         self.production = ProductionControls(config.root)
+        self.cloudflare = CloudflareOAuth(config.root)
         routes = [
             Route("/", self.home, methods=["GET"]),
             Route("/app", self.frontend, methods=["GET"]),
@@ -71,6 +73,11 @@ class PHFrame:
             Route("/api/publications/preview", self.publication_preview, methods=["POST"]),
             Route("/api/publications/bundle", self.publication_bundle, methods=["POST"]),
             Route("/api/publications/deploy", self.publication_deploy, methods=["POST"]),
+            Route("/api/integrations/cloudflare/status", self.cloudflare_status, methods=["GET"]),
+            Route("/api/integrations/cloudflare/connect", self.cloudflare_connect, methods=["GET"]),
+            Route("/api/integrations/cloudflare/callback", self.cloudflare_callback, methods=["GET"]),
+            Route("/api/integrations/cloudflare/account", self.cloudflare_account, methods=["PUT"]),
+            Route("/api/integrations/cloudflare/disconnect", self.cloudflare_disconnect, methods=["POST"]),
             Route("/api/ai/deidentify/{dataset}", self.ai_deidentify, methods=["POST"]),
             Route("/api/ai/chat", self.ai_chat, methods=["GET", "POST"]),
             Route("/api/ai/chat/{chat_id:int}/report", self.ai_chat_report, methods=["POST"]),
@@ -257,7 +264,34 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
 
     async def publication_index(self, request: Request) -> Response:
         settings = self.site_settings.load()
-        return JSONResponse({"data": settings.get("publications", []), "cloudflare": {"configured": bool(os.getenv(settings.get("cloudflare_token_env", "CLOUDFLARE_API_TOKEN")) and settings.get("cloudflare_account_id")), "token_env": settings.get("cloudflare_token_env", "CLOUDFLARE_API_TOKEN")}})
+        status = self.cloudflare.status()
+        return JSONResponse({"data": settings.get("publications", []), "cloudflare": {"configured": status["connected"] or bool(os.getenv(settings.get("cloudflare_token_env", "CLOUDFLARE_API_TOKEN")) and settings.get("cloudflare_account_id")), "oauth": status}})
+
+    async def cloudflare_status(self, request: Request) -> Response:
+        return JSONResponse({"data": self.cloudflare.status()})
+
+    async def cloudflare_connect(self, request: Request) -> Response:
+        try:
+            redirect_uri = os.getenv("PHFRAME_CLOUDFLARE_REDIRECT_URI", str(request.url_for("cloudflare_callback")))
+            return RedirectResponse(self.cloudflare.begin(redirect_uri), status_code=303)
+        except ValueError as error: return _error(str(error), 503)
+
+    async def cloudflare_callback(self, request: Request) -> Response:
+        if request.query_params.get("error"):
+            return RedirectResponse("/app#/settings?cloudflare=denied", status_code=303)
+        try:
+            self.cloudflare.complete(str(request.query_params.get("code", "")), str(request.query_params.get("state", "")))
+            return RedirectResponse("/app#/settings?cloudflare=connected", status_code=303)
+        except ValueError:
+            return RedirectResponse("/app#/settings?cloudflare=failed", status_code=303)
+
+    async def cloudflare_account(self, request: Request) -> Response:
+        try: return JSONResponse({"data": self.cloudflare.select_account(str((await request.json()).get("account_id", "")))})
+        except (json.JSONDecodeError, AttributeError, ValueError) as error: return _error(str(error), 422)
+
+    async def cloudflare_disconnect(self, request: Request) -> Response:
+        self.cloudflare.disconnect()
+        return JSONResponse({"data": self.cloudflare.status()})
 
     async def publication_feed(self, request: Request) -> Response:
         try:
@@ -320,8 +354,11 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
 
     async def publication_deploy(self, request: Request) -> Response:
         try:
-            payload = await request.json(); dashboard, audit, mode, upstream, refresh = self._publication_payload(payload); settings = self.site_settings.load(); account = str(settings.get("cloudflare_account_id", "")); token_env = str(settings.get("cloudflare_token_env", "CLOUDFLARE_API_TOKEN")); token = os.getenv(token_env, ""); project = safe_project_name(str(payload.get("project_name") or settings.get("cloudflare_project_name") or dashboard.get("title")))
-            if not account or not token: raise ValueError(f"Configure a Cloudflare account ID and the {token_env} environment variable first.")
+            payload = await request.json(); dashboard, audit, mode, upstream, refresh = self._publication_payload(payload); settings = self.site_settings.load(); project = safe_project_name(str(payload.get("project_name") or settings.get("cloudflare_project_name") or dashboard.get("title")))
+            try: account, token = self.cloudflare.deployment_credentials()
+            except ValueError:
+                account = str(settings.get("cloudflare_account_id", "")); token_env = str(settings.get("cloudflare_token_env", "CLOUDFLARE_API_TOKEN")); token = os.getenv(token_env, "")
+                if not account or not token: raise ValueError(f"Connect PHFrame to Cloudflare first, or set the advanced {token_env} API-token fallback.")
             content = build_bundle(dashboard, self._publication_snapshot(dashboard), self.site_settings.public(), mode, upstream, refresh)
             with tempfile.TemporaryDirectory(prefix="phframe-publish-") as directory:
                 archive_path = Path(directory) / "bundle.zip"; archive_path.write_bytes(content)
