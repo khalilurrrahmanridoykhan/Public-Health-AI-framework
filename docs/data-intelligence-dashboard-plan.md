@@ -2,10 +2,10 @@
 
 ## Status
 
-- Implementation started on 2026-08-25.
-- Work package 7.1 is in progress: browser files and connector syncs now share staging, immutable dataset versions, provenance, deterministic column profiling, semantic candidates, profile APIs, and the initial review interface.
-- Remaining 7.1 scope: add explicit version-management controls and finish profiling/background-job performance safeguards for very large sources.
-- Proposed delivery remains divided into independently testable work packages.
+- Phase 7 implementation completed on 2026-08-25.
+- Work packages 7.1–7.8 are delivered as independently tested commits: unified staging and profiling; quality review; audited repair; geography intelligence; semantic contracts; professional dashboard generation; governed knowledge packs and copilot proposals; and continuous assurance.
+- All intelligence output remains draft-first and reviewable. Dataset approval, semantic-contract approval, dashboard approval, and drift-sensitive publication are explicit governance boundaries.
+- The APIs are source-neutral and apply the same contracts to browser files and connector data. Large deployments can move the deterministic jobs to workers without changing their stored contracts.
 
 ## Problem statement
 
