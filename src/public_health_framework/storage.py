@@ -164,6 +164,12 @@ class Storage:
             Column("status", String(32), nullable=False), Column("proposal_json", Text, nullable=False),
             Column("created_at", DateTime(timezone=True), nullable=False), Column("reviewed_at", DateTime(timezone=True)),
         )
+        self.assurance_runs_table = Table(
+            "_phframe_assurance_runs", self.metadata,
+            Column("id", Integer, primary_key=True, autoincrement=True), Column("version_id", Integer, nullable=False),
+            Column("previous_version_id", Integer), Column("severity", String(32), nullable=False),
+            Column("report_json", Text, nullable=False), Column("created_at", DateTime(timezone=True), nullable=False),
+        )
         self.ai_summaries_table = Table(
             "_phframe_ai_summaries", self.metadata,
             Column("id", Integer, primary_key=True, autoincrement=True),
@@ -226,7 +232,7 @@ class Storage:
     def migrate(self, check_only: bool = False) -> list[str]:
         """Create metadata/tables and apply safe additive schema changes."""
         self.metadata.create_all(
-            self.engine, tables=[self.schema_table, self.imports_table, self.syncs_table, self.mappings_table, self.dataset_versions_table, self.staged_rows_table, self.column_profiles_table, self.quality_runs_table, self.quality_issues_table, self.transformations_table, self.geography_models_table, self.semantic_models_table, self.generated_dashboards_table, self.intelligence_proposals_table, self.ai_summaries_table, self.ai_audit_table, self.ai_chat_table]
+            self.engine, tables=[self.schema_table, self.imports_table, self.syncs_table, self.mappings_table, self.dataset_versions_table, self.staged_rows_table, self.column_profiles_table, self.quality_runs_table, self.quality_issues_table, self.transformations_table, self.geography_models_table, self.semantic_models_table, self.generated_dashboards_table, self.intelligence_proposals_table, self.assurance_runs_table, self.ai_summaries_table, self.ai_audit_table, self.ai_chat_table]
         )
         actions: list[str] = []
         inspector = inspect(self.engine)
@@ -598,6 +604,24 @@ class Storage:
             result = connection.execute(insert(self.intelligence_proposals_table).values(version_id=version_id, actor=actor, prompt=prompt, status="pending", proposal_json=json.dumps(proposal), created_at=_now(), reviewed_at=None)); item_id = int(result.inserted_primary_key[0])
         with self.engine.connect() as connection: row = connection.execute(select(self.intelligence_proposals_table).where(self.intelligence_proposals_table.c.id == item_id)).mappings().first()
         item = _serialize(dict(row)); item["proposal"] = json.loads(item.pop("proposal_json")); return item
+
+    def previous_dataset_version(self, version_id: int) -> dict[str, Any] | None:
+        current = self.dataset_version(version_id)
+        if not current: return None
+        with self.engine.connect() as connection: row = connection.execute(select(self.dataset_versions_table).where(and_(self.dataset_versions_table.c.dataset == current["dataset"], self.dataset_versions_table.c.id < version_id)).order_by(self.dataset_versions_table.c.id.desc()).limit(1)).mappings().first()
+        return self._dataset_version_row(row) if row else None
+
+    def record_assurance_run(self, version_id: int, previous_version_id: int | None, report: dict[str, Any]) -> dict[str, Any]:
+        with self.engine.begin() as connection:
+            result = connection.execute(insert(self.assurance_runs_table).values(version_id=version_id, previous_version_id=previous_version_id, severity=report["severity"], report_json=json.dumps(report), created_at=_now())); item_id = int(result.inserted_primary_key[0])
+        return self.assurance_run(version_id, item_id) or {}
+
+    def assurance_run(self, version_id: int, run_id: int | None = None) -> dict[str, Any] | None:
+        statement = select(self.assurance_runs_table).where(self.assurance_runs_table.c.version_id == version_id)
+        if run_id: statement = statement.where(self.assurance_runs_table.c.id == run_id)
+        with self.engine.connect() as connection: row = connection.execute(statement.order_by(self.assurance_runs_table.c.id.desc()).limit(1)).mappings().first()
+        if not row: return None
+        item = _serialize(dict(row)); item["report"] = json.loads(item.pop("report_json")); return item
 
     def create_ai_summary(self, values: dict[str, Any]) -> dict[str, Any]:
         now = _now()

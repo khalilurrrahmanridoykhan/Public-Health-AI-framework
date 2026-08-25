@@ -59,6 +59,7 @@ from .intelligence_geo import infer_geography
 from .intelligence_semantic import compile_semantic_model
 from .intelligence_dashboard import generate_dashboard
 from .intelligence_copilot import KNOWLEDGE_PACKS, match_knowledge_packs, propose_change
+from .intelligence_assurance import assess_drift, evaluate_assurance
 
 
 class PHFrame:
@@ -134,6 +135,7 @@ class PHFrame:
             Route("/api/staging/{version_id:int}/dashboards/{dashboard_id:int}", self.staging_dashboard_detail, methods=["PATCH"]),
             Route("/api/intelligence/knowledge-packs", self.intelligence_knowledge_packs, methods=["GET"]),
             Route("/api/staging/{version_id:int}/assistant", self.staging_assistant, methods=["POST"]),
+            Route("/api/staging/{version_id:int}/assurance", self.staging_assurance, methods=["GET", "POST"]),
             Route("/api/import-mappings", self.import_mapping_index, methods=["GET"]),
             Route("/api/import-mappings/{name}", self.import_mapping_save, methods=["PUT"]),
             Route("/api/browser-import/{dataset}/preview", self.browser_import_preview, methods=["POST"]),
@@ -1102,6 +1104,17 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
             payload = await request.json(); prompt = str(payload.get("prompt", "")); proposal = propose_change(prompt, semantic["model"])
             return JSONResponse({"data": self.storage.record_intelligence_proposal(version_id, str(payload.get("actor", "user")), prompt, proposal)}, status_code=201)
         except (ValueError, json.JSONDecodeError) as error: return _error(str(error), 422)
+
+    async def staging_assurance(self, request: Request) -> Response:
+        version_id = request.path_params["version_id"]
+        if request.method == "GET":
+            item = self.storage.assurance_run(version_id)
+            return JSONResponse({"data": item}) if item else _error("No assurance run exists for this version.", 404)
+        current = self.storage.dataset_version(version_id); previous = self.storage.previous_dataset_version(version_id)
+        if not current: return _error("Staged dataset version not found.", 404)
+        report = assess_drift(current, previous, self.storage.latest_quality_run(version_id), self.storage.latest_quality_run(previous["id"]) if previous else None, self.storage.generated_dashboards(previous["id"]) if previous else [])
+        report["evaluation"] = evaluate_assurance(report)
+        return JSONResponse({"data": self.storage.record_assurance_run(version_id, previous["id"] if previous else None, report)}, status_code=201)
 
     async def import_mapping_index(self, request: Request) -> JSONResponse:
         return JSONResponse({"data": self.storage.mappings(request.query_params.get("dataset"))})
