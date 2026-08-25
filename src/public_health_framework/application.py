@@ -8,7 +8,6 @@ import json
 import mimetypes
 import os
 from pathlib import Path
-import re
 import secrets
 import subprocess  # nosec B404 - only fixed npx/wrangler argv lists are executed
 import tempfile
@@ -374,7 +373,10 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
                 await run_in_threadpool(self.cloudflare.ensure_pages_project, account, token, project)
                 process = await run_in_threadpool(subprocess.run, ["npx", "--yes", "wrangler", "pages", "deploy", str(Path(directory) / "site"), "--project-name", project, "--branch", "main", "--commit-dirty=true"], capture_output=True, text=True, timeout=180, env=environment)
             if process.returncode: raise ValueError("Cloudflare deployment failed: " + (process.stderr or process.stdout)[-1000:])
-            urls = re.findall(r"https://[^\s]+\.pages\.dev", process.stdout + process.stderr); url = urls[-1].rstrip(".,") if urls else f"https://{project}.pages.dev"
+            # Wrangler reports a hash-prefixed deployment alias first. Cloudflare can
+            # expose that alias before its TLS certificate has propagated, while the
+            # canonical project hostname is stable and is updated by every deploy.
+            url = f"https://{project}.pages.dev"
             publication = self.site_settings.record_publication({"dashboard_id": dashboard.get("id"), "project_name": project, "url": url, "mode": mode, "refresh_minutes": refresh, "privacy": audit})
             return JSONResponse({"data": publication}, status_code=201)
         except (FileNotFoundError, subprocess.TimeoutExpired): return _error("Cloudflare deployment requires Node.js and npx, and must finish within three minutes.", 503)
