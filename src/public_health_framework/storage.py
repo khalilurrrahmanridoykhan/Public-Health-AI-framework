@@ -138,6 +138,11 @@ class Storage:
             Column("options_json", Text, nullable=False), Column("summary_json", Text, nullable=False),
             Column("created_at", DateTime(timezone=True), nullable=False),
         )
+        self.geography_models_table = Table(
+            "_phframe_geography_models", self.metadata,
+            Column("id", Integer, primary_key=True, autoincrement=True), Column("version_id", Integer, nullable=False),
+            Column("model_json", Text, nullable=False), Column("created_at", DateTime(timezone=True), nullable=False),
+        )
         self.ai_summaries_table = Table(
             "_phframe_ai_summaries", self.metadata,
             Column("id", Integer, primary_key=True, autoincrement=True),
@@ -200,7 +205,7 @@ class Storage:
     def migrate(self, check_only: bool = False) -> list[str]:
         """Create metadata/tables and apply safe additive schema changes."""
         self.metadata.create_all(
-            self.engine, tables=[self.schema_table, self.imports_table, self.syncs_table, self.mappings_table, self.dataset_versions_table, self.staged_rows_table, self.column_profiles_table, self.quality_runs_table, self.quality_issues_table, self.transformations_table, self.ai_summaries_table, self.ai_audit_table, self.ai_chat_table]
+            self.engine, tables=[self.schema_table, self.imports_table, self.syncs_table, self.mappings_table, self.dataset_versions_table, self.staged_rows_table, self.column_profiles_table, self.quality_runs_table, self.quality_issues_table, self.transformations_table, self.geography_models_table, self.ai_summaries_table, self.ai_audit_table, self.ai_chat_table]
         )
         actions: list[str] = []
         inspector = inspect(self.engine)
@@ -511,6 +516,19 @@ class Storage:
         for row in rows:
             item = _serialize(dict(row)); item["options"] = json.loads(item.pop("options_json")); item["summary"] = json.loads(item.pop("summary_json")); result.append(item)
         return result
+
+    def record_geography_model(self, version_id: int, model: dict[str, Any]) -> dict[str, Any]:
+        with self.engine.begin() as connection:
+            result = connection.execute(insert(self.geography_models_table).values(version_id=version_id, model_json=json.dumps(model), created_at=_now())); model_id = int(result.inserted_primary_key[0])
+        return self.geography_model(version_id, model_id) or {}
+
+    def geography_model(self, version_id: int, model_id: int | None = None) -> dict[str, Any] | None:
+        statement = select(self.geography_models_table).where(self.geography_models_table.c.version_id == version_id)
+        if model_id: statement = statement.where(self.geography_models_table.c.id == model_id)
+        statement = statement.order_by(self.geography_models_table.c.id.desc()).limit(1)
+        with self.engine.connect() as connection: row = connection.execute(statement).mappings().first()
+        if not row: return None
+        item = _serialize(dict(row)); item["model"] = json.loads(item.pop("model_json")); return item
 
     def create_ai_summary(self, values: dict[str, Any]) -> dict[str, Any]:
         now = _now()

@@ -55,6 +55,7 @@ from .cloudflare import CloudflareOAuth
 from .dhis2_oauth import DHIS2OAuth
 from .intelligence_quality import evaluate_quality
 from .intelligence_repair import apply_repair, repair_proposals
+from .intelligence_geo import infer_geography
 
 
 class PHFrame:
@@ -124,6 +125,7 @@ class PHFrame:
             Route("/api/staging/{version_id:int}/quality", self.staging_quality, methods=["GET", "POST"]),
             Route("/api/staging/{version_id:int}/repairs", self.staging_repairs, methods=["GET", "POST"]),
             Route("/api/transformations", self.transformation_index, methods=["GET"]),
+            Route("/api/staging/{version_id:int}/geography", self.staging_geography, methods=["GET", "POST"]),
             Route("/api/import-mappings", self.import_mapping_index, methods=["GET"]),
             Route("/api/import-mappings/{name}", self.import_mapping_save, methods=["PUT"]),
             Route("/api/browser-import/{dataset}/preview", self.browser_import_preview, methods=["POST"]),
@@ -1040,6 +1042,16 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
         try: version_id = int(request.query_params.get("version_id", "0") or 0); limit = int(request.query_params.get("limit", "100"))
         except ValueError: return _error("version_id and limit must be integers.", 400)
         return JSONResponse({"data": self.storage.transformations(version_id or None, limit)})
+
+    async def staging_geography(self, request: Request) -> Response:
+        version_id = request.path_params["version_id"]
+        if request.method == "GET":
+            model = self.storage.geography_model(version_id)
+            return JSONResponse({"data": model}) if model else _error("No geography model has run for this version.", 404)
+        version = self.storage.dataset_version(version_id, include_rows=True)
+        if not version: return _error("Staged dataset version not found.", 404)
+        model = infer_geography(version["rows"], version["profile"])
+        return JSONResponse({"data": self.storage.record_geography_model(version_id, model)}, status_code=201)
 
     async def import_mapping_index(self, request: Request) -> JSONResponse:
         return JSONResponse({"data": self.storage.mappings(request.query_params.get("dataset"))})
