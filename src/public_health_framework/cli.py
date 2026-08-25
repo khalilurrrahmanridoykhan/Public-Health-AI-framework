@@ -87,6 +87,8 @@ def _parser() -> argparse.ArgumentParser:
     syncs.add_argument("--config", default="phframe.yaml", help="Project configuration path")
     syncs.add_argument("--limit", type=int, default=20)
     syncs.add_argument("--connector", help="Filter history by connector name")
+    worker = subparsers.add_parser("worker", help="Run scheduled background connector jobs.")
+    worker.add_argument("--config", default="phframe.yaml"); worker.add_argument("--interval", type=int, default=60); worker.add_argument("--once", action="store_true")
 
     analyze = subparsers.add_parser("analyze", help="Create an HTML dashboard from CSV or Excel data.")
     analyze.add_argument("input", help="Path to a .csv, .xlsx, or .xlsm file")
@@ -173,6 +175,10 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"  Error: {error['message']}")
                 failed = failed or result.status == "failed"
             return 2 if failed else 0
+        if args.command == "worker":
+            from .config import ProjectConfig
+            from .jobs import work
+            work(ProjectConfig.load(args.config), args.interval, args.once); return 0
         if args.command == "import":
             from .config import ProjectConfig
 
