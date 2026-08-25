@@ -1,5 +1,8 @@
 .venv/
 __pycache__/
+.env
+backups/
+logs/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
@@ -7,4 +10,3 @@ dist/
 build/
 dashboard.html
 *-dashboard.html
-
