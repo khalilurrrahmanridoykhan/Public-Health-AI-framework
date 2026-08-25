@@ -114,6 +114,21 @@ class Storage:
             Column("confidence", Float, nullable=False),
             Column("profile_json", Text, nullable=False),
         )
+        self.quality_runs_table = Table(
+            "_phframe_quality_runs", self.metadata,
+            Column("id", Integer, primary_key=True, autoincrement=True),
+            Column("version_id", Integer, nullable=False), Column("score", Float, nullable=False),
+            Column("readiness", String(32), nullable=False), Column("issue_count", Integer, nullable=False),
+            Column("blocker_count", Integer, nullable=False), Column("created_at", DateTime(timezone=True), nullable=False),
+        )
+        self.quality_issues_table = Table(
+            "_phframe_quality_issues", self.metadata,
+            Column("id", Integer, primary_key=True, autoincrement=True), Column("run_id", Integer, nullable=False),
+            Column("rule", String(64), nullable=False), Column("severity", String(16), nullable=False),
+            Column("field", String(255)), Column("affected_count", Integer, nullable=False),
+            Column("message", Text, nullable=False), Column("rows_json", Text, nullable=False),
+            Column("evidence_json", Text, nullable=False),
+        )
         self.ai_summaries_table = Table(
             "_phframe_ai_summaries", self.metadata,
             Column("id", Integer, primary_key=True, autoincrement=True),
@@ -176,7 +191,7 @@ class Storage:
     def migrate(self, check_only: bool = False) -> list[str]:
         """Create metadata/tables and apply safe additive schema changes."""
         self.metadata.create_all(
-            self.engine, tables=[self.schema_table, self.imports_table, self.syncs_table, self.mappings_table, self.dataset_versions_table, self.staged_rows_table, self.column_profiles_table, self.ai_summaries_table, self.ai_audit_table, self.ai_chat_table]
+            self.engine, tables=[self.schema_table, self.imports_table, self.syncs_table, self.mappings_table, self.dataset_versions_table, self.staged_rows_table, self.column_profiles_table, self.quality_runs_table, self.quality_issues_table, self.ai_summaries_table, self.ai_audit_table, self.ai_chat_table]
         )
         actions: list[str] = []
         inspector = inspect(self.engine)
@@ -445,6 +460,27 @@ class Storage:
         with self.engine.begin() as connection:
             connection.execute(update(self.dataset_versions_table).where(self.dataset_versions_table.c.id == version_id).values(status=status, approved_at=_now() if status == "approved" else current["approved_at"]))
         return self.dataset_version(version_id)
+
+    def record_quality_run(self, version_id: int, report: dict[str, Any]) -> dict[str, Any]:
+        with self.engine.begin() as connection:
+            result = connection.execute(insert(self.quality_runs_table).values(version_id=version_id, score=report["score"], readiness=report["readiness"], issue_count=report["issue_count"], blocker_count=report["blocker_count"], created_at=_now()))
+            run_id = int(result.inserted_primary_key[0])
+            if report["issues"]: connection.execute(insert(self.quality_issues_table), [{"run_id": run_id, "rule": item["rule"], "severity": item["severity"], "field": item["field"], "affected_count": item["affected_count"], "message": item["message"], "rows_json": json.dumps(item["rows"]), "evidence_json": json.dumps(item["evidence"])} for item in report["issues"]])
+        return self.quality_run(run_id) or {}
+
+    def quality_run(self, run_id: int) -> dict[str, Any] | None:
+        with self.engine.connect() as connection:
+            row = connection.execute(select(self.quality_runs_table).where(self.quality_runs_table.c.id == run_id)).mappings().first()
+            if not row: return None
+            issues = connection.execute(select(self.quality_issues_table).where(self.quality_issues_table.c.run_id == run_id).order_by(self.quality_issues_table.c.id)).mappings().all()
+        item = _serialize(dict(row)); item["issues"] = []
+        for issue in issues:
+            value = _serialize(dict(issue)); value["rows"] = json.loads(value.pop("rows_json")); value["evidence"] = json.loads(value.pop("evidence_json")); item["issues"].append(value)
+        return item
+
+    def latest_quality_run(self, version_id: int) -> dict[str, Any] | None:
+        with self.engine.connect() as connection: run_id = connection.scalar(select(self.quality_runs_table.c.id).where(self.quality_runs_table.c.version_id == version_id).order_by(self.quality_runs_table.c.id.desc()).limit(1))
+        return self.quality_run(int(run_id)) if run_id else None
 
     def create_ai_summary(self, values: dict[str, Any]) -> dict[str, Any]:
         now = _now()

@@ -303,6 +303,12 @@ button, a { touch-action: manipulation; }
 .ph-profile-summary small, .ph-profile-type + small { color: var(--ph-color-muted); }
 .ph-profile-type { display: block; width: max-content; padding: .18rem .5rem; color: var(--ph-color-primary); background: var(--ph-color-accent-soft); border-radius: 999px; font-size: .72rem; font-weight: 800; }
 .ph-profile-review .ph-table td:last-child { max-width: 18rem; white-space: normal; }
+.ph-quality-banner { display: flex; justify-content: space-between; gap: 1rem; margin: .75rem 0; padding: .75rem .9rem; border-left: 4px solid var(--ph-color-primary); background: var(--ph-color-accent-soft); border-radius: .55rem; text-transform: capitalize; }
+.ph-quality-blocked { border-color: #dc2626; background: color-mix(in srgb, #dc2626 10%, var(--ph-color-surface)); }
+.ph-quality-ready { border-color: #16a34a; background: color-mix(in srgb, #16a34a 10%, var(--ph-color-surface)); }
+.ph-quality-severity { padding: .15rem .45rem; border-radius: 999px; font-size: .68rem; font-weight: 800; text-transform: uppercase; }
+.ph-quality-severity.ph-error, .ph-quality-severity.ph-critical { color: #fff; background: #b91c1c; }
+.ph-quality-severity.ph-warning { color: #422006; background: #fbbf24; }
 .ph-provider-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: .65rem; }
 .ph-provider-grid label { position: relative; display: grid; gap: .2rem; padding: .9rem; background: var(--ph-color-background); border: 2px solid transparent; border-radius: .7rem; cursor: pointer; }
 .ph-provider-grid label:has(input:checked) { background: var(--ph-color-accent-soft); border-color: var(--ph-color-primary); }

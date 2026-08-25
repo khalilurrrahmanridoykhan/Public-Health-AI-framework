@@ -53,6 +53,7 @@ from .ai import answer_question, deidentify_records, enrich_trend, evidence_dige
 from .production import ProductionControls, validate_production_environment
 from .cloudflare import CloudflareOAuth
 from .dhis2_oauth import DHIS2OAuth
+from .intelligence_quality import evaluate_quality
 
 
 class PHFrame:
@@ -119,6 +120,7 @@ class PHFrame:
             Route("/api/staging", self.staging_index, methods=["GET"]),
             Route("/api/staging/{version_id:int}", self.staging_detail, methods=["GET", "PATCH"]),
             Route("/api/staging/{version_id:int}/rows", self.staging_rows, methods=["GET"]),
+            Route("/api/staging/{version_id:int}/quality", self.staging_quality, methods=["GET", "POST"]),
             Route("/api/import-mappings", self.import_mapping_index, methods=["GET"]),
             Route("/api/import-mappings/{name}", self.import_mapping_save, methods=["PUT"]),
             Route("/api/browser-import/{dataset}/preview", self.browser_import_preview, methods=["POST"]),
@@ -1003,6 +1005,16 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
         except ValueError: return _error("limit and offset must be integers.", 400)
         return JSONResponse({"data": self.storage.staged_rows(version_id, limit, offset), "limit": limit, "offset": offset})
 
+    async def staging_quality(self, request: Request) -> Response:
+        version_id = request.path_params["version_id"]
+        version = self.storage.dataset_version(version_id, include_rows=request.method == "POST")
+        if not version: return _error("Staged dataset version not found.", 404)
+        if request.method == "GET":
+            report = self.storage.latest_quality_run(version_id)
+            return JSONResponse({"data": report}) if report else _error("No quality review has run for this version.", 404)
+        report = evaluate_quality(version["rows"], version["profile"])
+        return JSONResponse({"data": self.storage.record_quality_run(version_id, report)}, status_code=201)
+
     async def import_mapping_index(self, request: Request) -> JSONResponse:
         return JSONResponse({"data": self.storage.mappings(request.query_params.get("dataset"))})
 
@@ -1034,6 +1046,8 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
             preview = preview_frame(self.config, dataset, frame)
             version = stage_frame(self.config, dataset, frame, f"browser:{filename}")
             preview["version"] = {key: version[key] for key in ("id", "status", "content_digest", "schema_signature", "created_at")}
+            report = evaluate_quality([dict(row) for row in frame.to_dict(orient="records")], preview["profile"])
+            preview["quality"] = self.storage.record_quality_run(version["id"], report)
             return JSONResponse({"data": preview})
         except ValueError as error:
             return _error(str(error), 422)
