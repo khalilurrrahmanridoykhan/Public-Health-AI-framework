@@ -469,7 +469,141 @@ Long-running tasks must become background jobs with progress reporting:
 
 The browser should receive job state and summarized results rather than waiting on a single long request.
 
-## 13. Delivery work packages
+## 13. Intelligence expansion: minimum-work, expert-quality dashboards
+
+### North-star experience
+
+For a well-structured source, PHFrame should turn an import or connector sync into a useful draft dashboard without manual chart construction:
+
+1. Connect or upload data.
+2. Profile, enrich, validate, and fingerprint it automatically.
+3. Present one Data Health Report and only decisions that cannot be resolved safely.
+4. Generate three ranked options: **Recommended**, **Executive**, and **Programme operations**. Add a **Data quality** dashboard when issues merit it.
+5. Let the user preview, approve, and publish; every generated decision remains editable and reversible.
+
+When confidence is high, the target is no more than three user decisions before the first useful dashboard. Low-confidence semantics, privacy risks, invalid denominators, and destructive repairs must always stop for review.
+
+### Progressive autonomy
+
+- **Preview:** PHFrame suggests but changes nothing.
+- **Assisted:** safe metadata enrichment and reversible normalization can be accepted in one batch; analytical meaning still needs approval.
+- **Guarded automatic:** previously approved project rules can run after future syncs, with a change summary and rollback point.
+
+The system must never silently invent an indicator definition, denominator, geographic join, or clinical interpretation.
+
+### Deterministic-first intelligence architecture
+
+AI is a planning and explanation layer, not the calculation engine. The trusted pipeline is:
+
+`source -> immutable staging -> deterministic profiler -> quality engine -> semantic model -> constrained dashboard specification -> renderer`
+
+AI may propose inputs, but typed validators reject unsupported fields, formulas, joins, filters, chart types, and privacy-unsafe output. Aggregate calculations remain reproducible SQL/Python operations with visible formulas and lineage.
+
+The intelligence layer contains:
+
+- a metadata resolver for source-native labels, units, option sets, aggregation rules, periods, and organisation hierarchies;
+- a versioned public-health indicator and dashboard knowledge catalogue;
+- retrieval that selects only relevant, attributable definitions and templates;
+- a constrained planner that emits typed `SemanticProposal`, `RepairProposal`, and `DashboardSpec` objects;
+- deterministic validation, scoring, preview-diff, approval, audit, and rollback services.
+
+### Dataset fingerprint and living data contract
+
+Each approved version receives a fingerprint containing its schema signature, semantic roles, time and geographic grain, key candidates, category vocabularies, missingness, cardinality, ranges, duplicates, and quality score. Approved inferences become a versioned data contract.
+
+Every later sync checks renamed or missing columns, changed types, new categories, unit and code-list changes, hierarchy changes, unusual volume, and altered time coverage. Drift creates a review task and safe dashboard preview; it never silently changes a published dashboard.
+
+### Source-aware metadata enrichment
+
+- **DHIS2:** resolve UIDs to names, descriptions, value types, units, aggregation operators, period types, category option combinations, organisation-unit paths, coordinates, and data-set membership.
+- **KoboToolbox/ODK:** resolve question labels, choices, groups, repeats, constraints, language variants, and form versions.
+- **Files and REST APIs:** infer semantics from names and values, then offer mappings to recognized roles and code systems for confirmation.
+
+Raw identifiers remain in lineage but must not appear as dashboard labels when readable metadata exists.
+
+### Versioned public-health knowledge packs
+
+Ship curated packs for routine service delivery, maternal and child health, immunization, disease surveillance, malaria, nutrition, supply availability, and data quality. Each indicator includes:
+
+- name, purpose, version, and authoritative source link;
+- numerator, denominator, exclusions, multiplier, unit, directionality, and valid aggregation;
+- required semantic roles and compatible time/geographic grains;
+- expected ranges, companion quality checks, and limitations;
+- recommended KPI, trend, comparison, table, and map views;
+- privacy classification and minimum safe aggregation.
+
+AI may retrieve and recommend a pack but cannot change its formula. A custom indicator remains **project-defined** until a person approves it.
+
+### Bounded intelligence assistants
+
+- **Schema Copilot:** proposes storage types, roles, keys, units, and readable labels.
+- **Quality Copilot:** groups issues, explains impact, and proposes repair recipes.
+- **Indicator Copilot:** matches fields to governed measures and states what is missing.
+- **Geography Copilot:** detects hierarchy levels, boundary keys, points, and ambiguous joins.
+- **Dashboard Designer:** ranks templates and compiles the dashboard specification.
+- **Insight Copilot:** explains approved aggregate results with evidence, freshness, and limitations.
+- **Maintenance Copilot:** detects drift, broken cards, stale data, and changed recommendations.
+
+Every proposal shows confidence, evidence, affected fields/rows, expected dashboard impact, and reversibility. Low-confidence items become questions, not automatic changes.
+
+### Smart repair recipes
+
+- **Safe and reversible:** trim whitespace, normalize empty markers, parse unambiguous dates, and resolve labels from authoritative metadata.
+- **Review required:** deduplicate, impute, map unknown categories, change units, repair hierarchy, or exclude outliers.
+- **Forbidden automatically:** fabricate observations, infer patient outcomes, overwrite source values, probabilistically merge people, or weaken privacy controls.
+
+A repair preview shows before/after samples, affected rows, rationale, quality-score change, and impacted visualizations. Approved decisions may become project-scoped recipes; they must not train a cross-project model or expose another project's data.
+
+### Dashboard recommendation, scoring, and refinement
+
+Score candidates for semantic correctness, quality readiness, decision usefulness, visual diversity, readability, accessibility, privacy, geographic validity, and rendering cost. Automatically reject:
+
+- duplicate charts answering the same question;
+- identifiers or high-cardinality fields used as categories;
+- pies/donuts with excessive categories;
+- ratios without valid denominators;
+- misleading axes;
+- maps without reliable geographic matches;
+- low contrast, crowded legends, and unreadable labels;
+- cards based on stale, blocked, or low-quality fields.
+
+Every card includes **Why this view**, fields, formula, filters, aggregation, freshness, quality status, and limitations. The header includes reporting period, geography, programme, freshness, and filter chips. Layout density and chart detail adapt to both width and height.
+
+### Natural-language Dashboard Studio
+
+Users may ask, “Build a district immunization dashboard for the last 12 months” or “Replace this donut with a trend and filter to Region A.” PHFrame translates the request into its constrained dashboard schema, presents a visual and semantic diff, validates it, and waits for approval. It must not execute arbitrary SQL, Python, HTML, or external URLs supplied through imported data.
+
+Quick actions include: make this clearer; explain this chart; find a better denominator; show missing data by facility; compare periods; create an executive version; repair safe issues; and update the published dashboard after approval.
+
+### Continuous intelligence after publication
+
+After each import or sync, PHFrame recalculates fingerprints, rules, measures, and card health. It produces a change brief covering new periods, revised values, categories, quality, schema drift, and affected publications. Safe data refreshes may update an existing deployment URL under an approved policy; structural or semantic changes require preview and approval.
+
+### Privacy, security, and human control
+
+- Local deterministic analysis is the default.
+- External AI receives no row-level or protected fields; only minimum approved, de-identified aggregate context may leave the server.
+- Imported text is untrusted and cannot override instructions, invoke tools, or introduce executable content.
+- AI output must follow strict schemas, reference real fields and knowledge entries, and pass authorization and privacy checks.
+- Prompts, evidence, proposals, approvals, rejections, provider/model/version, and final changes are auditable.
+- A person approves publication, destructive repair, semantic changes, and official AI-generated narrative.
+
+### Intelligence evaluation and product metrics
+
+Maintain golden datasets and expert-reviewed dashboard specifications. Release gates measure semantic inference, duplicate/quality false positives, indicator matching, invalid-formula rejection, geographic joins, recommendation acceptance, post-generation edit distance, accessibility, responsiveness, performance, and time to first approved dashboard. Track the percentage of high-confidence datasets completed in three decisions or fewer. Unsupported factual or numerical claims have a target of zero.
+
+Evaluation must include adversarial imported text, ambiguous columns, schema changes, sparse data, mixed units, invalid denominators, and protected data.
+
+### Source-informed design basis
+
+Core quality reporting should align with WHO dimensions covering completeness/timeliness, internal consistency, external consistency, and comparison with population or denominator data. Knowledge packs should favor a limited, standardized set of decision-relevant indicators and understandable displays instead of every possible chart. AI governance should follow the NIST AI RMF functions **Govern, Map, Measure, and Manage**, emphasizing validity, transparency, explainability, privacy, and human oversight.
+
+- WHO Data Quality Assurance: https://www.who.int/data/data-collection-tools/health-service-data/data-quality-assurance-dqa
+- WHO routine health-facility analysis toolkit: https://www.who.int/data/data-collection-tools/analysis-use-health-facility-data
+- WHO RHIS general principles: https://www.who.int/publications/i/item/9789240063938
+- NIST AI RMF and Playbook: https://airc.nist.gov/ and https://www.nist.gov/itl/ai-risk-management-framework/nist-ai-rmf-playbook
+
+## 14. Delivery work packages
 
 ### 7.1 — Staging and profiling foundation
 
@@ -513,6 +647,8 @@ The browser should receive job state and summarized results rather than waiting 
 - measure builder;
 - compatibility/ranking engine;
 - label and metadata resolution.
+- dataset fingerprints, living contracts, and drift detection;
+- source-aware metadata enrichment.
 
 **Exit criteria:** every recommended chart is traceable to compatible typed fields and a defined aggregation.
 
@@ -523,10 +659,30 @@ The browser should receive job state and summarized results rather than waiting 
 - polished responsive components;
 - quality/freshness context;
 - preview, customization, and publication checks.
+- dashboard linting, scoring, refinement, and explanation cards;
+- Recommended, Executive, Programme operations, and Data quality variants.
 
 **Exit criteria:** generated dashboards contain an intentional analytical story, readable labels, appropriate filters, and no duplicate filler charts.
 
-## 14. Testing strategy
+### 7.7 — Governed knowledge packs and intelligence copilot
+
+- versioned indicator, visualization, and programme packs with attribution;
+- constrained schema, quality, indicator, geography, and dashboard proposals;
+- natural-language Dashboard Studio with diff, validation, approval, and undo;
+- local-first processing, structured output, prompt-injection defenses, and audit history.
+
+**Exit criteria:** intelligence reduces work without bypassing formula governance, privacy checks, reproducibility, or human approval.
+
+### 7.8 — Continuous dashboard assurance
+
+- re-score data, measures, and dashboards after every sync;
+- produce drift briefs and previews of affected dashboards;
+- support approved refresh-in-place for existing public URLs;
+- add golden-dataset evaluation and intelligence release gates.
+
+**Exit criteria:** data changes cannot silently make an approved or published dashboard misleading.
+
+## 15. Testing strategy
 
 ### Unit tests
 
@@ -564,7 +720,7 @@ The browser should receive job state and summarized results rather than waiting 
 
 Maintain synthetic fixtures containing known duplicates, missing reports, invalid dates, category aliases, hierarchy errors, outliers, points, and polygons. Expected results must be deterministic.
 
-## 15. Acceptance criteria for the complete phase
+## 16. Acceptance criteria for the complete phase
 
 - All ingestion methods enter staging before dashboard generation.
 - Every column receives a profile, inferred type, confidence, and user-confirmable role.
@@ -579,9 +735,16 @@ Maintain synthetic fixtures containing known duplicates, missing reports, invali
 - Dashboards work responsively and meet the existing accessibility baseline.
 - Publication continues to block protected row-level data.
 - Performance targets are defined and verified for small, medium, and large datasets.
+- A high-confidence dataset produces its first useful dashboard in three decisions or fewer.
+- PHFrame offers ranked variants and explains every recommendation.
+- Dashboard labels contain no raw source IDs when readable metadata exists.
+- AI cannot publish, destructively repair, invent formulas, or alter semantics without approval.
+- Every AI proposal is structured, validated, attributable, confidence-scored, auditable, and reversible.
+- Later syncs detect contract drift and preview effects on existing dashboards before structural updates.
+- Golden-dataset evaluations meet documented quality, safety, accessibility, and recommendation thresholds.
 
-## 16. Recommended implementation order
+## 17. Recommended implementation order
 
-Implement 7.1 through 7.6 in sequence. The professional dashboard generator should not be rebuilt first, because its quality depends on the semantic model, validated dataset version, resolved labels, measures, time fields, and geographic hierarchy produced by the earlier work packages.
+Implement 7.1 through 7.8 in sequence. The professional dashboard generator should not be rebuilt first, because its quality depends on the semantic model, validated dataset version, resolved labels, measures, time fields, and geographic hierarchy produced by the earlier work packages. AI copilots follow the deterministic foundation and generator so they can propose changes against enforceable schemas instead of producing unverified charts.
 
 The first implementation milestone should therefore be **7.1 — Staging and profiling foundation**.
