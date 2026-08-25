@@ -14,6 +14,7 @@ def test_security_headers_readiness_api_token_and_audit(tmp_path: Path, monkeypa
     assert response.headers["x-content-type-options"] == "nosniff"
     assert response.headers["x-frame-options"] == "DENY"
     assert response.headers["x-request-id"]
+    assert client.get("/assets/phframe.js", headers={"accept-encoding": "gzip"}).headers["cache-control"].startswith("public")
     assert client.get("/ready").status_code == 200
     created = client.post("/api/case_reports", json={}, headers={"authorization": "Bearer secret-production-token"})
     assert created.status_code == 422

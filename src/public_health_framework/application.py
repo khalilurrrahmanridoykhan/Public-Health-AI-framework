@@ -22,6 +22,7 @@ from starlette.requests import Request
 from starlette.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from starlette.routing import Route
 from starlette.concurrency import run_in_threadpool
+from starlette.middleware.gzip import GZipMiddleware
 
 from . import __version__
 from .config import ConnectorSchema, DatasetSchema, FIELD_TYPES, FieldSchema, ProjectConfig
@@ -110,6 +111,7 @@ class PHFrame:
             Route("/api/{dataset}/{record_id:int}", self.detail, methods=["GET", "PUT", "PATCH", "DELETE"]),
         ]
         self.asgi = Starlette(debug=False, routes=routes)
+        self.asgi.add_middleware(GZipMiddleware, minimum_size=800)
         self.asgi.state.phframe = self
         load_plugins(config.plugins, self.asgi, config)
 
@@ -177,10 +179,10 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
 <script type="module" src="/assets/phframe.js"></script></body></html>""")
 
     async def frontend_css(self, request: Request) -> Response:
-        return Response(asset_text("phframe.css"), media_type="text/css")
+        return Response(asset_text("phframe.css"), media_type="text/css", headers={"cache-control": "public, max-age=3600"})
 
     async def frontend_js(self, request: Request) -> Response:
-        return Response(asset_text("phframe.js"), media_type="text/javascript")
+        return Response(asset_text("phframe.js"), media_type="text/javascript", headers={"cache-control": "public, max-age=3600"})
 
     async def framework_logo(self, request: Request) -> Response:
         return Response(asset_bytes("phframe-logo.png"), media_type="image/png", headers={"cache-control": "public, max-age=86400"})
@@ -1003,10 +1005,10 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
             except ValueError:
                 return _error("Invalid collection filter, limit, or offset.", 400)
             try:
-                records = self.storage.list(dataset, limit, offset, filters)
+                records = self.storage.list(dataset, limit, offset, filters); total = self.storage.count(dataset, filters)
             except ValueError as error:
                 return _error(str(error), 422)
-            return JSONResponse({"data": records, "count": len(records), "limit": limit, "offset": offset})
+            return JSONResponse({"data": records, "count": len(records), "total": total, "limit": limit, "offset": offset})
         try:
             payload = await request.json()
             record = self.storage.create(dataset, payload)

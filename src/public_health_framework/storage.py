@@ -227,6 +227,13 @@ class Storage:
             rows = connection.execute(statement).mappings().all()
         return [_serialize(dict(row)) for row in rows]
 
+    def count(self, dataset: DatasetSchema, filters: dict[str, Any] | None = None) -> int:
+        table = self._dataset_table(dataset); statement = select(func.count()).select_from(table)
+        for name, value in (filters or {}).items():
+            if name not in dataset.fields: raise ValueError(f"Unknown filter field '{name}'.")
+            statement = statement.where(table.c[name] == _coerce(name, value, dataset.fields[name]))
+        with self.engine.connect() as connection: return int(connection.scalar(statement) or 0)
+
     def get(self, dataset: DatasetSchema, record_id: int) -> dict[str, Any] | None:
         table = self._dataset_table(dataset)
         with self.engine.connect() as connection:
