@@ -1,0 +1,1 @@
+data ALL=(root) NOPASSWD: /usr/bin/systemctl status phframe-auth, /usr/bin/systemctl start phframe-auth, /usr/bin/systemctl stop phframe-auth, /usr/bin/systemctl restart phframe-auth, /usr/bin/systemctl is-active phframe-auth, /usr/bin/journalctl -u phframe-auth, /usr/bin/journalctl -u phframe-auth -f, /usr/bin/journalctl -u phframe-auth -n * --no-pager
