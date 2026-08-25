@@ -46,6 +46,15 @@ def test_frontend_shell_and_assets(tmp_path: Path):
     assert ':root[data-theme="high-contrast"]' in css.text
     assert 'customElements.define("ph-import-wizard"' in javascript.text
     assert 'customElements.define("ph-connector-console"' in javascript.text
+    assert "data-theme-choice" in javascript.text
+    assert 'data-theme-choice="light"' in javascript.text
+    assert 'data-theme-choice="dark"' in javascript.text
+    assert 'data-theme-choice="high-contrast"' in javascript.text
+    assert "ph-theme-changing" in javascript.text
+    assert ".ph-theme-switcher" in css.text
+    assert "data-connector-tab" in javascript.text
+    assert "setupConnectorNavigation" in javascript.text
+    assert ".ph-connectors-sidebar" in css.text
     assert 'customElements.define("ph-data-builder"' in javascript.text
     assert "data-add-widget" in javascript.text
     assert "ph-resize-handle" in javascript.text

@@ -80,11 +80,11 @@ class PHAppShell extends PHElement {
     this.innerHTML = `<a class="ph-skip-link" href="#main">Skip to content</a>
       <div class="ph-shell"><header class="ph-header"><a class="ph-brand" href="#/dashboard"><img src="${PHFrame.escape(PHFrame.siteSettings.logo_url)}" alt=""><span><b>${PHFrame.escape(PHFrame.siteSettings.brand_name)}</b><small>${PHFrame.escape(PHFrame.siteSettings.header_title)}</small></span></a>
       <nav class="ph-nav" aria-label="Primary">${links}</nav>
-      <div class="ph-header-tools"><label>${PHFrame.t("theme")} <select class="ph-theme" aria-label="${PHFrame.t("theme")}"><option value="light">Light</option><option value="dark">Dark</option><option value="high-contrast">High contrast</option></select></label>${PHFrame.siteSettings.access_mode === "private" ? `<button class="ph-logout" type="button">Sign out</button>` : ""}</div></header>
+      <div class="ph-header-tools"><div class="ph-theme-switcher" role="group" aria-label="Color theme"><button type="button" data-theme-choice="light" aria-label="Use light theme">☀</button><button type="button" data-theme-choice="dark" aria-label="Use dark theme">☾</button><button type="button" data-theme-choice="high-contrast" aria-label="Use high contrast theme">◐</button></div>${PHFrame.siteSettings.access_mode === "private" ? `<button class="ph-logout" type="button">Sign out</button>` : ""}</div></header>
       <main class="ph-main" id="main" tabindex="-1"><div id="ph-view"></div></main>${PHFrame.siteSettings.show_footer ? `<footer class="ph-footer">${PHFrame.siteSettings.footer_html}</footer>` : ""}<ph-ai-assistant></ph-ai-assistant><ph-notification-center></ph-notification-center></div>`;
-    const theme = this.querySelector(".ph-theme");
-    theme.value = document.documentElement.dataset.theme;
-    theme.addEventListener("change", () => { document.documentElement.dataset.theme = theme.value; localStorage.setItem("ph-theme", theme.value); PHFrame.applyColor(PHFrame.siteSettings.primary_color); });
+    const applyTheme = value => { document.documentElement.classList.add("ph-theme-changing"); document.documentElement.dataset.theme = value; localStorage.setItem("ph-theme", value); PHFrame.applyColor(PHFrame.siteSettings.primary_color); this.querySelectorAll("[data-theme-choice]").forEach(button => { const active = button.dataset.themeChoice === value; button.classList.toggle("ph-theme-choice-active", active); button.setAttribute("aria-pressed", String(active)); }); clearTimeout(this._themeTimer); this._themeTimer = setTimeout(() => document.documentElement.classList.remove("ph-theme-changing"), 280); };
+    this.querySelectorAll("[data-theme-choice]").forEach(button => button.addEventListener("click", () => applyTheme(button.dataset.themeChoice)));
+    applyTheme(document.documentElement.dataset.theme);
     this.querySelector(".ph-logout")?.addEventListener("click", async () => { await PHFrame.send("/api/auth/logout", "POST", {}); location.href = "/login"; });
     this.querySelector("ph-ai-assistant").metadata = this.metadata;
     this.route();
@@ -868,6 +868,7 @@ class PHPageBuilder extends PHElement {
 
 class PHConnectorConsole extends PHElement {
   async render() {
+    this.innerHTML = `<section class="ph-dashboard-loading">${PHFrame.loading("Loading connector workspace")}</section>`;
     try {
       const [connectors, history] = await Promise.all([PHFrame.get("/api/connectors"), PHFrame.get("/api/syncs")]);
       const metadata = await PHFrame.get("/api");
@@ -875,6 +876,7 @@ class PHConnectorConsole extends PHElement {
       const rows = history.data.map(item => `<tr><td>${PHFrame.escape(item.created_at)}</td><td>${PHFrame.escape(item.connector)}</td><td>${item.status}</td><td>${item.imported_rows}/${item.fetched_rows}</td><td>${item.errors.map(error => PHFrame.escape(error.message)).join("; ")}</td></tr>`).join("") || `<tr><td colspan="5">No synchronization runs.</td></tr>`;
       const datasets = Object.entries(metadata.datasets).map(([name, item]) => `<option value="${name}">${PHFrame.escape(item.label)}</option>`).join("");
       this.innerHTML = `<section class="ph-card ph-stack"><div><p class="ph-eyebrow">New data source</p><h3>Add a connector</h3><p class="ph-muted">Choose a provider for guided setup. Every connector maps remote fields into a typed PHFrame dataset.</p></div><form class="ph-stack" data-connector-form><div class="ph-provider-grid"><label><input type="radio" name="type" value="api" checked><b>REST API</b><small>Any JSON endpoint</small></label><label><input type="radio" name="type" value="dhis2"><b>DHIS2</b><small>Data value sets</small></label><label><input type="radio" name="type" value="kobo"><b>KoboToolbox</b><small>Form submissions</small></label><label><input type="radio" name="type" value="odk"><b>ODK Central</b><small>OData submissions</small></label></div><div class="ph-provider-guide" data-provider-guide></div><div class="ph-form-grid"><div class="ph-field"><label>Name</label><input name="name" required pattern="[a-z][a-z0-9_]*" placeholder="global_cases_api"></div><div class="ph-field"><label>Destination dataset</label><select name="dataset">${datasets}</select></div><div class="ph-field"><label>Server base URL</label><input name="base_url" type="url" required placeholder="https://api.example.org"></div><div class="ph-field"><label data-resource-label>Resource path</label><input name="resource" required placeholder="v1/events"></div><div class="ph-field" data-records-path><label>Records path</label><input name="records_path" placeholder="data.records"></div><div class="ph-field"><label>Schedule (minutes)</label><input name="schedule_minutes" type="number" min="1" placeholder="60"></div><div class="ph-field"><label>Token environment variable</label><input name="token_env" placeholder="HEALTH_API_TOKEN"></div><div class="ph-field"><label>Username environment variable</label><input name="username_env" placeholder="ODK_USERNAME"></div><div class="ph-field"><label>Password environment variable</label><input name="password_env" placeholder="ODK_PASSWORD"></div></div><div class="ph-field"><label>Field mapping (JSON)</label><textarea name="mapping" rows="5" required placeholder='{"source.id":"record_id","source.country":"country"}'></textarea><small>Left: provider source path. Right: destination dataset column.</small></div><button class="ph-button" type="submit">Create connector</button><p class="ph-status" role="status"></p></form></section><section><h3>Configured connectors</h3><div class="ph-grid">${cards}</div></section><section class="ph-card"><h3>Synchronization history</h3><div class="ph-table-wrap"><table class="ph-table"><thead><tr><th>Time</th><th>Connector</th><th>Status</th><th>Rows</th><th>Errors</th></tr></thead><tbody>${rows}</tbody></table></div></section>`;
+      this.setupConnectorNavigation(connectors.data.length, history.data.length);
       this.querySelectorAll("[data-sync]").forEach(button => button.addEventListener("click", () => this.sync(button.dataset.sync, true)));
       this.querySelectorAll("ph-confirm[data-connector]").forEach(confirm => confirm.addEventListener("ph-confirmed", () => this.sync(confirm.dataset.connector, false)));
       this.querySelectorAll("[data-delete]").forEach(button => button.addEventListener("click", () => this.remove(button.dataset.delete)));
@@ -883,6 +885,15 @@ class PHConnectorConsole extends PHElement {
       this.providerChanged();
     } catch (error) { this.innerHTML = `<p class="ph-error" role="alert">${PHFrame.escape(error.message)}</p>`; }
   }
+  setupConnectorNavigation(connectorCount, syncCount) {
+    const sections = [...this.querySelectorAll(":scope > section")], names = ["add", "configured", "history"];
+    const workspace = document.createElement("div"); workspace.className = "ph-connectors-workspace";
+    workspace.innerHTML = `<aside class="ph-connectors-sidebar"><div class="ph-connectors-sidebar-heading"><p class="ph-eyebrow">Data integrations</p><h3>Connectors</h3><p>Configure, test, and monitor external data sources.</p></div><nav role="tablist" aria-label="Connector sections"><button type="button" role="tab" data-connector-tab="add"><span>+</span><span><small>Setup</small><b>Add connector</b></span><i>›</i></button><button type="button" role="tab" data-connector-tab="configured"><span>⌁</span><span><small>${connectorCount} active</small><b>Configured</b></span><i>›</i></button><button type="button" role="tab" data-connector-tab="history"><span>↻</span><span><small>${syncCount} runs</small><b>Sync history</b></span><i>›</i></button></nav></aside>`;
+    this.prepend(workspace); sections.forEach((section, index) => { section.classList.add("ph-connector-panel"); section.dataset.connectorPanel = names[index]; workspace.append(section); });
+    this.querySelectorAll("[data-connector-tab]").forEach(tab => tab.addEventListener("click", () => this.activateConnectorPanel(tab.dataset.connectorTab)));
+    this.activateConnectorPanel(sessionStorage.getItem("ph-connectors-tab") || (connectorCount ? "configured" : "add"));
+  }
+  activateConnectorPanel(name) { if (!this.querySelector(`[data-connector-panel="${name}"]`)) name = "add"; this.querySelectorAll("[data-connector-panel]").forEach(panel => panel.hidden = panel.dataset.connectorPanel !== name); this.querySelectorAll("[data-connector-tab]").forEach(tab => { const active = tab.dataset.connectorTab === name; tab.classList.toggle("ph-connector-tab-active", active); tab.setAttribute("aria-selected", String(active)); tab.tabIndex = active ? 0 : -1; }); sessionStorage.setItem("ph-connectors-tab", name); }
   async create(event) {
     event.preventDefault(); const form = event.currentTarget, status = form.querySelector("[role=status]");
     try {
@@ -890,7 +901,7 @@ class PHConnectorConsole extends PHElement {
       const auth = {}; if (raw.token_env) auth.token_env = raw.token_env; if (raw.username_env) auth.username_env = raw.username_env; if (raw.password_env) auth.password_env = raw.password_env;
       const payload = { ...raw, mapping: JSON.parse(raw.mapping), auth };
       delete payload.token_env; delete payload.username_env; delete payload.password_env; if (!payload.records_path) delete payload.records_path; if (!payload.schedule_minutes) delete payload.schedule_minutes;
-      await PHFrame.send("/api/connectors", "POST", payload); PHFrame.notify("Connector created."); this.render();
+      await PHFrame.send("/api/connectors", "POST", payload); sessionStorage.setItem("ph-connectors-tab", "configured"); PHFrame.notify("Connector created."); this.render();
     } catch (error) { status.textContent = error.message; status.className = "ph-status ph-error"; }
   }
   providerChanged() {
@@ -906,12 +917,12 @@ class PHConnectorConsole extends PHElement {
   }
   async remove(name) {
     if (!confirm(`Remove connector ${name}? Imported records will remain.`)) return;
-    try { await PHFrame.send(`/api/connectors/${name}`, "DELETE"); PHFrame.notify("Connector removed."); this.render(); } catch (error) { PHFrame.notify(error.message); }
+    try { await PHFrame.send(`/api/connectors/${name}`, "DELETE"); sessionStorage.setItem("ph-connectors-tab", "configured"); PHFrame.notify("Connector removed."); this.render(); } catch (error) { PHFrame.notify(error.message); }
   }
   async sync(name, dryRun) {
     try {
       const response = await PHFrame.send(`/api/connectors/${name}/sync?dry_run=${dryRun}`, "POST", {});
-      PHFrame.notify(`${name}: ${response.data.status}`);
+      sessionStorage.setItem("ph-connectors-tab", "history"); PHFrame.notify(`${name}: ${response.data.status}`);
       this.render();
     } catch (error) { PHFrame.notify(`${name}: ${error.message}`); }
   }

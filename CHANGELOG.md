@@ -4,6 +4,16 @@ All notable changes to PHFrame will be documented here. The project intends to f
 
 ## [Unreleased]
 
+## [0.8.0a14] - 2026-08-25
+
+### Changed
+
+- Replace the labeled theme dropdown with compact accessible light, dark, and high-contrast icon controls.
+- Add smooth color, background, border, and shadow transitions when changing themes.
+- Redesign Connectors as a responsive sidebar workspace with Add connector, Configured, and Sync history panels.
+- Preserve the relevant connector panel after create, delete, test, and synchronization actions.
+- Improve connector loading, panel spacing, provider selection, connector cards, form actions, and mobile navigation.
+
 ## [0.8.0a13] - 2026-08-24
 
 ### Changed
@@ -268,7 +278,8 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Import audit history.
 - Portable HTML dashboard export.
 
-[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a13...HEAD
+[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a14...HEAD
+[0.8.0a14]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a13...v0.8.0a14
 [0.8.0a13]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a12...v0.8.0a13
 [0.8.0a12]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a11...v0.8.0a12
 [0.8.0a11]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a10...v0.8.0a11
