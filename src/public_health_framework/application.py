@@ -10,7 +10,7 @@ import os
 from pathlib import Path
 import re
 import secrets
-import subprocess
+import subprocess  # nosec B404 - only fixed npx/wrangler argv lists are executed
 import tempfile
 from typing import Any
 from zipfile import ZipFile

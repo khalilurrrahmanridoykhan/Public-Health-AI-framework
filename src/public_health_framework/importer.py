@@ -7,7 +7,7 @@ from io import BytesIO
 import json
 from pathlib import Path
 from typing import Any
-from xml.etree import ElementTree
+from defusedxml import ElementTree
 
 import pandas as pd
 import yaml

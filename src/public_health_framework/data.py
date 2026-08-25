@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 from pathlib import Path
-from xml.etree import ElementTree
+from defusedxml import ElementTree
 
 import pandas as pd
 

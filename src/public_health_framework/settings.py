@@ -291,8 +291,9 @@ class SiteSettings:
 
     @staticmethod
     def _download_json(url: str, maximum: int) -> Any:
+        if urlparse(url).scheme != "https": raise ValueError("Download URL must use HTTPS.")
         request = Request(url, headers={"User-Agent": "PHFrame-boundary-manager/1", "Accept": "application/json"})
-        with urlopen(request, timeout=30) as response:
+        with urlopen(request, timeout=30) as response:  # nosec B310 - HTTPS required above
             content = response.read(maximum + 1)
         if len(content) > maximum: raise ValueError("Boundary download is too large; choose a simplified or lower administrative level.")
         try: return json.loads(content)

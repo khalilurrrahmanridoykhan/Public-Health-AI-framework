@@ -7,7 +7,7 @@ import base64
 import json
 import os
 from typing import Any, Callable
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 from urllib.request import Request, urlopen
 
 from .config import ConnectorSchema
@@ -25,8 +25,11 @@ def register_connector(name: str):
 
 
 def json_transport(url: str, headers: dict[str, str], timeout: int) -> Any:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("Connector URL must use HTTP or HTTPS.")
     request = Request(url, headers={"accept": "application/json", **headers})
-    with urlopen(request, timeout=timeout) as response:
+    with urlopen(request, timeout=timeout) as response:  # nosec B310 - scheme and host validated above
         charset = response.headers.get_content_charset() or "utf-8"
         return json.loads(response.read().decode(charset))
 
