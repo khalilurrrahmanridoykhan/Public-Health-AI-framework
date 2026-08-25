@@ -58,6 +58,7 @@ from .intelligence_repair import apply_repair, repair_proposals
 from .intelligence_geo import infer_geography
 from .intelligence_semantic import compile_semantic_model
 from .intelligence_dashboard import generate_dashboard
+from .intelligence_copilot import KNOWLEDGE_PACKS, match_knowledge_packs, propose_change
 
 
 class PHFrame:
@@ -131,6 +132,8 @@ class PHFrame:
             Route("/api/staging/{version_id:int}/semantic", self.staging_semantic, methods=["GET", "POST", "PATCH"]),
             Route("/api/staging/{version_id:int}/dashboards", self.staging_dashboards, methods=["GET", "POST"]),
             Route("/api/staging/{version_id:int}/dashboards/{dashboard_id:int}", self.staging_dashboard_detail, methods=["PATCH"]),
+            Route("/api/intelligence/knowledge-packs", self.intelligence_knowledge_packs, methods=["GET"]),
+            Route("/api/staging/{version_id:int}/assistant", self.staging_assistant, methods=["POST"]),
             Route("/api/import-mappings", self.import_mapping_index, methods=["GET"]),
             Route("/api/import-mappings/{name}", self.import_mapping_save, methods=["PUT"]),
             Route("/api/browser-import/{dataset}/preview", self.browser_import_preview, methods=["POST"]),
@@ -1085,6 +1088,20 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
     async def staging_dashboard_detail(self, request: Request) -> Response:
         item = self.storage.approve_generated_dashboard(request.path_params["version_id"], request.path_params["dashboard_id"])
         return JSONResponse({"data": item}) if item else _error("Draft generated dashboard not found.", 404)
+
+    async def intelligence_knowledge_packs(self, request: Request) -> Response:
+        version_id = request.query_params.get("version_id")
+        if not version_id: return JSONResponse({"data": KNOWLEDGE_PACKS})
+        semantic = self.storage.semantic_model(int(version_id))
+        return JSONResponse({"data": match_knowledge_packs(semantic["model"])}) if semantic else _error("Semantic model not found.", 404)
+
+    async def staging_assistant(self, request: Request) -> Response:
+        version_id = request.path_params["version_id"]; semantic = self.storage.semantic_model(version_id)
+        if not semantic: return _error("Compile a semantic model before using the dashboard assistant.", 409)
+        try:
+            payload = await request.json(); prompt = str(payload.get("prompt", "")); proposal = propose_change(prompt, semantic["model"])
+            return JSONResponse({"data": self.storage.record_intelligence_proposal(version_id, str(payload.get("actor", "user")), prompt, proposal)}, status_code=201)
+        except (ValueError, json.JSONDecodeError) as error: return _error(str(error), 422)
 
     async def import_mapping_index(self, request: Request) -> JSONResponse:
         return JSONResponse({"data": self.storage.mappings(request.query_params.get("dataset"))})

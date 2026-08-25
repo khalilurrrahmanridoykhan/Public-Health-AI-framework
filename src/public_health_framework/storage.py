@@ -157,6 +157,13 @@ class Storage:
             Column("status", String(32), nullable=False), Column("spec_json", Text, nullable=False),
             Column("created_at", DateTime(timezone=True), nullable=False), Column("approved_at", DateTime(timezone=True)),
         )
+        self.intelligence_proposals_table = Table(
+            "_phframe_intelligence_proposals", self.metadata,
+            Column("id", Integer, primary_key=True, autoincrement=True), Column("version_id", Integer, nullable=False),
+            Column("actor", String(255), nullable=False), Column("prompt", Text, nullable=False),
+            Column("status", String(32), nullable=False), Column("proposal_json", Text, nullable=False),
+            Column("created_at", DateTime(timezone=True), nullable=False), Column("reviewed_at", DateTime(timezone=True)),
+        )
         self.ai_summaries_table = Table(
             "_phframe_ai_summaries", self.metadata,
             Column("id", Integer, primary_key=True, autoincrement=True),
@@ -219,7 +226,7 @@ class Storage:
     def migrate(self, check_only: bool = False) -> list[str]:
         """Create metadata/tables and apply safe additive schema changes."""
         self.metadata.create_all(
-            self.engine, tables=[self.schema_table, self.imports_table, self.syncs_table, self.mappings_table, self.dataset_versions_table, self.staged_rows_table, self.column_profiles_table, self.quality_runs_table, self.quality_issues_table, self.transformations_table, self.geography_models_table, self.semantic_models_table, self.generated_dashboards_table, self.ai_summaries_table, self.ai_audit_table, self.ai_chat_table]
+            self.engine, tables=[self.schema_table, self.imports_table, self.syncs_table, self.mappings_table, self.dataset_versions_table, self.staged_rows_table, self.column_profiles_table, self.quality_runs_table, self.quality_issues_table, self.transformations_table, self.geography_models_table, self.semantic_models_table, self.generated_dashboards_table, self.intelligence_proposals_table, self.ai_summaries_table, self.ai_audit_table, self.ai_chat_table]
         )
         actions: list[str] = []
         inspector = inspect(self.engine)
@@ -585,6 +592,12 @@ class Storage:
     def approve_generated_dashboard(self, version_id: int, dashboard_id: int) -> dict[str, Any] | None:
         with self.engine.begin() as connection: result = connection.execute(update(self.generated_dashboards_table).where(and_(self.generated_dashboards_table.c.version_id == version_id, self.generated_dashboards_table.c.id == dashboard_id, self.generated_dashboards_table.c.status == "draft")).values(status="approved", approved_at=_now()))
         return self.generated_dashboard(version_id, dashboard_id) if result.rowcount else None
+
+    def record_intelligence_proposal(self, version_id: int, actor: str, prompt: str, proposal: dict[str, Any]) -> dict[str, Any]:
+        with self.engine.begin() as connection:
+            result = connection.execute(insert(self.intelligence_proposals_table).values(version_id=version_id, actor=actor, prompt=prompt, status="pending", proposal_json=json.dumps(proposal), created_at=_now(), reviewed_at=None)); item_id = int(result.inserted_primary_key[0])
+        with self.engine.connect() as connection: row = connection.execute(select(self.intelligence_proposals_table).where(self.intelligence_proposals_table.c.id == item_id)).mappings().first()
+        item = _serialize(dict(row)); item["proposal"] = json.loads(item.pop("proposal_json")); return item
 
     def create_ai_summary(self, values: dict[str, Any]) -> dict[str, Any]:
         now = _now()
