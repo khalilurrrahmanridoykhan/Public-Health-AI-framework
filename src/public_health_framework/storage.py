@@ -418,6 +418,11 @@ class Storage:
                 item["rows"] = [json.loads(value["data_json"]) for value in staged]
         return item
 
+    def staged_rows(self, version_id: int, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
+        statement = select(self.staged_rows_table).where(self.staged_rows_table.c.version_id == version_id).order_by(self.staged_rows_table.c.row_number).limit(max(1, min(limit, 1000))).offset(max(0, offset))
+        with self.engine.connect() as connection: rows = connection.execute(statement).mappings().all()
+        return [{"row_number": row["row_number"], "data": json.loads(row["data_json"])} for row in rows]
+
     @staticmethod
     def _version_row(row: Any, include_profile: bool) -> dict[str, Any]:
         item = _serialize(dict(row))
@@ -429,6 +434,17 @@ class Storage:
         with self.engine.begin() as connection:
             result = connection.execute(update(self.dataset_versions_table).where(self.dataset_versions_table.c.id == version_id).values(status="approved", approved_at=_now()))
         return self.dataset_version(version_id) if result.rowcount else None
+
+    def transition_dataset_version(self, version_id: int, status: str) -> dict[str, Any] | None:
+        if status not in {"staged", "approved", "rejected", "archived"}: raise ValueError("Invalid dataset version status.")
+        current = self.dataset_version(version_id)
+        if not current: return None
+        allowed = {"staged": {"approved", "rejected"}, "approved": {"archived"}, "rejected": {"archived"}, "archived": set()}
+        if status != current["status"] and status not in allowed[current["status"]]:
+            raise ValueError(f"Cannot change dataset version from {current['status']} to {status}.")
+        with self.engine.begin() as connection:
+            connection.execute(update(self.dataset_versions_table).where(self.dataset_versions_table.c.id == version_id).values(status=status, approved_at=_now() if status == "approved" else current["approved_at"]))
+        return self.dataset_version(version_id)
 
     def create_ai_summary(self, values: dict[str, Any]) -> dict[str, Any]:
         now = _now()

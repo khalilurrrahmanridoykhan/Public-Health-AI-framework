@@ -63,6 +63,7 @@ def test_browser_csv_preview_validate_and_import(tmp_path: Path):
     assert detail.status_code == 200
     assert detail.json()["data"]["content_digest"] == staged["content_digest"]
     assert client.get("/api/staging?dataset=case_reports").json()["data"][0]["id"] == staged["id"]
+    assert client.get(f"/api/staging/{staged['id']}/rows").json()["data"][0]["data"]["Case Number"] == "M-1"
 
     query = f"filename=cases.csv&mapping={json.dumps(MAPPING)}&dry_run=true&version_id={staged['id']}"
     validated = client.post(f"/api/browser-import/case_reports?{query}", content=_csv())
@@ -74,6 +75,16 @@ def test_browser_csv_preview_validate_and_import(tmp_path: Path):
     assert imported.status_code == 200
     assert imported.json()["data"]["imported_rows"] == 1
     assert client.get(f"/api/staging/{staged['id']}").json()["data"]["status"] == "approved"
+
+
+def test_staged_version_can_be_rejected_but_not_reapproved(tmp_path: Path):
+    root = create_project("Version Review", tmp_path / "version-review")
+    client = TestClient(PHFrame.from_file(str(root / "phframe.yaml")))
+    version_id = client.post("/api/browser-import/case_reports/preview?filename=cases.csv", content=_csv()).json()["data"]["version"]["id"]
+    rejected = client.patch(f"/api/staging/{version_id}", json={"status": "rejected"})
+    assert rejected.status_code == 200
+    assert rejected.json()["data"]["status"] == "rejected"
+    assert client.patch(f"/api/staging/{version_id}", json={"status": "approved"}).status_code == 422
 
 
 def test_browser_excel_preview_and_error_report(tmp_path: Path):

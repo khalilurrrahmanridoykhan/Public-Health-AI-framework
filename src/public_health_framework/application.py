@@ -117,7 +117,8 @@ class PHFrame:
             Route("/api/imports", self.import_history, methods=["GET"]),
             Route("/api/imports/{run_id:int}/errors", self.import_errors, methods=["GET"]),
             Route("/api/staging", self.staging_index, methods=["GET"]),
-            Route("/api/staging/{version_id:int}", self.staging_detail, methods=["GET"]),
+            Route("/api/staging/{version_id:int}", self.staging_detail, methods=["GET", "PATCH"]),
+            Route("/api/staging/{version_id:int}/rows", self.staging_rows, methods=["GET"]),
             Route("/api/import-mappings", self.import_mapping_index, methods=["GET"]),
             Route("/api/import-mappings/{name}", self.import_mapping_save, methods=["PUT"]),
             Route("/api/browser-import/{dataset}/preview", self.browser_import_preview, methods=["POST"]),
@@ -986,8 +987,21 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
         return JSONResponse({"data": self.storage.dataset_versions(dataset, limit)})
 
     async def staging_detail(self, request: Request) -> Response:
-        version = self.storage.dataset_version(request.path_params["version_id"])
-        return JSONResponse({"data": version}) if version else _error("Staged dataset version not found.", 404)
+        version_id = request.path_params["version_id"]
+        if request.method == "GET":
+            version = self.storage.dataset_version(version_id)
+            return JSONResponse({"data": version}) if version else _error("Staged dataset version not found.", 404)
+        try:
+            payload = await request.json(); version = self.storage.transition_dataset_version(version_id, str(payload.get("status", "")))
+            return JSONResponse({"data": version}) if version else _error("Staged dataset version not found.", 404)
+        except (ValueError, json.JSONDecodeError) as error: return _error(str(error), 422)
+
+    async def staging_rows(self, request: Request) -> Response:
+        version_id = request.path_params["version_id"]
+        if not self.storage.dataset_version(version_id): return _error("Staged dataset version not found.", 404)
+        try: limit, offset = int(request.query_params.get("limit", "100")), int(request.query_params.get("offset", "0"))
+        except ValueError: return _error("limit and offset must be integers.", 400)
+        return JSONResponse({"data": self.storage.staged_rows(version_id, limit, offset), "limit": limit, "offset": offset})
 
     async def import_mapping_index(self, request: Request) -> JSONResponse:
         return JSONResponse({"data": self.storage.mappings(request.query_params.get("dataset"))})
