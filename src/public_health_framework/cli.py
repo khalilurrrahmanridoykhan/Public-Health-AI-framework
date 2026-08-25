@@ -44,6 +44,9 @@ def _parser() -> argparse.ArgumentParser:
     new = subparsers.add_parser("new", help="Create a new PHFrame project.")
     new.add_argument("name", help="Human-readable project name")
     new.add_argument("--directory", "-d", help="Destination directory (defaults to a project-name slug)")
+    plugin = subparsers.add_parser("plugin", help="Create and inspect PHFrame plugins."); plugin_commands = plugin.add_subparsers(dest="plugin_command", required=True)
+    plugin_new = plugin_commands.add_parser("new", help="Scaffold a distributable plugin."); plugin_new.add_argument("name"); plugin_new.add_argument("--directory", "-d")
+    plugin_commands.add_parser("list", help="List installed entry-point plugins.")
 
     serve = subparsers.add_parser("serve", help="Run a PHFrame project development server.")
     serve.add_argument("--config", default="phframe.yaml", help="Project configuration path")
@@ -112,6 +115,12 @@ def main(argv: list[str] | None = None) -> int:
             project = create_project(args.name, args.directory)
             print(f"PHFrame project created: {project}")
             print(f"Next: cd {project.name} && phframe serve")
+            return 0
+        if args.command == "plugin":
+            from .plugins import create_plugin, installed_plugins
+            if args.plugin_command == "new": print(f"Plugin created: {create_plugin(args.name, args.directory)}")
+            else:
+                for name in sorted(installed_plugins()): print(name)
             return 0
         if args.command == "check":
             _, messages = check_project(args.config)
