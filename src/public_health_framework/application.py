@@ -54,6 +54,7 @@ from .production import ProductionControls, validate_production_environment
 from .cloudflare import CloudflareOAuth
 from .dhis2_oauth import DHIS2OAuth
 from .intelligence_quality import evaluate_quality
+from .intelligence_repair import apply_repair, repair_proposals
 
 
 class PHFrame:
@@ -121,6 +122,8 @@ class PHFrame:
             Route("/api/staging/{version_id:int}", self.staging_detail, methods=["GET", "PATCH"]),
             Route("/api/staging/{version_id:int}/rows", self.staging_rows, methods=["GET"]),
             Route("/api/staging/{version_id:int}/quality", self.staging_quality, methods=["GET", "POST"]),
+            Route("/api/staging/{version_id:int}/repairs", self.staging_repairs, methods=["GET", "POST"]),
+            Route("/api/transformations", self.transformation_index, methods=["GET"]),
             Route("/api/import-mappings", self.import_mapping_index, methods=["GET"]),
             Route("/api/import-mappings/{name}", self.import_mapping_save, methods=["PUT"]),
             Route("/api/browser-import/{dataset}/preview", self.browser_import_preview, methods=["POST"]),
@@ -1014,6 +1017,29 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
             return JSONResponse({"data": report}) if report else _error("No quality review has run for this version.", 404)
         report = evaluate_quality(version["rows"], version["profile"])
         return JSONResponse({"data": self.storage.record_quality_run(version_id, report)}, status_code=201)
+
+    async def staging_repairs(self, request: Request) -> Response:
+        version_id = request.path_params["version_id"]; version = self.storage.dataset_version(version_id, include_rows=request.method == "POST")
+        if not version: return _error("Staged dataset version not found.", 404)
+        quality = self.storage.latest_quality_run(version_id)
+        if request.method == "GET": return JSONResponse({"data": repair_proposals(quality or {"issues": []})})
+        try:
+            payload = await request.json(); recipe = str(payload.get("recipe", "")); options = payload.get("options") or {}
+            repaired, summary = apply_repair(version["rows"], recipe, options)
+            if payload.get("preview", True):
+                transformation = self.storage.record_transformation(version_id, None, recipe, "previewed", str(payload.get("actor", "user")), str(payload.get("reason", "Repair preview")), options, summary)
+                return JSONResponse({"data": transformation})
+            import pandas as pd
+            output = stage_frame(self.config, version["dataset"], pd.DataFrame(repaired), f"repair:{version_id}:{recipe}", "transformation")
+            report = evaluate_quality(repaired, output["profile"]); self.storage.record_quality_run(output["id"], report)
+            transformation = self.storage.record_transformation(version_id, output["id"], recipe, "applied", str(payload.get("actor", "user")), str(payload.get("reason", "Approved repair")), options, summary)
+            return JSONResponse({"data": {**transformation, "output_version": output}}, status_code=201)
+        except (ValueError, json.JSONDecodeError) as error: return _error(str(error), 422)
+
+    async def transformation_index(self, request: Request) -> Response:
+        try: version_id = int(request.query_params.get("version_id", "0") or 0); limit = int(request.query_params.get("limit", "100"))
+        except ValueError: return _error("version_id and limit must be integers.", 400)
+        return JSONResponse({"data": self.storage.transformations(version_id or None, limit)})
 
     async def import_mapping_index(self, request: Request) -> JSONResponse:
         return JSONResponse({"data": self.storage.mappings(request.query_params.get("dataset"))})

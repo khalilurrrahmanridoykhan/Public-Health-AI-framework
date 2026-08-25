@@ -129,6 +129,15 @@ class Storage:
             Column("message", Text, nullable=False), Column("rows_json", Text, nullable=False),
             Column("evidence_json", Text, nullable=False),
         )
+        self.transformations_table = Table(
+            "_phframe_transformations", self.metadata,
+            Column("id", Integer, primary_key=True, autoincrement=True),
+            Column("source_version_id", Integer, nullable=False), Column("output_version_id", Integer),
+            Column("recipe", String(64), nullable=False), Column("status", String(32), nullable=False),
+            Column("actor", String(255), nullable=False), Column("reason", Text, nullable=False),
+            Column("options_json", Text, nullable=False), Column("summary_json", Text, nullable=False),
+            Column("created_at", DateTime(timezone=True), nullable=False),
+        )
         self.ai_summaries_table = Table(
             "_phframe_ai_summaries", self.metadata,
             Column("id", Integer, primary_key=True, autoincrement=True),
@@ -191,7 +200,7 @@ class Storage:
     def migrate(self, check_only: bool = False) -> list[str]:
         """Create metadata/tables and apply safe additive schema changes."""
         self.metadata.create_all(
-            self.engine, tables=[self.schema_table, self.imports_table, self.syncs_table, self.mappings_table, self.dataset_versions_table, self.staged_rows_table, self.column_profiles_table, self.quality_runs_table, self.quality_issues_table, self.ai_summaries_table, self.ai_audit_table, self.ai_chat_table]
+            self.engine, tables=[self.schema_table, self.imports_table, self.syncs_table, self.mappings_table, self.dataset_versions_table, self.staged_rows_table, self.column_profiles_table, self.quality_runs_table, self.quality_issues_table, self.transformations_table, self.ai_summaries_table, self.ai_audit_table, self.ai_chat_table]
         )
         actions: list[str] = []
         inspector = inspect(self.engine)
@@ -481,6 +490,27 @@ class Storage:
     def latest_quality_run(self, version_id: int) -> dict[str, Any] | None:
         with self.engine.connect() as connection: run_id = connection.scalar(select(self.quality_runs_table.c.id).where(self.quality_runs_table.c.version_id == version_id).order_by(self.quality_runs_table.c.id.desc()).limit(1))
         return self.quality_run(int(run_id)) if run_id else None
+
+    def record_transformation(self, source_version_id: int, output_version_id: int | None, recipe: str, status: str, actor: str, reason: str, options: dict[str, Any], summary: dict[str, Any]) -> dict[str, Any]:
+        with self.engine.begin() as connection:
+            result = connection.execute(insert(self.transformations_table).values(source_version_id=source_version_id, output_version_id=output_version_id, recipe=recipe, status=status, actor=actor, reason=reason, options_json=json.dumps(options), summary_json=json.dumps(summary), created_at=_now()))
+            transformation_id = int(result.inserted_primary_key[0])
+        return self.transformation(transformation_id) or {}
+
+    def transformation(self, transformation_id: int) -> dict[str, Any] | None:
+        with self.engine.connect() as connection: row = connection.execute(select(self.transformations_table).where(self.transformations_table.c.id == transformation_id)).mappings().first()
+        if not row: return None
+        item = _serialize(dict(row)); item["options"] = json.loads(item.pop("options_json")); item["summary"] = json.loads(item.pop("summary_json")); return item
+
+    def transformations(self, version_id: int | None = None, limit: int = 100) -> list[dict[str, Any]]:
+        statement = select(self.transformations_table)
+        if version_id: statement = statement.where(or_(self.transformations_table.c.source_version_id == version_id, self.transformations_table.c.output_version_id == version_id))
+        statement = statement.order_by(self.transformations_table.c.id.desc()).limit(max(1, min(limit, 500)))
+        with self.engine.connect() as connection: rows = connection.execute(statement).mappings().all()
+        result = []
+        for row in rows:
+            item = _serialize(dict(row)); item["options"] = json.loads(item.pop("options_json")); item["summary"] = json.loads(item.pop("summary_json")); result.append(item)
+        return result
 
     def create_ai_summary(self, values: dict[str, Any]) -> dict[str, Any]:
         now = _now()
