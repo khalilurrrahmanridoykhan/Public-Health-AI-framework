@@ -76,6 +76,7 @@ class PHFrame:
             Route("/api/integrations/cloudflare/status", self.cloudflare_status, methods=["GET"]),
             Route("/api/integrations/cloudflare/connect", self.cloudflare_connect, methods=["GET"]),
             Route("/api/integrations/cloudflare/callback", self.cloudflare_callback, methods=["GET"]),
+            Route("/api/integrations/cloudflare/broker/callback", self.cloudflare_broker_callback, methods=["GET"]),
             Route("/api/integrations/cloudflare/account", self.cloudflare_account, methods=["PUT"]),
             Route("/api/integrations/cloudflare/disconnect", self.cloudflare_disconnect, methods=["POST"]),
             Route("/api/ai/deidentify/{dataset}", self.ai_deidentify, methods=["POST"]),
@@ -284,6 +285,12 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
             return RedirectResponse("/app#/settings?cloudflare=connected", status_code=303)
         except ValueError:
             return RedirectResponse("/app#/settings?cloudflare=failed", status_code=303)
+
+    async def cloudflare_broker_callback(self, request: Request) -> Response:
+        try:
+            self.cloudflare.complete_broker(str(request.query_params.get("broker_code", "")), str(request.query_params.get("state", "")))
+            return RedirectResponse("/app#/settings?cloudflare=connected", status_code=303)
+        except ValueError: return RedirectResponse("/app#/settings?cloudflare=failed", status_code=303)
 
     async def cloudflare_account(self, request: Request) -> Response:
         try: return JSONResponse({"data": self.cloudflare.select_account(str((await request.json()).get("account_id", "")))})

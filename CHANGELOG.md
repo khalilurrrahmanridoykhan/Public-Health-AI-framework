@@ -9,6 +9,7 @@ All notable changes to PHFrame will be documented here. The project intends to f
 ### Added
 
 - Add one-click Cloudflare OAuth authorization with PKCE, callback validation, automatic account discovery, account selection, token refresh, and disconnect controls.
+- Add support for the hosted PHFrame authorization broker so local installations need no Cloudflare client secret and receive credentials through short-lived, single-use grants.
 - Encrypt Cloudflare access and refresh tokens at rest; production deployments can supply `PHFRAME_CREDENTIAL_KEY` to keep the encryption key outside the project.
 
 ### Changed

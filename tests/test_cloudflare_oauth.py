@@ -43,3 +43,16 @@ def test_cloudflare_oauth_rejects_invalid_state(tmp_path, monkeypatch):
         assert "state" in str(error)
     else:
         raise AssertionError("Invalid OAuth state was accepted")
+
+
+def test_hosted_broker_flow_requires_no_local_client_secret(tmp_path, monkeypatch):
+    monkeypatch.delenv("PHFRAME_CLOUDFLARE_CLIENT_ID", raising=False)
+    monkeypatch.delenv("PHFRAME_CLOUDFLARE_CLIENT_SECRET", raising=False)
+    monkeypatch.setenv("PHFRAME_CREDENTIAL_KEY", Fernet.generate_key().decode())
+    oauth = CloudflareOAuth(tmp_path)
+    url = oauth.begin("http://127.0.0.1:8000/api/integrations/cloudflare/callback")
+    assert url.startswith(oauth.default_broker_url + "/oauth/authorize?")
+    assert "broker%2Fcallback" in url
+    pending = oauth._load(oauth.state_path)
+    monkeypatch.setattr(oauth, "_request_json", lambda *args, **kwargs: {"data": {"token": {"access_token": "broker-access", "refresh_token": "broker-refresh", "expires_in": 3600}, "accounts": [{"id": "account-a", "name": "Health"}]}})
+    assert oauth.complete_broker("single-use-code", pending["state"])["connected"] is True

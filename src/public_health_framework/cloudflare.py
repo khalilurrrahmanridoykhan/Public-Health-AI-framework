@@ -22,6 +22,7 @@ class CloudflareOAuth:
     token_url = "https://dash.cloudflare.com/oauth2/token"
     revoke_url = "https://dash.cloudflare.com/oauth2/revoke"
     api_url = "https://api.cloudflare.com/client/v4"
+    default_broker_url = "https://phframe-auth.82.25.92.211.nip.io"
 
     def __init__(self, root: Path):
         self.directory = Path(root) / "data"
@@ -39,13 +40,16 @@ class CloudflareOAuth:
     def scopes(self) -> str:
         return os.getenv("PHFRAME_CLOUDFLARE_SCOPES", "workers-platform.read workers-platform.write").strip()
 
+    @property
+    def broker_url(self) -> str: return os.getenv("PHFRAME_CLOUDFLARE_BROKER_URL", self.default_broker_url).rstrip("/")
+
     def status(self) -> dict[str, Any]:
         credentials = self._load(self.credentials_path) or {}
         accounts = credentials.get("accounts", [])
         selected = credentials.get("account_id", "")
         account = next((item for item in accounts if item.get("id") == selected), None)
         return {
-            "available": bool(self.client_id and self.client_secret),
+            "available": bool((self.client_id and self.client_secret) or self.broker_url),
             "connected": bool(credentials.get("access_token") and selected),
             "account": {"id": selected, "name": (account or {}).get("name", "")},
             "accounts": [{"id": str(item.get("id", "")), "name": str(item.get("name", ""))} for item in accounts],
@@ -53,12 +57,29 @@ class CloudflareOAuth:
         }
 
     def begin(self, redirect_uri: str) -> str:
-        if not self.client_id or not self.client_secret:
-            raise ValueError("Cloudflare OAuth is not configured on this PHFrame server.")
+        if not self.client_id or not self.client_secret: return self.begin_broker(redirect_uri.replace("/callback", "/broker/callback"))
         state, verifier = secrets.token_urlsafe(32), secrets.token_urlsafe(64)
         challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).decode().rstrip("=")
         self._save(self.state_path, {"state": state, "verifier": verifier, "redirect_uri": redirect_uri, "created_at": datetime.now(timezone.utc).isoformat()})
         return self.authorize_url + "?" + urlencode({"response_type": "code", "client_id": self.client_id, "redirect_uri": redirect_uri, "scope": self.scopes, "state": state, "code_challenge": challenge, "code_challenge_method": "S256"})
+
+    def begin_broker(self, return_uri: str) -> str:
+        parsed = __import__("urllib.parse", fromlist=["urlparse"]).urlparse(self.broker_url)
+        if parsed.scheme != "https" or not parsed.netloc: raise ValueError("PHFRAME_CLOUDFLARE_BROKER_URL must use HTTPS.")
+        state = secrets.token_urlsafe(32)
+        self._save(self.state_path, {"state": state, "broker": self.broker_url, "created_at": datetime.now(timezone.utc).isoformat()})
+        return f"{self.broker_url}/oauth/authorize?" + urlencode({"return_url": return_uri, "state": state})
+
+    def complete_broker(self, code: str, state: str) -> dict[str, Any]:
+        pending = self._load(self.state_path)
+        if not pending or not secrets.compare_digest(str(pending.get("state", "")), state): raise ValueError("Broker authorization state is invalid or expired.")
+        if datetime.now(timezone.utc) - datetime.fromisoformat(str(pending["created_at"])) > timedelta(minutes=10): raise ValueError("Broker authorization expired.")
+        response = self._request_json(f"{pending['broker']}/oauth/token", json_body={"code": code})
+        data = response.get("data", {}); token, accounts = data.get("token", {}), data.get("accounts", [])
+        if not token.get("access_token") or not accounts: raise ValueError("Authorization broker returned no Cloudflare account.")
+        expires = datetime.now(timezone.utc) + timedelta(seconds=int(token.get("expires_in", 3600)))
+        self._save(self.credentials_path, {"access_token":token["access_token"],"refresh_token":token.get("refresh_token", ""),"expires_at":expires.isoformat(),"account_id":str(accounts[0]["id"]),"accounts":accounts,"broker":pending["broker"]})
+        self.state_path.unlink(missing_ok=True); return self.status()
 
     def complete(self, code: str, state: str) -> dict[str, Any]:
         pending = self._load(self.state_path)
@@ -95,7 +116,9 @@ class CloudflareOAuth:
         if expires <= datetime.now(timezone.utc) + timedelta(minutes=2):
             refresh = str(credentials.get("refresh_token", ""))
             if not refresh: raise ValueError("Cloudflare authorization expired. Connect again.")
-            token = self._request_json(self.token_url, {"grant_type": "refresh_token", "refresh_token": refresh, "client_id": self.client_id, "client_secret": self.client_secret})
+            if credentials.get("broker") and not self.client_secret:
+                token = self._request_json(f"{credentials['broker']}/oauth/refresh", json_body={"refresh_token": refresh}).get("data", {}).get("token", {})
+            else: token = self._request_json(self.token_url, {"grant_type": "refresh_token", "refresh_token": refresh, "client_id": self.client_id, "client_secret": self.client_secret})
             credentials["access_token"] = token["access_token"]
             credentials["refresh_token"] = token.get("refresh_token", refresh)
             credentials["expires_at"] = (datetime.now(timezone.utc) + timedelta(seconds=int(token.get("expires_in", 3600)))).isoformat()
@@ -128,10 +151,11 @@ class CloudflareOAuth:
         try: return json.loads(self._fernet().decrypt(path.read_bytes()))
         except (InvalidToken, json.JSONDecodeError) as error: raise ValueError("Stored Cloudflare credentials cannot be decrypted.") from error
 
-    def _request_json(self, url: str, form: dict[str, Any] | None = None, bearer: str = "") -> dict[str, Any]:
-        data = urlencode(form).encode() if form is not None else None
+    def _request_json(self, url: str, form: dict[str, Any] | None = None, bearer: str = "", json_body: dict[str, Any] | None = None) -> dict[str, Any]:
+        data = json.dumps(json_body).encode() if json_body is not None else (urlencode(form).encode() if form is not None else None)
         headers = {"accept": "application/json"}
         if form is not None: headers["content-type"] = "application/x-www-form-urlencoded"
+        if json_body is not None: headers["content-type"] = "application/json"
         if bearer: headers["authorization"] = f"Bearer {bearer}"
         try:
             with urlopen(Request(url, data=data, headers=headers), timeout=30) as response:  # nosec B310 - fixed Cloudflare origins

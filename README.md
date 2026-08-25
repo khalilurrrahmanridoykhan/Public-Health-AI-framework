@@ -182,6 +182,10 @@ Create a Cloudflare OAuth application for the PHFrame installation, register its
 exact callback URL, and keep the client secret and encryption key outside the
 project:
 
+PHFrame uses the hosted authorization broker by default, so normal installations
+need no Cloudflare client ID or secret. The following variables are only needed
+when operating a private, self-hosted broker instead:
+
 ```bash
 export PHFRAME_CLOUDFLARE_CLIENT_ID="your-oauth-client-id"
 export PHFRAME_CLOUDFLARE_CLIENT_SECRET="your-oauth-client-secret"

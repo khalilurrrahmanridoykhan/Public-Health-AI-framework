@@ -1,0 +1,25 @@
+[Unit]
+Description=PHFrame Cloudflare OAuth broker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=phframe-auth
+Group=phframe-auth
+WorkingDirectory=/opt/phframe-auth
+EnvironmentFile=/etc/phframe-auth.env
+ExecStart=/opt/phframe-auth/.venv/bin/uvicorn app:app --host 127.0.0.1 --port 8765 --proxy-headers --forwarded-allow-ips=127.0.0.1
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/phframe-auth
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+LockPersonality=true
+MemoryDenyWriteExecute=true
+
+[Install]
+WantedBy=multi-user.target
