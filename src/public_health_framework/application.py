@@ -371,10 +371,7 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
                 archive_path = Path(directory) / "bundle.zip"; archive_path.write_bytes(content)
                 with ZipFile(archive_path) as archive: archive.extractall(Path(directory) / "site")
                 environment = {**os.environ, "CLOUDFLARE_ACCOUNT_ID": account, "CLOUDFLARE_API_TOKEN": token}
-                created = await run_in_threadpool(subprocess.run, ["npx", "--yes", "wrangler", "pages", "project", "create", project, "--production-branch", "main"], capture_output=True, text=True, timeout=90, env=environment)
-                creation_message = (created.stderr or created.stdout).lower()
-                if created.returncode and "already exists" not in creation_message and "already been taken" not in creation_message:
-                    raise ValueError("Cloudflare project setup failed: " + (created.stderr or created.stdout)[-1000:])
+                await run_in_threadpool(self.cloudflare.ensure_pages_project, account, token, project)
                 process = await run_in_threadpool(subprocess.run, ["npx", "--yes", "wrangler", "pages", "deploy", str(Path(directory) / "site"), "--project-name", project, "--branch", "main", "--commit-dirty=true"], capture_output=True, text=True, timeout=180, env=environment)
             if process.returncode: raise ValueError("Cloudflare deployment failed: " + (process.stderr or process.stdout)[-1000:])
             urls = re.findall(r"https://[^\s]+\.pages\.dev", process.stdout + process.stderr); url = urls[-1].rstrip(".,") if urls else f"https://{project}.pages.dev"

@@ -56,3 +56,22 @@ def test_hosted_broker_flow_requires_no_local_client_secret(tmp_path, monkeypatc
     pending = oauth._load(oauth.state_path)
     monkeypatch.setattr(oauth, "_request_json", lambda *args, **kwargs: {"data": {"token": {"access_token": "broker-access", "refresh_token": "broker-refresh", "expires_in": 3600}, "accounts": [{"id": "account-a", "name": "Health"}]}})
     assert oauth.complete_broker("single-use-code", pending["state"])["connected"] is True
+
+
+def test_pages_project_is_reused_or_created_through_api(tmp_path, monkeypatch):
+    oauth = CloudflareOAuth(tmp_path)
+    calls = []
+
+    def request(url, form=None, bearer="", json_body=None):
+        calls.append((url, bearer, json_body))
+        if json_body is None:
+            return {"success": True, "result": []}
+        return {"success": True, "result": {"name": json_body["name"], "subdomain": f"{json_body['name']}.pages.dev"}}
+
+    monkeypatch.setattr(oauth, "_request_json", request)
+    project = oauth.ensure_pages_project("account-a", "oauth-access", "health-dashboard")
+    assert project["subdomain"] == "health-dashboard.pages.dev"
+    assert calls[-1][2] == {"name": "health-dashboard", "production_branch": "main"}
+
+    monkeypatch.setattr(oauth, "_request_json", lambda *args, **kwargs: {"success": True, "result": [project]})
+    assert oauth.ensure_pages_project("account-a", "oauth-access", "health-dashboard") == project

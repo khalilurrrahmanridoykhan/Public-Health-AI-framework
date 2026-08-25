@@ -125,6 +125,23 @@ class CloudflareOAuth:
             self._save(self.credentials_path, credentials)
         return str(credentials["account_id"]), str(credentials["access_token"])
 
+    def ensure_pages_project(self, account_id: str, access_token: str, name: str) -> dict[str, Any]:
+        """Return an existing Pages project or create it through the OAuth-aware API."""
+        endpoint = f"{self.api_url}/accounts/{account_id}/pages/projects"
+        response = self._request_json(endpoint, bearer=access_token)
+        existing = next((item for item in response.get("result", []) if item.get("name") == name), None)
+        if existing:
+            return existing
+        created = self._request_json(
+            endpoint,
+            bearer=access_token,
+            json_body={"name": name, "production_branch": "main"},
+        )
+        project = created.get("result")
+        if not isinstance(project, dict) or project.get("name") != name:
+            raise ValueError("Cloudflare did not create the requested Pages project.")
+        return project
+
     def disconnect(self) -> None:
         credentials = self._load(self.credentials_path) or {}
         token = str(credentials.get("access_token", ""))
