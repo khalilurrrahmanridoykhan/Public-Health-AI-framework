@@ -10,7 +10,7 @@ import pandas as pd
 
 from .config import ProjectConfig
 from .connectors import Transport, create_connector, json_transport
-from .importer import import_frame
+from .importer import import_frame, stage_frame
 from .storage import Storage
 
 
@@ -24,6 +24,7 @@ class SyncResult:
     imported_rows: int
     errors: tuple[dict[str, Any], ...]
     dry_run: bool = False
+    version_id: int | None = None
 
 
 def sync_connector(
@@ -45,6 +46,7 @@ def sync_connector(
     storage = Storage(config)
     storage.initialize()
     fetched = imported = 0
+    version_id: int | None = None
     errors: list[dict[str, Any]] = []
     status = "failed"
     try:
@@ -53,17 +55,22 @@ def sync_connector(
         if not records:
             status = "validated" if dry_run else "completed"
         else:
+            frame = pd.DataFrame(records)
+            version = stage_frame(config, connector_config.dataset, frame, f"connector:{name}", connector_config.type)
+            version_id = int(version["id"])
             result = import_frame(
-                config, connector_config.dataset, pd.DataFrame(records),
+                config, connector_config.dataset, frame,
                 f"connector:{name}", mapping=None, dry_run=dry_run,
             )
             imported = result.imported_rows
             errors = list(result.errors)
             status = result.status
+            if not dry_run and not errors:
+                storage.approve_dataset_version(version_id)
     except (OSError, ValueError) as error:
         errors.append({"message": str(error)})
     run_id = storage.record_sync(name, connector_config.dataset, status, fetched, imported, errors)
-    return SyncResult(run_id, name, connector_config.dataset, status, fetched, imported, tuple(errors), dry_run)
+    return SyncResult(run_id, name, connector_config.dataset, status, fetched, imported, tuple(errors), dry_run, version_id)
 
 
 def connector_due(config: ProjectConfig, name: str, now: datetime | None = None) -> bool:

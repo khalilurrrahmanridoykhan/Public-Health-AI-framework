@@ -84,6 +84,36 @@ class Storage:
             Column("mapping_json", Text, nullable=False),
             Column("updated_at", DateTime(timezone=True), nullable=False),
         )
+        self.dataset_versions_table = Table(
+            "_phframe_dataset_versions", self.metadata,
+            Column("id", Integer, primary_key=True, autoincrement=True),
+            Column("dataset", String(255), nullable=False),
+            Column("source", Text, nullable=False),
+            Column("source_kind", String(64), nullable=False),
+            Column("status", String(32), nullable=False),
+            Column("row_count", Integer, nullable=False),
+            Column("column_count", Integer, nullable=False),
+            Column("content_digest", String(64), nullable=False),
+            Column("schema_signature", String(64), nullable=False),
+            Column("profile_json", Text, nullable=False),
+            Column("created_at", DateTime(timezone=True), nullable=False),
+            Column("approved_at", DateTime(timezone=True)),
+        )
+        self.staged_rows_table = Table(
+            "_phframe_staged_rows", self.metadata,
+            Column("version_id", Integer, primary_key=True),
+            Column("row_number", Integer, primary_key=True),
+            Column("data_json", Text, nullable=False),
+        )
+        self.column_profiles_table = Table(
+            "_phframe_column_profiles", self.metadata,
+            Column("version_id", Integer, primary_key=True),
+            Column("column_name", String(255), primary_key=True),
+            Column("storage_type", String(32), nullable=False),
+            Column("semantic_type", String(64), nullable=False),
+            Column("confidence", Float, nullable=False),
+            Column("profile_json", Text, nullable=False),
+        )
         self.ai_summaries_table = Table(
             "_phframe_ai_summaries", self.metadata,
             Column("id", Integer, primary_key=True, autoincrement=True),
@@ -146,7 +176,7 @@ class Storage:
     def migrate(self, check_only: bool = False) -> list[str]:
         """Create metadata/tables and apply safe additive schema changes."""
         self.metadata.create_all(
-            self.engine, tables=[self.schema_table, self.imports_table, self.syncs_table, self.mappings_table, self.ai_summaries_table, self.ai_audit_table, self.ai_chat_table]
+            self.engine, tables=[self.schema_table, self.imports_table, self.syncs_table, self.mappings_table, self.dataset_versions_table, self.staged_rows_table, self.column_profiles_table, self.ai_summaries_table, self.ai_audit_table, self.ai_chat_table]
         )
         actions: list[str] = []
         inspector = inspect(self.engine)
@@ -343,6 +373,62 @@ class Storage:
             item["mapping"] = json.loads(item.pop("mapping_json"))
             result.append(item)
         return result
+
+    def stage_dataset(self, dataset: str, source: str, source_kind: str, rows: list[dict[str, Any]], profile: dict[str, Any]) -> dict[str, Any]:
+        """Persist an immutable source version and its deterministic profile."""
+        now = _now()
+        with self.engine.begin() as connection:
+            result = connection.execute(insert(self.dataset_versions_table).values(
+                dataset=dataset, source=source, source_kind=source_kind, status="staged",
+                row_count=profile["row_count"], column_count=profile["column_count"],
+                content_digest=profile["content_digest"], schema_signature=profile["schema_signature"],
+                profile_json=json.dumps(profile), created_at=now, approved_at=None,
+            ))
+            version_id = int(result.inserted_primary_key[0])
+            if rows:
+                connection.execute(insert(self.staged_rows_table), [
+                    {"version_id": version_id, "row_number": index, "data_json": json.dumps(row)}
+                    for index, row in enumerate(rows, start=1)
+                ])
+            if profile["columns"]:
+                connection.execute(insert(self.column_profiles_table), [
+                    {
+                        "version_id": version_id, "column_name": item["name"],
+                        "storage_type": item["storage_type"], "semantic_type": item["semantic_type"],
+                        "confidence": item["confidence"], "profile_json": json.dumps(item),
+                    }
+                    for item in profile["columns"]
+                ])
+        return self.dataset_version(version_id) or {}
+
+    def dataset_versions(self, dataset: str | None = None, limit: int = 50) -> list[dict[str, Any]]:
+        statement = select(self.dataset_versions_table)
+        if dataset: statement = statement.where(self.dataset_versions_table.c.dataset == dataset)
+        statement = statement.order_by(self.dataset_versions_table.c.id.desc()).limit(max(1, min(limit, 200)))
+        with self.engine.connect() as connection: rows = connection.execute(statement).mappings().all()
+        return [self._version_row(row, include_profile=False) for row in rows]
+
+    def dataset_version(self, version_id: int, include_rows: bool = False) -> dict[str, Any] | None:
+        with self.engine.connect() as connection:
+            row = connection.execute(select(self.dataset_versions_table).where(self.dataset_versions_table.c.id == version_id)).mappings().first()
+            if not row: return None
+            item = self._version_row(row, include_profile=True)
+            if include_rows:
+                staged = connection.execute(select(self.staged_rows_table).where(self.staged_rows_table.c.version_id == version_id).order_by(self.staged_rows_table.c.row_number)).mappings().all()
+                item["rows"] = [json.loads(value["data_json"]) for value in staged]
+        return item
+
+    @staticmethod
+    def _version_row(row: Any, include_profile: bool) -> dict[str, Any]:
+        item = _serialize(dict(row))
+        raw_profile = item.pop("profile_json")
+        if include_profile: item["profile"] = json.loads(raw_profile)
+        return item
+
+    def approve_dataset_version(self, version_id: int) -> dict[str, Any] | None:
+        with self.engine.begin() as connection:
+            result = connection.execute(update(self.dataset_versions_table).where(self.dataset_versions_table.c.id == version_id).values(status="approved", approved_at=_now()))
+        return self.dataset_version(version_id) if result.rowcount else None
 
     def create_ai_summary(self, values: dict[str, Any]) -> dict[str, Any]:
         now = _now()

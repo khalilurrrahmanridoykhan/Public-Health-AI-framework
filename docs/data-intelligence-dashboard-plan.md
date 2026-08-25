@@ -2,9 +2,10 @@
 
 ## Status
 
-- Planning document only
-- No implementation is included in this change
-- Proposed delivery: Phase 7, divided into independently testable work packages
+- Implementation started on 2026-08-25.
+- Work package 7.1 is in progress: browser files and connector syncs now share staging, immutable dataset versions, provenance, deterministic column profiling, semantic candidates, profile APIs, and the initial review interface.
+- Remaining 7.1 scope: add explicit version-management controls and finish profiling/background-job performance safeguards for very large sources.
+- Proposed delivery remains divided into independently testable work packages.
 
 ## Problem statement
 

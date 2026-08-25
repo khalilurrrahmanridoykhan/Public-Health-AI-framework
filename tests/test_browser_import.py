@@ -53,16 +53,27 @@ def test_browser_csv_preview_validate_and_import(tmp_path: Path):
     assert preview.status_code == 200
     assert preview.json()["data"]["columns"][0] == "Case Number"
     assert preview.json()["data"]["total_rows"] == 1
+    staged = preview.json()["data"]["version"]
+    assert staged["status"] == "staged"
+    profile = preview.json()["data"]["profile"]
+    assert profile["row_count"] == 1
+    assert next(item for item in profile["columns"] if item["name"] == "Cases")["semantic_type"] == "measure"
 
-    query = f"filename=cases.csv&mapping={json.dumps(MAPPING)}&dry_run=true"
+    detail = client.get(f"/api/staging/{staged['id']}")
+    assert detail.status_code == 200
+    assert detail.json()["data"]["content_digest"] == staged["content_digest"]
+    assert client.get("/api/staging?dataset=case_reports").json()["data"][0]["id"] == staged["id"]
+
+    query = f"filename=cases.csv&mapping={json.dumps(MAPPING)}&dry_run=true&version_id={staged['id']}"
     validated = client.post(f"/api/browser-import/case_reports?{query}", content=_csv())
     assert validated.status_code == 200
     assert validated.json()["data"]["status"] == "validated"
     imported = client.post(
-        f"/api/browser-import/case_reports?filename=cases.csv&mapping={json.dumps(MAPPING)}", content=_csv()
+        f"/api/browser-import/case_reports?filename=cases.csv&mapping={json.dumps(MAPPING)}&version_id={staged['id']}", content=_csv()
     )
     assert imported.status_code == 200
     assert imported.json()["data"]["imported_rows"] == 1
+    assert client.get(f"/api/staging/{staged['id']}").json()["data"]["status"] == "approved"
 
 
 def test_browser_excel_preview_and_error_report(tmp_path: Path):

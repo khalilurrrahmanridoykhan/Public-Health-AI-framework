@@ -44,7 +44,7 @@ from .config import ConnectorSchema, DatasetSchema, FIELD_TYPES, FieldSchema, Pr
 from .plugins import load_plugins
 from .periods import resolve_period
 from .publishing import build_bundle, publication_audit, safe_project_name
-from .importer import import_frame, load_uploaded_frame, preview_frame
+from .importer import import_frame, load_uploaded_frame, preview_frame, stage_frame
 from .storage import Storage
 from .ui import asset_bytes, asset_text
 from .settings import SiteSettings
@@ -116,6 +116,8 @@ class PHFrame:
             Route("/api", self.api_index, methods=["GET"]),
             Route("/api/imports", self.import_history, methods=["GET"]),
             Route("/api/imports/{run_id:int}/errors", self.import_errors, methods=["GET"]),
+            Route("/api/staging", self.staging_index, methods=["GET"]),
+            Route("/api/staging/{version_id:int}", self.staging_detail, methods=["GET"]),
             Route("/api/import-mappings", self.import_mapping_index, methods=["GET"]),
             Route("/api/import-mappings/{name}", self.import_mapping_save, methods=["PUT"]),
             Route("/api/browser-import/{dataset}/preview", self.browser_import_preview, methods=["POST"]),
@@ -976,6 +978,17 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
             "errors": run["errors"], "error_rows": run["error_rows"],
         }})
 
+    async def staging_index(self, request: Request) -> Response:
+        try: limit = int(request.query_params.get("limit", "50"))
+        except ValueError: return _error("limit must be an integer.", 400)
+        dataset = request.query_params.get("dataset")
+        if dataset and dataset not in self.config.datasets: return _error("Dataset not found.", 404)
+        return JSONResponse({"data": self.storage.dataset_versions(dataset, limit)})
+
+    async def staging_detail(self, request: Request) -> Response:
+        version = self.storage.dataset_version(request.path_params["version_id"])
+        return JSONResponse({"data": version}) if version else _error("Staged dataset version not found.", 404)
+
     async def import_mapping_index(self, request: Request) -> JSONResponse:
         return JSONResponse({"data": self.storage.mappings(request.query_params.get("dataset"))})
 
@@ -1003,13 +1016,25 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
     async def browser_import_preview(self, request: Request) -> Response:
         try:
             frame, filename = await self._uploaded_frame(request)
-            return JSONResponse({"data": preview_frame(self.config, request.path_params["dataset"], frame)})
+            dataset = request.path_params["dataset"]
+            preview = preview_frame(self.config, dataset, frame)
+            version = stage_frame(self.config, dataset, frame, f"browser:{filename}")
+            preview["version"] = {key: version[key] for key in ("id", "status", "content_digest", "schema_signature", "created_at")}
+            return JSONResponse({"data": preview})
         except ValueError as error:
             return _error(str(error), 422)
 
     async def browser_import(self, request: Request) -> Response:
         try:
-            frame, filename = await self._uploaded_frame(request)
+            version_id = int(request.query_params.get("version_id", "0") or 0)
+            if version_id:
+                version = self.storage.dataset_version(version_id, include_rows=True)
+                if not version or version["dataset"] != request.path_params["dataset"]:
+                    raise ValueError("Staged dataset version not found for this destination.")
+                import pandas as pd
+                frame, filename = pd.DataFrame(version["rows"]), Path(version["source"].removeprefix("browser:")).name
+            else:
+                frame, filename = await self._uploaded_frame(request)
             raw_mapping = request.query_params.get("mapping", "{}")
             mapping = json.loads(raw_mapping)
             if not isinstance(mapping, dict):
@@ -1019,10 +1044,13 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
                 self.config, request.path_params["dataset"], frame, f"browser:{filename}",
                 {str(key): str(value) for key, value in mapping.items()}, dry_run,
             )
+            if version_id and not dry_run and not result.errors:
+                self.storage.approve_dataset_version(version_id)
             return JSONResponse({"data": {
                 "run_id": result.run_id, "dataset": result.dataset, "status": result.status,
                 "total_rows": result.total_rows, "imported_rows": result.imported_rows,
                 "errors": list(result.errors), "dry_run": result.dry_run,
+                "version_id": version_id or None,
             }}, status_code=200 if not result.errors else 422)
         except (json.JSONDecodeError, ValueError) as error:
             return _error(str(error), 422)

@@ -46,6 +46,11 @@ def test_connector_sync_imports_and_audits(tmp_path: Path):
     storage = Storage(config)
     assert storage.sync_history()[0]["connector"] == "kobo_cases"
     assert len(storage.list(config.datasets["case_reports"])) == 1
+    version = storage.dataset_version(result.version_id)
+    assert version["source"] == "connector:kobo_cases"
+    assert version["source_kind"] == "kobo"
+    assert version["status"] == "approved"
+    assert version["profile"]["row_count"] == 1
 
 
 def test_failed_sync_is_audited_and_atomic(tmp_path: Path):

@@ -14,6 +14,7 @@ import yaml
 
 from .config import ProjectConfig
 from .data import load_dataset
+from .intelligence import profile_frame
 from .storage import Storage, validate_payload
 
 
@@ -168,6 +169,7 @@ def preview_frame(config: ProjectConfig, dataset_name: str, frame: pd.DataFrame)
         {str(name): _clean(value) for name, value in row.items()}
         for row in frame.head(10).to_dict(orient="records")
     ]
+    profile = profile_frame(frame)
     return {
         "columns": [str(column) for column in frame.columns],
         "fields": [
@@ -177,7 +179,17 @@ def preview_frame(config: ProjectConfig, dataset_name: str, frame: pd.DataFrame)
         "suggested_mapping": suggested,
         "sample": sample,
         "total_rows": len(frame),
+        "profile": profile,
     }
+
+
+def stage_frame(config: ProjectConfig, dataset_name: str, frame: pd.DataFrame, source: str, source_kind: str = "file") -> dict[str, Any]:
+    if dataset_name not in config.datasets:
+        raise ValueError(f"Dataset not found: {dataset_name}")
+    profile = profile_frame(frame)
+    rows = [{str(key): _clean(value) for key, value in row.items()} for row in frame.to_dict(orient="records")]
+    storage = Storage(config); storage.initialize()
+    return storage.stage_dataset(dataset_name, source, source_kind, rows, profile)
 
 
 def _clean(value: Any) -> Any:
