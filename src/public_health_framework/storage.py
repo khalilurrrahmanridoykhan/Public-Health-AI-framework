@@ -143,6 +143,13 @@ class Storage:
             Column("id", Integer, primary_key=True, autoincrement=True), Column("version_id", Integer, nullable=False),
             Column("model_json", Text, nullable=False), Column("created_at", DateTime(timezone=True), nullable=False),
         )
+        self.semantic_models_table = Table(
+            "_phframe_semantic_models", self.metadata,
+            Column("id", Integer, primary_key=True, autoincrement=True), Column("version_id", Integer, nullable=False),
+            Column("contract_version", Integer, nullable=False), Column("status", String(32), nullable=False),
+            Column("model_json", Text, nullable=False), Column("created_at", DateTime(timezone=True), nullable=False),
+            Column("approved_at", DateTime(timezone=True)),
+        )
         self.ai_summaries_table = Table(
             "_phframe_ai_summaries", self.metadata,
             Column("id", Integer, primary_key=True, autoincrement=True),
@@ -205,7 +212,7 @@ class Storage:
     def migrate(self, check_only: bool = False) -> list[str]:
         """Create metadata/tables and apply safe additive schema changes."""
         self.metadata.create_all(
-            self.engine, tables=[self.schema_table, self.imports_table, self.syncs_table, self.mappings_table, self.dataset_versions_table, self.staged_rows_table, self.column_profiles_table, self.quality_runs_table, self.quality_issues_table, self.transformations_table, self.geography_models_table, self.ai_summaries_table, self.ai_audit_table, self.ai_chat_table]
+            self.engine, tables=[self.schema_table, self.imports_table, self.syncs_table, self.mappings_table, self.dataset_versions_table, self.staged_rows_table, self.column_profiles_table, self.quality_runs_table, self.quality_issues_table, self.transformations_table, self.geography_models_table, self.semantic_models_table, self.ai_summaries_table, self.ai_audit_table, self.ai_chat_table]
         )
         actions: list[str] = []
         inspector = inspect(self.engine)
@@ -529,6 +536,26 @@ class Storage:
         with self.engine.connect() as connection: row = connection.execute(statement).mappings().first()
         if not row: return None
         item = _serialize(dict(row)); item["model"] = json.loads(item.pop("model_json")); return item
+
+    def record_semantic_model(self, version_id: int, model: dict[str, Any]) -> dict[str, Any]:
+        with self.engine.connect() as connection: previous = connection.scalar(select(func.max(self.semantic_models_table.c.contract_version)).where(self.semantic_models_table.c.version_id == version_id))
+        with self.engine.begin() as connection:
+            result = connection.execute(insert(self.semantic_models_table).values(version_id=version_id, contract_version=int(previous or 0) + 1, status="draft", model_json=json.dumps(model), created_at=_now(), approved_at=None)); model_id = int(result.inserted_primary_key[0])
+        return self.semantic_model(version_id, model_id) or {}
+
+    def semantic_model(self, version_id: int, model_id: int | None = None) -> dict[str, Any] | None:
+        statement = select(self.semantic_models_table).where(self.semantic_models_table.c.version_id == version_id)
+        if model_id: statement = statement.where(self.semantic_models_table.c.id == model_id)
+        statement = statement.order_by(self.semantic_models_table.c.id.desc()).limit(1)
+        with self.engine.connect() as connection: row = connection.execute(statement).mappings().first()
+        if not row: return None
+        item = _serialize(dict(row)); item["model"] = json.loads(item.pop("model_json")); return item
+
+    def approve_semantic_model(self, version_id: int, model_id: int) -> dict[str, Any] | None:
+        with self.engine.begin() as connection:
+            connection.execute(update(self.semantic_models_table).where(and_(self.semantic_models_table.c.version_id == version_id, self.semantic_models_table.c.status == "approved")).values(status="superseded"))
+            result = connection.execute(update(self.semantic_models_table).where(and_(self.semantic_models_table.c.id == model_id, self.semantic_models_table.c.version_id == version_id, self.semantic_models_table.c.status == "draft")).values(status="approved", approved_at=_now()))
+        return self.semantic_model(version_id, model_id) if result.rowcount else None
 
     def create_ai_summary(self, values: dict[str, Any]) -> dict[str, Any]:
         now = _now()

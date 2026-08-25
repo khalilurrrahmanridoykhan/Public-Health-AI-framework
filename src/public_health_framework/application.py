@@ -56,6 +56,7 @@ from .dhis2_oauth import DHIS2OAuth
 from .intelligence_quality import evaluate_quality
 from .intelligence_repair import apply_repair, repair_proposals
 from .intelligence_geo import infer_geography
+from .intelligence_semantic import compile_semantic_model
 
 
 class PHFrame:
@@ -126,6 +127,7 @@ class PHFrame:
             Route("/api/staging/{version_id:int}/repairs", self.staging_repairs, methods=["GET", "POST"]),
             Route("/api/transformations", self.transformation_index, methods=["GET"]),
             Route("/api/staging/{version_id:int}/geography", self.staging_geography, methods=["GET", "POST"]),
+            Route("/api/staging/{version_id:int}/semantic", self.staging_semantic, methods=["GET", "POST", "PATCH"]),
             Route("/api/import-mappings", self.import_mapping_index, methods=["GET"]),
             Route("/api/import-mappings/{name}", self.import_mapping_save, methods=["PUT"]),
             Route("/api/browser-import/{dataset}/preview", self.browser_import_preview, methods=["POST"]),
@@ -1052,6 +1054,20 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
         if not version: return _error("Staged dataset version not found.", 404)
         model = infer_geography(version["rows"], version["profile"])
         return JSONResponse({"data": self.storage.record_geography_model(version_id, model)}, status_code=201)
+
+    async def staging_semantic(self, request: Request) -> Response:
+        version_id = request.path_params["version_id"]
+        if request.method == "GET":
+            model = self.storage.semantic_model(version_id)
+            return JSONResponse({"data": model}) if model else _error("No semantic model has been compiled for this version.", 404)
+        if request.method == "PATCH":
+            try: payload = await request.json(); model = self.storage.approve_semantic_model(version_id, int(payload.get("model_id", 0)))
+            except (ValueError, json.JSONDecodeError): return _error("model_id must be an integer.", 422)
+            return JSONResponse({"data": model}) if model else _error("Draft semantic model not found.", 404)
+        version = self.storage.dataset_version(version_id)
+        if not version: return _error("Staged dataset version not found.", 404)
+        model = compile_semantic_model(version["profile"], self.storage.latest_quality_run(version_id), self.storage.geography_model(version_id))
+        return JSONResponse({"data": self.storage.record_semantic_model(version_id, model)}, status_code=201)
 
     async def import_mapping_index(self, request: Request) -> JSONResponse:
         return JSONResponse({"data": self.storage.mappings(request.query_params.get("dataset"))})
