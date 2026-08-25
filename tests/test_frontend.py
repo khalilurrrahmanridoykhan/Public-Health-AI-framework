@@ -52,6 +52,8 @@ def test_frontend_shell_and_assets(tmp_path: Path):
     assert 'data-theme-choice="high-contrast"' in javascript.text
     assert "ph-theme-changing" in javascript.text
     assert ".ph-theme-switcher" in css.text
+    assert ".ph-theme-switcher:hover, .ph-theme-switcher:focus-within" in css.text
+    assert "width: 2.55rem" in css.text
     assert "data-connector-tab" in javascript.text
     assert "setupConnectorNavigation" in javascript.text
     assert ".ph-connectors-sidebar" in css.text

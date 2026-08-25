@@ -4,6 +4,13 @@ All notable changes to PHFrame will be documented here. The project intends to f
 
 ## [Unreleased]
 
+## [0.8.0a15] - 2026-08-25
+
+### Changed
+
+- Collapse the header theme control to the active icon and reveal all three theme choices on hover or keyboard focus.
+- Animate the theme-choice expansion and return the selected theme to the leading position.
+
 ## [0.8.0a14] - 2026-08-25
 
 ### Changed
@@ -278,7 +285,8 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Import audit history.
 - Portable HTML dashboard export.
 
-[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a14...HEAD
+[Unreleased]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a15...HEAD
+[0.8.0a15]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a14...v0.8.0a15
 [0.8.0a14]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a13...v0.8.0a14
 [0.8.0a13]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a12...v0.8.0a13
 [0.8.0a12]: https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/compare/v0.8.0a11...v0.8.0a12

@@ -83,7 +83,10 @@ class PHAppShell extends PHElement {
       <div class="ph-header-tools"><div class="ph-theme-switcher" role="group" aria-label="Color theme"><button type="button" data-theme-choice="light" aria-label="Use light theme">☀</button><button type="button" data-theme-choice="dark" aria-label="Use dark theme">☾</button><button type="button" data-theme-choice="high-contrast" aria-label="Use high contrast theme">◐</button></div>${PHFrame.siteSettings.access_mode === "private" ? `<button class="ph-logout" type="button">Sign out</button>` : ""}</div></header>
       <main class="ph-main" id="main" tabindex="-1"><div id="ph-view"></div></main>${PHFrame.siteSettings.show_footer ? `<footer class="ph-footer">${PHFrame.siteSettings.footer_html}</footer>` : ""}<ph-ai-assistant></ph-ai-assistant><ph-notification-center></ph-notification-center></div>`;
     const applyTheme = value => { document.documentElement.classList.add("ph-theme-changing"); document.documentElement.dataset.theme = value; localStorage.setItem("ph-theme", value); PHFrame.applyColor(PHFrame.siteSettings.primary_color); this.querySelectorAll("[data-theme-choice]").forEach(button => { const active = button.dataset.themeChoice === value; button.classList.toggle("ph-theme-choice-active", active); button.setAttribute("aria-pressed", String(active)); }); clearTimeout(this._themeTimer); this._themeTimer = setTimeout(() => document.documentElement.classList.remove("ph-theme-changing"), 280); };
-    this.querySelectorAll("[data-theme-choice]").forEach(button => button.addEventListener("click", () => applyTheme(button.dataset.themeChoice)));
+    this.querySelectorAll("[data-theme-choice]").forEach(button => button.addEventListener("click", event => {
+      applyTheme(button.dataset.themeChoice);
+      if (event.detail > 0) button.blur();
+    }));
     applyTheme(document.documentElement.dataset.theme);
     this.querySelector(".ph-logout")?.addEventListener("click", async () => { await PHFrame.send("/api/auth/logout", "POST", {}); location.href = "/login"; });
     this.querySelector("ph-ai-assistant").metadata = this.metadata;
