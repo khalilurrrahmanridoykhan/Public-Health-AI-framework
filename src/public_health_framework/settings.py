@@ -178,7 +178,11 @@ class SiteSettings:
                 item = {str(key): value for key, value in widget.items() if key in {"_id", "type", "title", "indicator", "dimension", "dataset", "field", "operation", "date_field", "value_field", "latitude_field", "longitude_field", "html"}}
                 if item["type"] == "content": item["html"] = sanitize_html(str(item.get("html", "")))
                 clean_widgets.append(item)
-            clean.append({"id": dashboard_id, "title": str(dashboard.get("title", dashboard_id))[:200], "description": str(dashboard.get("description", ""))[:500], "dataset": str(dashboard.get("dataset", ""))[:255], "template": str(dashboard.get("template", "blank"))[:100], "widgets": clean_widgets})
+            widget_datasets = [str(item.get("dataset")) for item in clean_widgets if item.get("dataset")]
+            requested_datasets = dashboard.get("datasets", [])
+            if not isinstance(requested_datasets, list): raise ValueError("Dashboard datasets must be a list.")
+            datasets = list(dict.fromkeys([str(item)[:255] for item in requested_datasets if item] + widget_datasets))
+            clean.append({"id": dashboard_id, "title": str(dashboard.get("title", dashboard_id))[:200], "description": str(dashboard.get("description", ""))[:500], "datasets": datasets, "template": str(dashboard.get("template", "blank"))[:100], "widgets": clean_widgets})
         return clean
 
     def _validate_pages(self, pages: Any) -> list[dict[str, Any]]:

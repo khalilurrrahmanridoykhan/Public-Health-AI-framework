@@ -108,6 +108,7 @@ def test_user_dashboards_are_persisted_and_rich_content_is_sanitized(tmp_path: P
     assert response.status_code == 200
     dashboard = response.json()["data"]["dashboards"][0]
     assert dashboard["title"] == "Programme Overview"
+    assert dashboard["datasets"] == ["case_reports"]
     assert "<h2>Heading</h2>" in dashboard["widgets"][0]["html"]
     assert "<script" not in dashboard["widgets"][0]["html"]
     assert 'target="_blank"' in dashboard["widgets"][0]["html"]

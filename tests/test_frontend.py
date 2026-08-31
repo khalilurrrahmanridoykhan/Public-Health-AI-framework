@@ -114,6 +114,9 @@ def test_frontend_shell_and_assets(tmp_path: Path):
     for component in ["ph-dashboard-manager", "ph-geo-map"]:
         assert f'customElements.define("{component}"' in javascript.text
     assert "Dashboard templates" in javascript.text
+    assert "Dashboards are independent workspaces" in javascript.text
+    assert "Primary dataset" not in javascript.text
+    assert "Multi-dataset dashboard" in javascript.text
     assert "Executive overview" in javascript.text
     assert "DHIS2 aggregate" in javascript.text
     assert "Worldwide geospatial" in javascript.text
