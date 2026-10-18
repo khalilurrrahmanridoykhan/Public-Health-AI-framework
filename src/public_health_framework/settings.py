@@ -18,6 +18,28 @@ from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 
+def migrate_settings(stored: dict[str, Any]) -> dict[str, Any]:
+    """Normalize legacy (0.9 preview) on-disk settings shapes to the current format.
+
+    0.8.0a9-0.9.0a3 saved each dashboard's data source under a single `dataset`
+    key; dashboards are now independent workspaces that can combine several
+    datasets, stored under a `datasets` list. Releases before that also wrote a
+    plain-text `footer_text` key before HTML footers were introduced.
+    """
+    stored = dict(stored)
+    if "footer_html" not in stored and "footer_text" in stored:
+        stored["footer_html"] = f"<p>{escape(str(stored['footer_text']))}</p>"
+    dashboards = stored.get("dashboards")
+    if isinstance(dashboards, list):
+        stored["dashboards"] = [
+            {**item, "datasets": [item["dataset"]] if item["dataset"] else []}
+            if isinstance(item, dict) and "dataset" in item and "datasets" not in item
+            else item
+            for item in dashboards
+        ]
+    return stored
+
+
 DEFAULT_NAVIGATION = {
     "dashboard": {"label": "Dashboard", "visible": True},
     "records": {"label": "Records", "visible": True},
@@ -71,15 +93,24 @@ class SiteSettings:
     def load(self) -> dict[str, Any]:
         settings = self.defaults()
         if self.path.exists():
-            stored = json.loads(self.path.read_text(encoding="utf-8"))
-            if "footer_html" not in stored and "footer_text" in stored:
-                stored["footer_html"] = f"<p>{escape(str(stored['footer_text']))}</p>"
+            stored = migrate_settings(json.loads(self.path.read_text(encoding="utf-8")))
             settings.update(stored)
             settings["navigation"] = {
                 key: {**value, **stored.get("navigation", {}).get(key, {})}
                 for key, value in DEFAULT_NAVIGATION.items()
             }
         return settings
+
+    def upgrade(self) -> bool:
+        """Rewrite on-disk settings in the current 1.0 shape; return whether anything changed."""
+        if not self.path.exists():
+            return False
+        stored = json.loads(self.path.read_text(encoding="utf-8"))
+        migrated = migrate_settings(stored)
+        if migrated == stored:
+            return False
+        self._save(migrated)
+        return True
 
     def public(self) -> dict[str, Any]:
         settings = self.load()

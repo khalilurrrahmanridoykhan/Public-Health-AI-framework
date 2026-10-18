@@ -60,6 +60,12 @@ def _parser() -> argparse.ArgumentParser:
     migrate = subparsers.add_parser("migrate", help="Apply safe dataset schema changes.")
     migrate.add_argument("--config", default="phframe.yaml", help="Project configuration path")
     migrate.add_argument("--check", action="store_true", help="Report changes without applying them")
+
+    upgrade = subparsers.add_parser(
+        "upgrade", help="Upgrade a 0.9 preview project to the 1.0 configuration, settings, and database shape."
+    )
+    upgrade.add_argument("--config", default="phframe.yaml", help="Project configuration path")
+    upgrade.add_argument("--check", action="store_true", help="Report pending upgrades without applying them")
     for command, help_text in [("doctor", "Check production configuration and dependencies."), ("backup", "Create a consistent database backup."), ("restore", "Restore a database backup.")]:
         item = subparsers.add_parser(command, help=help_text); item.add_argument("--config", default="phframe.yaml")
         if command == "backup": item.add_argument("--output")
@@ -138,6 +144,18 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"  - {action}")
                 return 1 if args.check else 0
             print("Database schema is up to date.")
+            return 0
+        if args.command == "upgrade":
+            from .upgrade import upgrade_project
+
+            actions = upgrade_project(args.config, check_only=args.check)
+            if actions:
+                prefix = "Pending" if args.check else "Applied"
+                print(f"{prefix} upgrades:")
+                for action in actions:
+                    print(f"  - {action}")
+                return 1 if args.check else 0
+            print("Project already uses the current 1.0 configuration, settings, and database shape.")
             return 0
         if args.command in {"doctor", "backup", "restore"}:
             from .config import ProjectConfig

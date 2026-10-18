@@ -529,6 +529,17 @@ phframe migrate
 
 Adding optional fields is automatic. PHFrame refuses destructive field removal, incompatible type changes, and new required fields that would invalidate existing records.
 
+## Upgrading from a 0.9 preview
+
+Bring a project created on a `0.9` preview release to the current 1.0 configuration, settings, and database shape:
+
+```bash
+phframe upgrade --check
+phframe upgrade
+```
+
+It is safe to run on every PHFrame upgrade: an already-upgraded project reports nothing pending. See [docs/upgrading.md](docs/upgrading.md) for exactly what it changes.
+
 ## Persistent data imports
 
 Validate an import without writing records:
@@ -672,7 +683,7 @@ Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the develo
 
 ## Project status
 
-PHFrame follows semantic versioning after the `0.2.0a1` preview. See [CHANGELOG.md](CHANGELOG.md) for release notes and [PLAN.md](PLAN.md) for the full architecture and phased roadmap. The public API covered by the 1.0 stability promise is defined in [docs/api-stability.md](docs/api-stability.md), every HTTP route is documented in the [HTTP API reference](docs/http-api.md) ([OpenAPI document](docs/openapi.json)), and every `phframe.yaml` key is documented in the [configuration reference](docs/configuration.md) ([JSON Schema](docs/phframe.schema.json)).
+PHFrame follows semantic versioning after the `0.2.0a1` preview. See [CHANGELOG.md](CHANGELOG.md) for release notes and [PLAN.md](PLAN.md) for the full architecture and phased roadmap. The public API covered by the 1.0 stability promise is defined in [docs/api-stability.md](docs/api-stability.md), every HTTP route is documented in the [HTTP API reference](docs/http-api.md) ([OpenAPI document](docs/openapi.json)), every `phframe.yaml` key is documented in the [configuration reference](docs/configuration.md) ([JSON Schema](docs/phframe.schema.json)), and upgrading a 0.9 preview project is documented in [docs/upgrading.md](docs/upgrading.md).
 
 ## Reproducing the examples
 

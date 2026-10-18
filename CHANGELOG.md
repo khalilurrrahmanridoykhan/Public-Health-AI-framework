@@ -12,6 +12,7 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Add a versioned `phframe.yaml` configuration schema: a JSON Schema (`docs/phframe.schema.json`) and a generated reference (`docs/configuration.md`) covering every section, key, type, default, and environment override. Files that declare `version: 1` are validated strictly and fail with the offending key named, such as `datasets.case_reports.fields.cases.requird: unknown key; did you mean 'required'?`; files without `version` still load and `phframe check` lists the findings as warnings.
 - Add `CITATION.cff`, a `make reproduce` command that runs all checks and regenerates the example dashboards, and a data dictionary and provenance record for the synthetic example datasets.
 - Add the Phase 7 data intelligence pipeline: governed staging and profiling, quality review, audited repair, geography intelligence, semantic contracts, professional dashboard generation, governed copilot proposals, and continuous assurance.
+- Add `phframe upgrade`, bringing a 0.9 preview project's `phframe.yaml`, `data/phframe-settings.json`, and database to the current 1.0 shape in one command: adding `version: 1` once the file validates, migrating legacy settings shapes, and applying the same additive database migration as `phframe migrate`. `phframe upgrade --check` reports pending upgrades without writing anything; see `docs/upgrading.md`.
 
 ### Changed
 
@@ -23,6 +24,7 @@ All notable changes to PHFrame will be documented here. The project intends to f
 ### Fixed
 
 - Running an assurance check on a dataset version that has an earlier version no longer fails with a server error.
+- A dashboard saved by a `0.8.0a9`–`0.9.0a3` release under the legacy single `dataset` key, including a KPI-only dashboard with no widget-level `dataset` field, no longer loses its data source: `phframe upgrade` and the settings loader now merge it into the current `datasets` list instead of dropping it.
 
 ## [0.9.0a3] - 2026-08-25
 

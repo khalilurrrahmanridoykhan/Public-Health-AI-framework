@@ -57,3 +57,10 @@ Documented response fields are stable. Responses may gain fields in minor releas
 ```bash
 python -m public_health_framework.config_schema --write docs
 ```
+
+## Upgrading a 0.9 preview project
+
+`phframe upgrade` brings a 0.9 preview project's configuration, site settings, and
+database to the current 1.0 shape in one command; see
+[`upgrading.md`](upgrading.md) for what it changes and what it deliberately leaves
+alone.
