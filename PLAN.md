@@ -570,6 +570,25 @@ Deliverables:
 
 **Status: Completed as a production-readiness preview in 0.9.0a1.** The preview adds hardened HTTP defaults, request IDs, write-token support, rate and upload limits, operational audit logs, readiness checks, consistent SQLite backup/restore, production diagnostics, scheduled workers with retries, database pagination totals, response compression and caching, Docker/PostgreSQL deployment templates, plugin scaffolding and entry-point discovery, accessibility/internationalization guidance, and production upgrade documentation. Independent security, accessibility, recovery, and load validation remain release gates before the stable 1.0 designation.
 
+### Phase 7: Data Intelligence and Professional Dashboards
+
+Deliverables are detailed in [docs/data-intelligence-dashboard-plan.md](docs/data-intelligence-dashboard-plan.md): governed staging and profiling, quality review, audited repair, geography intelligence, semantic contracts, professional dashboard generation, a governed copilot, and continuous assurance.
+
+**Status: Completed on 2026-08-25** through work packages 7.1–7.8.
+
+### Phase 8: 1.0 Stabilization
+
+Deliverables:
+
+- 8.1 Public API contract: a reviewed, machine-checked snapshot of the Python, CLI, HTTP, and plugin surface, plus a deprecation policy
+- 8.2 HTTP API reference: request/response schemas for every stable route
+- 8.3 Configuration schema: a versioned, validated `phframe.yaml` reference
+- 8.4 Upgrade path: tested migrations from every 0.9 preview to 1.0
+- 8.5 Reference application: the malaria surveillance slice packaged as a deployable example
+- 8.6 Release candidate: `1.0.0rc1` with the independent sign-offs in [docs/certification.md](docs/certification.md) scheduled
+
+**Status: In progress.** 8.1 is delivered: [docs/api-stability.md](docs/api-stability.md) defines the stability promise, and `tests/test_api_contract.py` fails on any unreviewed change to [docs/public-api-contract.json](docs/public-api-contract.json).
+
 ## First Vertical Slice: Malaria Surveillance
 
 The framework should initially be developed through one real application rather than disconnected infrastructure.
@@ -673,4 +692,4 @@ PHFrame should be considered successful when:
 
 ## Current Priority
 
-Phases 1–4 are implemented in the `0.7.0a1` preview. The next engineering priority is **Phase 5: privacy-aware AI assistance**, beginning with provider abstraction, de-identification, evidence-backed summaries, human approval, and complete AI audit history.
+Phases 1–7 are implemented in the 0.9.0 alpha series. The engineering priority is **Phase 8: 1.0 stabilization**. The public API contract (8.1) is in place; next is the HTTP API reference (8.2), followed by the configuration schema, upgrade path, packaged reference application, and the `1.0.0rc1` release candidate.
