@@ -1,0 +1,863 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/docs/phframe.schema.json",
+  "title": "PHFrame project configuration",
+  "description": "Schema for phframe.yaml, configuration version 1.",
+  "type": "object",
+  "properties": {
+    "version": {
+      "type": "integer",
+      "description": "Configuration schema version. Files without it are read as 0.9 preview projects.",
+      "enum": [
+        1
+      ]
+    },
+    "project": {
+      "type": "object",
+      "description": "Project identity and storage.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Project name shown in the application header.",
+          "minLength": 1
+        },
+        "database": {
+          "type": "string",
+          "description": "SQLAlchemy database URL. Relative SQLite paths resolve against the configuration file. `${NAME}` is replaced by the environment variable `NAME`.",
+          "default": "sqlite:///data/phframe.db"
+        },
+        "environment": {
+          "type": "string",
+          "description": "Deployment environment. `production` turns on the production readiness checks and disallows `phframe serve --reload`.",
+          "enum": [
+            "development",
+            "test",
+            "production"
+          ],
+          "default": "development"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "server": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Address that `phframe serve` binds to.",
+      "properties": {
+        "host": {
+          "type": "string",
+          "description": "Address to bind.",
+          "default": "127.0.0.1"
+        },
+        "port": {
+          "type": "integer",
+          "description": "Port to bind.",
+          "minimum": 1,
+          "maximum": 65535,
+          "default": 8000
+        }
+      },
+      "additionalProperties": false
+    },
+    "datasets": {
+      "type": "object",
+      "description": "Datasets keyed by name.",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/Dataset"
+      }
+    },
+    "indicators": {
+      "type": "object",
+      "description": "Indicators keyed by name.",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/Indicator"
+      }
+    },
+    "data_quality": {
+      "type": "object",
+      "description": "Data-quality rules keyed by name.",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/DataQualityRule"
+      }
+    },
+    "filters": {
+      "type": "object",
+      "description": "Saved filters keyed by name.",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/SavedFilter"
+      }
+    },
+    "dimensions": {
+      "type": "object",
+      "description": "Dimensions keyed by name.",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/Dimension"
+      }
+    },
+    "thresholds": {
+      "type": "object",
+      "description": "Surveillance thresholds keyed by name.",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/Threshold"
+      }
+    },
+    "organisation_units": {
+      "type": "object",
+      "description": "Organisation units keyed by code.",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OrganisationUnit"
+      }
+    },
+    "dashboards": {
+      "type": "object",
+      "description": "Dashboards keyed by name.",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/Dashboard"
+      }
+    },
+    "ui": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Browser application appearance.",
+      "properties": {
+        "theme": {
+          "type": "string",
+          "description": "Default colour theme.",
+          "enum": [
+            "light",
+            "dark",
+            "high-contrast"
+          ],
+          "default": "light"
+        },
+        "locale": {
+          "type": "string",
+          "description": "Interface language, such as `en` or `en-US`.",
+          "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
+          "default": "en"
+        },
+        "translations": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "Interface strings keyed by message id.",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "integer",
+              "boolean"
+            ]
+          },
+          "default": {}
+        }
+      },
+      "additionalProperties": false
+    },
+    "connectors": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "Connectors keyed by name.",
+      "propertyNames": {
+        "pattern": "^[a-z][a-z0-9_]*$"
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/Connector"
+      }
+    },
+    "plugins": {
+      "type": "array",
+      "description": "Plugins loaded at start-up, in order, written as `module` or `module:attribute`. Each must provide `setup(app, config)`.",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    }
+  },
+  "required": [
+    "version",
+    "project"
+  ],
+  "additionalProperties": false,
+  "$defs": {
+    "Field": {
+      "description": "A dataset field: either a field type name, or an object with the type and options.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "age",
+            "boolean",
+            "case_classification",
+            "date",
+            "datetime",
+            "disease_code",
+            "epi_week",
+            "facility",
+            "identifier",
+            "integer",
+            "location",
+            "number",
+            "organisation_unit",
+            "reporting_period",
+            "sex",
+            "string"
+          ],
+          "description": "Shorthand for `{type: <name>}`."
+        },
+        {
+          "type": "object",
+          "description": "An object with the keys below.",
+          "properties": {
+            "type": {
+              "type": "string",
+              "description": "Field type. Determines storage and validation.",
+              "enum": [
+                "age",
+                "boolean",
+                "case_classification",
+                "date",
+                "datetime",
+                "disease_code",
+                "epi_week",
+                "facility",
+                "identifier",
+                "integer",
+                "location",
+                "number",
+                "organisation_unit",
+                "reporting_period",
+                "sex",
+                "string"
+              ],
+              "default": "string"
+            },
+            "required": {
+              "type": "boolean",
+              "description": "Records must provide a value.",
+              "default": false
+            },
+            "protected": {
+              "type": "boolean",
+              "description": "Treated as sensitive: excluded from AI evidence and flagged by publication review.",
+              "default": false
+            },
+            "label": {
+              "type": "string",
+              "description": "Display name. Defaults to the field name in title case."
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
+    },
+    "Dataset": {
+      "type": "object",
+      "description": "A dataset stored as a database table with generated record endpoints.",
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "Display name. Defaults to the dataset name in title case."
+        },
+        "fields": {
+          "type": "object",
+          "description": "Fields keyed by name. At least one is required.",
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/Field"
+          }
+        }
+      },
+      "required": [
+        "fields"
+      ],
+      "additionalProperties": false
+    },
+    "Indicator": {
+      "type": "object",
+      "description": "A declarative indicator calculated over one dataset.",
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "Display name. Defaults to the indicator name in title case."
+        },
+        "dataset": {
+          "type": "string",
+          "description": "Name of a dataset defined in `datasets`."
+        },
+        "operation": {
+          "type": "string",
+          "description": "Calculation to perform.",
+          "enum": [
+            "average",
+            "count",
+            "percentage",
+            "rate",
+            "ratio",
+            "sum"
+          ],
+          "default": "count"
+        },
+        "field": {
+          "type": "string",
+          "description": "Numeric field to sum or average. Required for `sum` and `average`."
+        },
+        "numerator": {
+          "type": "string",
+          "description": "Numeric numerator field. Required for `rate`, `ratio`, and `percentage`."
+        },
+        "denominator": {
+          "type": "string",
+          "description": "Numeric denominator field. Required for `rate`, `ratio`, and `percentage`."
+        },
+        "multiplier": {
+          "type": "number",
+          "description": "Scale applied to the result. Defaults to 100 for `percentage` and 1 otherwise."
+        },
+        "date_field": {
+          "type": "string",
+          "description": "Date or datetime field used for reporting periods."
+        },
+        "filters": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "Field values every counted record must match.",
+          "default": {}
+        }
+      },
+      "required": [
+        "dataset"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "operation": {
+                "enum": [
+                  "sum",
+                  "average"
+                ]
+              }
+            },
+            "required": [
+              "operation"
+            ]
+          },
+          "then": {
+            "required": [
+              "field"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "operation": {
+                "enum": [
+                  "rate",
+                  "ratio",
+                  "percentage"
+                ]
+              }
+            },
+            "required": [
+              "operation"
+            ]
+          },
+          "then": {
+            "required": [
+              "numerator",
+              "denominator"
+            ]
+          }
+        }
+      ]
+    },
+    "DataQualityRule": {
+      "type": "object",
+      "description": "A data-quality rule evaluated over one field.",
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "Display name. Defaults to the rule name in title case."
+        },
+        "dataset": {
+          "type": "string",
+          "description": "Name of a dataset defined in `datasets`."
+        },
+        "field": {
+          "type": "string",
+          "description": "Field the rule checks."
+        },
+        "check": {
+          "type": "string",
+          "description": "`required` flags missing values, `range` flags numbers outside min/max, `allowed` flags values outside a list.",
+          "enum": [
+            "allowed",
+            "range",
+            "required"
+          ],
+          "default": "required"
+        },
+        "min": {
+          "type": "number",
+          "description": "Lowest accepted value for a `range` check."
+        },
+        "max": {
+          "type": "number",
+          "description": "Highest accepted value for a `range` check."
+        },
+        "values": {
+          "type": "array",
+          "description": "Accepted values for an `allowed` check.",
+          "items": {
+            "type": [
+              "string",
+              "number",
+              "integer",
+              "boolean"
+            ]
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "dataset",
+        "field"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "check": {
+                "const": "range"
+              }
+            },
+            "required": [
+              "check"
+            ]
+          },
+          "then": {
+            "anyOf": [
+              {
+                "required": [
+                  "min"
+                ]
+              },
+              {
+                "required": [
+                  "max"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "check": {
+                "const": "allowed"
+              }
+            },
+            "required": [
+              "check"
+            ]
+          },
+          "then": {
+            "required": [
+              "values"
+            ]
+          }
+        }
+      ]
+    },
+    "SavedFilter": {
+      "type": "object",
+      "description": "A reusable set of field values for indicator and dimension queries.",
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "Display name. Defaults to the filter name in title case."
+        },
+        "dataset": {
+          "type": "string",
+          "description": "Name of a dataset defined in `datasets`."
+        },
+        "values": {
+          "type": "object",
+          "description": "Field values to match, keyed by field name.",
+          "minProperties": 1
+        }
+      },
+      "required": [
+        "dataset",
+        "values"
+      ],
+      "additionalProperties": false
+    },
+    "Dimension": {
+      "type": "object",
+      "description": "A grouped count of records by one field.",
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "Display name. Defaults to the dimension name in title case."
+        },
+        "dataset": {
+          "type": "string",
+          "description": "Name of a dataset defined in `datasets`."
+        },
+        "field": {
+          "type": "string",
+          "description": "Field to group by."
+        },
+        "filter": {
+          "type": "string",
+          "description": "Name of a saved filter defined in `filters` for the same dataset."
+        }
+      },
+      "required": [
+        "dataset",
+        "field"
+      ],
+      "additionalProperties": false
+    },
+    "Threshold": {
+      "type": "object",
+      "description": "A surveillance alert evaluated against an indicator.",
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "Display name. Defaults to the threshold name in title case."
+        },
+        "indicator": {
+          "type": "string",
+          "description": "Name of an indicator defined in `indicators`."
+        },
+        "operator": {
+          "type": "string",
+          "description": "Comparison between the indicator value and `value`.",
+          "enum": [
+            "eq",
+            "gt",
+            "gte",
+            "lt",
+            "lte"
+          ],
+          "default": "gte"
+        },
+        "value": {
+          "type": "number",
+          "description": "Alert level."
+        },
+        "severity": {
+          "type": "string",
+          "description": "Alert severity.",
+          "enum": [
+            "info",
+            "warning",
+            "critical"
+          ],
+          "default": "warning"
+        },
+        "message": {
+          "type": "string",
+          "description": "Message shown when the threshold is met."
+        }
+      },
+      "required": [
+        "indicator",
+        "value"
+      ],
+      "additionalProperties": false
+    },
+    "OrganisationUnit": {
+      "type": "object",
+      "description": "A node in the organisation-unit hierarchy, keyed by its code.",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Display name.",
+          "minLength": 1
+        },
+        "level": {
+          "type": "string",
+          "description": "Hierarchy level, such as country, district, or facility.",
+          "minLength": 1
+        },
+        "parent": {
+          "type": "string",
+          "description": "Code of the parent unit. The hierarchy may not contain cycles."
+        }
+      },
+      "required": [
+        "name",
+        "level"
+      ],
+      "additionalProperties": false
+    },
+    "Widget": {
+      "type": "object",
+      "description": "A dashboard widget.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "`kpi` shows an indicator, `chart` and `map` show a dimension, `epi_curve` plots records over time.",
+          "enum": [
+            "kpi",
+            "chart",
+            "map",
+            "epi_curve"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "description": "Widget heading. Defaults to the widget type in title case."
+        },
+        "indicator": {
+          "type": "string",
+          "description": "Indicator shown by a `kpi` widget."
+        },
+        "dimension": {
+          "type": "string",
+          "description": "Dimension shown by a `chart` or `map` widget."
+        },
+        "dataset": {
+          "type": "string",
+          "description": "Dataset plotted by an `epi_curve` widget."
+        },
+        "date_field": {
+          "type": "string",
+          "description": "Date or datetime field on the x-axis of an `epi_curve` widget."
+        },
+        "value_field": {
+          "type": "string",
+          "description": "Numeric field summed per period by an `epi_curve` widget. Records are counted when omitted."
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "kpi"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "indicator"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": [
+                  "chart",
+                  "map"
+                ]
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "dimension"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "epi_curve"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "required": [
+              "dataset",
+              "date_field"
+            ]
+          }
+        }
+      ]
+    },
+    "Dashboard": {
+      "type": "object",
+      "description": "A configured dashboard.",
+      "properties": {
+        "label": {
+          "type": "string",
+          "description": "Display name. Defaults to the dashboard name in title case."
+        },
+        "widgets": {
+          "type": "array",
+          "description": "Widgets in display order.",
+          "items": {
+            "$ref": "#/$defs/Widget"
+          },
+          "default": []
+        }
+      },
+      "additionalProperties": false
+    },
+    "Connector": {
+      "type": "object",
+      "description": "A scheduled pull from an external data source into a dataset.",
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Source system.",
+          "enum": [
+            "api",
+            "dhis2",
+            "kobo",
+            "odk"
+          ]
+        },
+        "dataset": {
+          "type": "string",
+          "description": "Dataset that receives the records."
+        },
+        "base_url": {
+          "type": "string",
+          "description": "Server address. Must start with `http://` or `https://`.",
+          "pattern": "^https?://"
+        },
+        "resource": {
+          "type": "string",
+          "description": "Resource path, form id, or DHIS2 data set id on the server.",
+          "minLength": 1
+        },
+        "records_path": {
+          "type": "string",
+          "description": "Dot-separated path to the record list when the response nests it."
+        },
+        "mapping": {
+          "type": "object",
+          "description": "Source field names mapped to dataset field names. At least one is required.",
+          "minProperties": 1,
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "auth": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "Names of environment variables that hold credentials. Secrets never go in the file.",
+          "properties": {
+            "token_env": {
+              "type": "string",
+              "description": "Variable holding an API token."
+            },
+            "username_env": {
+              "type": "string",
+              "description": "Variable holding a user name for basic authentication."
+            },
+            "password_env": {
+              "type": "string",
+              "description": "Variable holding a password for basic authentication."
+            }
+          },
+          "additionalProperties": false
+        },
+        "parameters": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "Extra query parameters sent with each request.",
+          "additionalProperties": {
+            "type": [
+              "string",
+              "number",
+              "integer",
+              "boolean"
+            ]
+          }
+        },
+        "timeout": {
+          "type": "integer",
+          "description": "Request timeout in seconds.",
+          "minimum": 1,
+          "maximum": 300,
+          "default": 30
+        },
+        "schedule_minutes": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "Minutes between scheduled runs by `phframe worker`. Manual only when omitted.",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "type",
+        "dataset",
+        "base_url",
+        "resource",
+        "mapping"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

@@ -41,6 +41,7 @@ def _leaflet_asset(name: str) -> bytes:
 
 from . import __version__
 from .config import ConnectorSchema, DatasetSchema, FIELD_TYPES, FieldSchema, ProjectConfig
+from .config_schema import validate_section
 from .plugins import load_plugins
 from .periods import resolve_period
 from .publishing import build_bundle, publication_audit, safe_project_name
@@ -940,6 +941,9 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
             try:
                 payload = await request.json()
                 name = str(payload.pop("name", ""))
+                issues = validate_section("connectors", name, payload)
+                if issues:
+                    raise ValueError("; ".join(str(issue) for issue in issues))
                 connector = ConnectorSchema.from_dict(name, payload, self.config.datasets)
                 if name in self.config.connectors:
                     raise ValueError(f"Connector already exists: {name}")

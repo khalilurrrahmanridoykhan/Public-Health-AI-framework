@@ -4,9 +4,9 @@
 PYTHON ?= python
 OUTPUT ?= outputs
 
-.PHONY: reproduce install test certify contract openapi dashboard clean
+.PHONY: reproduce install test certify contract openapi config-schema dashboard clean
 
-reproduce: install test certify contract openapi dashboard
+reproduce: install test certify contract openapi config-schema dashboard
 
 install:
 	$(PYTHON) -m pip install -e '.[dev]'
@@ -24,6 +24,9 @@ contract:
 
 openapi:
 	$(PYTHON) -m public_health_framework.http_reference --write docs
+
+config-schema:
+	$(PYTHON) -m public_health_framework.config_schema --write docs
 
 dashboard:
 	mkdir -p $(OUTPUT)

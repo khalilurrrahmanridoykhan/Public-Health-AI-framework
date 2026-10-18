@@ -587,7 +587,7 @@ Deliverables:
 - 8.5 Reference application: the malaria surveillance slice packaged as a deployable example
 - 8.6 Release candidate: `1.0.0rc1` with the independent sign-offs in [docs/certification.md](docs/certification.md) scheduled
 
-**Status: In progress.** 8.1 is delivered: [docs/api-stability.md](docs/api-stability.md) defines the stability promise, and `tests/test_api_contract.py` fails on any unreviewed change to [docs/public-api-contract.json](docs/public-api-contract.json). 8.2 is delivered: [docs/openapi.json](docs/openapi.json) and [docs/http-api.md](docs/http-api.md) document the parameters, request bodies, and responses of every route, applications serve the document at `/api/openapi.json`, and `tests/test_http_reference.py` checks live responses against it.
+**Status: In progress.** 8.1 is delivered: [docs/api-stability.md](docs/api-stability.md) defines the stability promise, and `tests/test_api_contract.py` fails on any unreviewed change to [docs/public-api-contract.json](docs/public-api-contract.json). 8.2 is delivered: [docs/openapi.json](docs/openapi.json) and [docs/http-api.md](docs/http-api.md) document the parameters, request bodies, and responses of every route, applications serve the document at `/api/openapi.json`, and `tests/test_http_reference.py` checks live responses against it. 8.3 is delivered: [docs/configuration.md](docs/configuration.md) and the JSON Schema [docs/phframe.schema.json](docs/phframe.schema.json) document configuration version 1, files declaring `version: 1` are validated strictly when loaded, unversioned 0.9 files load with warnings, and `tests/test_config_schema.py` keeps the generated reference current.
 
 ## First Vertical Slice: Malaria Surveillance
 
@@ -692,4 +692,4 @@ PHFrame should be considered successful when:
 
 ## Current Priority
 
-Phases 1–7 are implemented in the 0.9.0 alpha series. The engineering priority is **Phase 8: 1.0 stabilization**. The public API contract (8.1) and HTTP API reference (8.2) are in place; next is the configuration schema (8.3), followed by the upgrade path, packaged reference application, and the `1.0.0rc1` release candidate.
+Phases 1–7 are implemented in the 0.9.0 alpha series. The engineering priority is **Phase 8: 1.0 stabilization**. The public API contract (8.1), HTTP API reference (8.2), and configuration schema (8.3) are in place; next is the upgrade path (8.4), followed by the packaged reference application, and the `1.0.0rc1` release candidate.
