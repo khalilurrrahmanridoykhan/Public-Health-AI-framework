@@ -10,3 +10,4 @@ dist/
 build/
 dashboard.html
 *-dashboard.html
+outputs/

@@ -8,6 +8,7 @@ All notable changes to PHFrame will be documented here. The project intends to f
 
 - Add a public API contract covering Python exports, CLI commands and options, HTTP routes, and the plugin hook, with a reviewed snapshot in `docs/public-api-contract.json` and a test that fails on unreviewed changes.
 - Add the public API stability and deprecation policy in `docs/api-stability.md`.
+- Add `CITATION.cff`, a `make reproduce` command that runs all checks and regenerates the example dashboards, and a data dictionary and provenance record for the synthetic example datasets.
 - Add the Phase 7 data intelligence pipeline: governed staging and profiling, quality review, audited repair, geography intelligence, semantic contracts, professional dashboard generation, governed copilot proposals, and continuous assurance.
 
 ### Changed

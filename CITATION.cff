@@ -1,0 +1,19 @@
+cff-version: 1.2.0
+message: "If you use PHFrame, please cite it using the metadata below."
+type: software
+title: "PHFrame: Public Health AI Framework"
+abstract: "An extensible Python framework for public-health data systems, validated imports, APIs, and offline dashboards."
+authors:
+  - given-names: "Khalilur Rahman Ridoy"
+    family-names: "Khan"
+version: "0.9.0a3"
+date-released: "2026-08-25"
+license: MIT
+repository-code: "https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework"
+url: "https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework#readme"
+keywords:
+  - public health
+  - health informatics
+  - surveillance
+  - data
+  - api
