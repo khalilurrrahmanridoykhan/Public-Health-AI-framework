@@ -1,0 +1,176 @@
+version: 1
+
+project:
+  name: "Malaria Surveillance"
+  database: sqlite:///data/phframe.db
+  environment: development
+
+server:
+  host: 127.0.0.1
+  port: 8000
+
+datasets:
+  facility_reports:
+    label: Facility Malaria Reports
+    fields:
+      district:
+        type: location
+        label: District
+        required: true
+      report_date:
+        type: date
+        label: Reporting month
+        required: true
+      facility_type:
+        type: string
+        label: Facility type
+        required: true
+      cases:
+        type: integer
+        label: Malaria cases
+        required: true
+      population:
+        type: integer
+        label: Population
+        required: true
+      confirmed_cases:
+        type: integer
+        label: Confirmed cases
+        required: true
+      tested:
+        type: integer
+        label: People tested
+        required: true
+
+indicators:
+  total_cases:
+    label: Total cases
+    dataset: facility_reports
+    operation: sum
+    field: cases
+    date_field: report_date
+  incidence_per_100000:
+    label: Incidence per 100,000
+    dataset: facility_reports
+    operation: rate
+    numerator: cases
+    denominator: population
+    multiplier: 100000
+    date_field: report_date
+  test_positivity_percentage:
+    label: Test positivity
+    dataset: facility_reports
+    operation: percentage
+    numerator: confirmed_cases
+    denominator: tested
+    date_field: report_date
+
+data_quality:
+  cases_nonnegative:
+    label: Cases are nonnegative
+    dataset: facility_reports
+    field: cases
+    check: range
+    min: 0
+  tested_nonnegative:
+    label: Tested count is nonnegative
+    dataset: facility_reports
+    field: tested
+    check: range
+    min: 0
+  valid_facility_type:
+    label: Facility type is recognized
+    dataset: facility_reports
+    field: facility_type
+    check: allowed
+    values: [Hospital, Clinic, Community]
+
+filters:
+  hospital_reports:
+    label: Hospital reports
+    dataset: facility_reports
+    values:
+      facility_type: Hospital
+
+dimensions:
+  cases_by_district:
+    label: Cases by district
+    dataset: facility_reports
+    field: district
+  cases_by_facility_type:
+    label: Cases by facility type
+    dataset: facility_reports
+    field: facility_type
+  hospital_cases_by_district:
+    label: Hospital cases by district
+    dataset: facility_reports
+    field: district
+    filter: hospital_reports
+
+thresholds:
+  high_incidence:
+    label: High malaria incidence
+    indicator: incidence_per_100000
+    operator: gte
+    value: 2
+    severity: warning
+    message: Incidence has reached the surveillance alert level for this reporting period.
+
+organisation_units:
+  bangladesh:
+    name: Bangladesh
+    level: country
+  dhaka:
+    name: Dhaka
+    level: district
+    parent: bangladesh
+  chattogram:
+    name: Chattogram
+    level: district
+    parent: bangladesh
+  khulna:
+    name: Khulna
+    level: district
+    parent: bangladesh
+  rajshahi:
+    name: Rajshahi
+    level: district
+    parent: bangladesh
+  sylhet:
+    name: Sylhet
+    level: district
+    parent: bangladesh
+
+dashboards:
+  main:
+    label: Malaria Surveillance Dashboard
+    widgets:
+      - type: kpi
+        title: Total cases
+        indicator: total_cases
+      - type: kpi
+        title: Incidence per 100,000
+        indicator: incidence_per_100000
+      - type: kpi
+        title: Test positivity
+        indicator: test_positivity_percentage
+      - type: chart
+        title: Cases by district
+        dimension: cases_by_district
+      - type: map
+        title: Geographic distribution
+        dimension: cases_by_district
+      - type: epi_curve
+        title: Cases over time
+        dataset: facility_reports
+        date_field: report_date
+        value_field: cases
+
+ui:
+  theme: light
+  locale: en
+  translations: {}
+
+connectors: {}
+
+plugins: []

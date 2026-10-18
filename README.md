@@ -673,6 +673,17 @@ phframe analyze monthly-report.xlsx --sheet Surveillance --interactive
 
 Run `phframe analyze --help` for all options.
 
+## Reference application
+
+[`examples/malaria-surveillance`](examples/malaria-surveillance) is a complete, runnable PHFrame project demonstrating every piece above on one surveillance use case: a declarative schema, CSV import, incidence and test-positivity indicators, an epidemiological curve, data-quality rules, a surveillance alert threshold, and AI-assisted summaries. Run it with:
+
+```bash
+cd examples/malaria-surveillance
+phframe check
+phframe import facility_reports ../malaria_surveillance.csv
+phframe serve
+```
+
 ## Development
 
 ```bash

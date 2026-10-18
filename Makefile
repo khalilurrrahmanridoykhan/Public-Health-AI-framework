@@ -4,9 +4,9 @@
 PYTHON ?= python
 OUTPUT ?= outputs
 
-.PHONY: reproduce install test certify contract openapi config-schema dashboard clean
+.PHONY: reproduce install test certify contract openapi config-schema dashboard reference clean
 
-reproduce: install test certify contract openapi config-schema dashboard
+reproduce: install test certify contract openapi config-schema dashboard reference
 
 install:
 	$(PYTHON) -m pip install -e '.[dev]'
@@ -38,6 +38,10 @@ dashboard:
 		--location district --date report_date --value cases --population population \
 		--category disease --title "Case Reports Dashboard" \
 		--output $(OUTPUT)/case-reports-dashboard.html
+
+reference:
+	cd examples/malaria-surveillance && $(PYTHON) -m public_health_framework check
+	cd examples/malaria-surveillance && $(PYTHON) -m public_health_framework import facility_reports ../malaria_surveillance.csv
 
 clean:
 	rm -rf $(OUTPUT)
