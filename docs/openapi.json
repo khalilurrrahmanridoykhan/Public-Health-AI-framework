@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "PHFrame HTTP API",
-    "version": "0.9.0a3",
+    "version": "1.0.0rc1",
     "summary": "Generated dataset, analytics, data-intelligence, publishing, and governed AI APIs.",
     "description": "Routes and methods are covered by the PHFrame stability policy (docs/api-stability.md). Record endpoints are generated for every dataset in phframe.yaml, so `{dataset}` is a configured dataset name and record fields follow that dataset's schema. JSON responses wrap results in `data`; errors use the `Error` schema. When `access_mode` is `private`, requests need a `phframe_session` cookie from `/api/auth/login`; write requests may instead send `Authorization: Bearer $PHFRAME_API_TOKEN`.",
     "license": {

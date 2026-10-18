@@ -5,11 +5,11 @@
 [![CI](https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/actions/workflows/ci.yml/badge.svg)](https://github.com/khalilurrrahmanridoykhan/Public-Health-AI-framework/actions/workflows/ci.yml)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Status: Alpha](https://img.shields.io/badge/status-alpha-orange.svg)](CHANGELOG.md)
+[![Status: Release Candidate](https://img.shields.io/badge/status-release%20candidate-blue.svg)](CHANGELOG.md)
 
-PHFrame is an early-stage framework for building extensible public-health data systems. It combines generated projects, declarative health schemas, persistent storage, automatic APIs, a public-health engine, and a standards-based Web Component interface. The original CSV/Excel dashboard generator remains available as an export workflow.
+PHFrame is a framework for building extensible public-health data systems. It combines generated projects, declarative health schemas, persistent storage, automatic APIs, a public-health engine, and a standards-based Web Component interface. The original CSV/Excel dashboard generator remains available as an export workflow.
 
-> Current version: `0.9.0a2` (production certification candidate)
+> Current version: `1.0.0rc1` (release candidate)
 
 ## Why PHFrame?
 
@@ -34,7 +34,7 @@ Current capabilities include:
 - De-identification previews that remove protected/direct identifiers and generalize person-level dates and ages
 
 > [!IMPORTANT]
-> PHFrame is alpha software. Evaluate it with non-sensitive data before considering production use. Its optional local login is a preview and is not yet a complete production deployment security model.
+> PHFrame 1.0.0rc1 has passed every internal release gate (full test suite, dependency and static-security scans, recovery, accessibility-contract, and HTTP security tests; see [docs/certification.md](docs/certification.md)). A release candidate is not a certified production deployment: the independent sign-offs in that document — penetration test, manual WCAG 2.2 AA evaluation, load test, encrypted-backup restoration drill, and privacy/legal review — are scoped to a specific deployed system and have not been performed for any PHFrame deployment yet. Complete them, or confirm they are out of scope, before handling real patient or program data in production.
 
 ## Create a public-health application
 
