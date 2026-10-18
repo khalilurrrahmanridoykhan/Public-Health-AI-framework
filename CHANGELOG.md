@@ -13,6 +13,7 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Add `CITATION.cff`, a `make reproduce` command that runs all checks and regenerates the example dashboards, and a data dictionary and provenance record for the synthetic example datasets.
 - Add the Phase 7 data intelligence pipeline: governed staging and profiling, quality review, audited repair, geography intelligence, semantic contracts, professional dashboard generation, governed copilot proposals, and continuous assurance.
 - Add `phframe upgrade`, bringing a 0.9 preview project's `phframe.yaml`, `data/phframe-settings.json`, and database to the current 1.0 shape in one command: adding `version: 1` once the file validates, migrating legacy settings shapes, and applying the same additive database migration as `phframe migrate`. `phframe upgrade --check` reports pending upgrades without writing anything; see `docs/upgrading.md`.
+- Add the reference application: a complete, runnable PHFrame project at `examples/malaria-surveillance` demonstrating the full first vertical slice — a declarative malaria surveillance schema, CSV import, incidence and test-positivity indicators, an epidemiological curve, data-quality rules, a surveillance alert threshold, and AI-assisted summaries — on one realistic use case. `tests/test_reference_application.py` imports its published sample data and checks every indicator, rule, and threshold against the actual values in the file; `make reference` runs the same check and import from the command line.
 
 ### Changed
 
