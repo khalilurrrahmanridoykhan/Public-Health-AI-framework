@@ -674,6 +674,16 @@ Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the develo
 
 PHFrame follows semantic versioning after the `0.2.0a1` preview. See [CHANGELOG.md](CHANGELOG.md) for release notes and [PLAN.md](PLAN.md) for the full architecture and phased roadmap. The public API covered by the 1.0 stability promise is defined in [docs/api-stability.md](docs/api-stability.md).
 
+## Reproducing the examples
+
+Run every test, the certification gates, and regenerate the example dashboards with one command:
+
+```bash
+make reproduce
+```
+
+Dashboards are written to `outputs/`. The example datasets are synthetic; see the [data dictionary](docs/data-dictionary.md) and [data provenance](docs/data-provenance.md). To cite PHFrame, use [CITATION.cff](CITATION.cff).
+
 ## Roadmap
 
 See [PLAN.md](PLAN.md) for the full architecture and phased roadmap.
