@@ -8,6 +8,7 @@ All notable changes to PHFrame will be documented here. The project intends to f
 
 - Add a public API contract covering Python exports, CLI commands and options, HTTP routes, and the plugin hook, with a reviewed snapshot in `docs/public-api-contract.json` and a test that fails on unreviewed changes.
 - Add the public API stability and deprecation policy in `docs/api-stability.md`.
+- Add an HTTP API reference: an OpenAPI 3.1 document (`docs/openapi.json`, also served at `/api/openapi.json`) and a Markdown guide (`docs/http-api.md`) with the parameters, request bodies, and responses of every route, plus a test that checks live responses against the documented schemas.
 - Add `CITATION.cff`, a `make reproduce` command that runs all checks and regenerates the example dashboards, and a data dictionary and provenance record for the synthetic example datasets.
 - Add the Phase 7 data intelligence pipeline: governed staging and profiling, quality review, audited repair, geography intelligence, semantic contracts, professional dashboard generation, governed copilot proposals, and continuous assurance.
 
@@ -15,6 +16,10 @@ All notable changes to PHFrame will be documented here. The project intends to f
 
 - Dashboards are independent workspaces that can combine several datasets; saved dashboards store a `datasets` list instead of a single `dataset`.
 - Plan Phase 8 (1.0 stabilization) as the current roadmap priority.
+
+### Fixed
+
+- Running an assurance check on a dataset version that has an earlier version no longer fails with a server error.
 
 ## [0.9.0a3] - 2026-08-25
 

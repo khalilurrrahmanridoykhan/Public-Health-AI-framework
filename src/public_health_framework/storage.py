@@ -609,7 +609,7 @@ class Storage:
         current = self.dataset_version(version_id)
         if not current: return None
         with self.engine.connect() as connection: row = connection.execute(select(self.dataset_versions_table).where(and_(self.dataset_versions_table.c.dataset == current["dataset"], self.dataset_versions_table.c.id < version_id)).order_by(self.dataset_versions_table.c.id.desc()).limit(1)).mappings().first()
-        return self._dataset_version_row(row) if row else None
+        return self._version_row(row, include_profile=True) if row else None
 
     def record_assurance_run(self, version_id: int, previous_version_id: int | None, report: dict[str, Any]) -> dict[str, Any]:
         with self.engine.begin() as connection:

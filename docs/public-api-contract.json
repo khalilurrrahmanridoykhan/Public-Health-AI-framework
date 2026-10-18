@@ -396,6 +396,12 @@
       ]
     },
     {
+      "path": "/api/openapi.json",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
       "path": "/api/operations/audit",
       "methods": [
         "GET"

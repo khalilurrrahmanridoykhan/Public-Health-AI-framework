@@ -672,7 +672,7 @@ Contributions are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the develo
 
 ## Project status
 
-PHFrame follows semantic versioning after the `0.2.0a1` preview. See [CHANGELOG.md](CHANGELOG.md) for release notes and [PLAN.md](PLAN.md) for the full architecture and phased roadmap. The public API covered by the 1.0 stability promise is defined in [docs/api-stability.md](docs/api-stability.md).
+PHFrame follows semantic versioning after the `0.2.0a1` preview. See [CHANGELOG.md](CHANGELOG.md) for release notes and [PLAN.md](PLAN.md) for the full architecture and phased roadmap. The public API covered by the 1.0 stability promise is defined in [docs/api-stability.md](docs/api-stability.md), and every HTTP route is documented in the [HTTP API reference](docs/http-api.md) ([OpenAPI document](docs/openapi.json)).
 
 ## Reproducing the examples
 

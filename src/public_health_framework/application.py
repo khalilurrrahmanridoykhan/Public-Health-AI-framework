@@ -121,6 +121,7 @@ class PHFrame:
             Route("/api/ai/summaries/{summary_id:int}/review", self.ai_summary_review, methods=["POST"]),
             Route("/api/ai/audit", self.ai_audit, methods=["GET"]),
             Route("/api", self.api_index, methods=["GET"]),
+            Route("/api/openapi.json", self.openapi, methods=["GET"]),
             Route("/api/imports", self.import_history, methods=["GET"]),
             Route("/api/imports/{run_id:int}/errors", self.import_errors, methods=["GET"]),
             Route("/api/staging", self.staging_index, methods=["GET"]),
@@ -719,6 +720,10 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
                 },
             }
         )
+
+    async def openapi(self, request: Request) -> JSONResponse:
+        from .http_reference import build_openapi
+        return JSONResponse(build_openapi())
 
     async def indicator_index(self, request: Request) -> JSONResponse:
         return JSONResponse({"data": [
