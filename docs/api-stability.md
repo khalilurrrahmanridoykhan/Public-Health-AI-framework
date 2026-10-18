@@ -49,3 +49,11 @@ python -m public_health_framework.http_reference --write docs
 ```
 
 Documented response fields are stable. Responses may gain fields in minor releases, so clients should ignore fields they do not recognise.
+
+## Configuration schema
+
+[`configuration.md`](configuration.md) and the JSON Schema [`phframe.schema.json`](phframe.schema.json) document every `phframe.yaml` key for configuration version 1. A file that declares `version: 1` is validated strictly; a file without `version` is read as a 0.9 preview project and its findings are reported as warnings by `phframe check`. Within 1.x, keys documented for version 1 keep their meaning, and new optional keys may be added in minor releases. Removing or renaming a key, or making an optional key required, needs a new configuration version, which only a major release introduces, together with a migration. Both files are generated from `public_health_framework/config_schema.py`, and `tests/test_config_schema.py` fails when they are stale. Regenerate them after a reviewed change:
+
+```bash
+python -m public_health_framework.config_schema --write docs
+```

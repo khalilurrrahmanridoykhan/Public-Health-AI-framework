@@ -11,7 +11,9 @@ from .storage import Storage
 
 PROJECT_NAME = re.compile(r"^[A-Za-z][A-Za-z0-9 _-]*$")
 
-CONFIG_TEMPLATE = """project:
+CONFIG_TEMPLATE = """version: 1
+
+project:
   name: "{title}"
   database: sqlite:///data/phframe.db
   environment: development
@@ -237,6 +239,12 @@ def create_project(name: str, directory: str | Path | None = None) -> Path:
 def check_project(config_path: str | Path = "phframe.yaml") -> tuple[ProjectConfig, list[str]]:
     config = ProjectConfig.load(config_path)
     messages = [f"Configuration: {Path(config_path).resolve()}"]
+    if config.version is None:
+        messages.append("Configuration version: none (0.9 preview format)")
+        messages.extend(f"Warning: {warning}" for warning in config.warnings)
+        messages.append("Warning: add 'version: 1' to phframe.yaml to validate it strictly; see docs/configuration.md")
+    else:
+        messages.append(f"Configuration version: {config.version}")
     messages.append(f"Project: {config.name}")
     messages.append(f"Datasets: {len(config.datasets)}")
     messages.append(f"Indicators: {len(config.indicators)}")

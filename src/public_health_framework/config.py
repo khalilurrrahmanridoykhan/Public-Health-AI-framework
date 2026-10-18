@@ -425,6 +425,8 @@ class ProjectConfig:
     host: str = "127.0.0.1"
     port: int = 8000
     root: Path = Path(".")
+    version: int | None = None
+    warnings: tuple[str, ...] = ()
 
     @classmethod
     def load(cls, source: str | Path = "phframe.yaml") -> "ProjectConfig":
@@ -432,6 +434,7 @@ class ProjectConfig:
         if not path.exists():
             raise FileNotFoundError(f"PHFrame project configuration not found: {path}")
         raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        version, warnings = _check_schema(raw)
         project = raw.get("project", {})
         name = project.get("name")
         if not name:
@@ -538,6 +541,8 @@ class ProjectConfig:
             host=os.environ.get("PHFRAME_HOST", str(server.get("host", "127.0.0.1"))),
             port=int(os.environ.get("PHFRAME_PORT", server.get("port", 8000))),
             root=path.parent,
+            version=version,
+            warnings=warnings,
         )
 
     @property
@@ -562,6 +567,27 @@ class ProjectConfig:
         if separator and "@" in remainder:
             return f"{scheme}://***@{remainder.rsplit('@', 1)[1]}"
         return self.database
+
+
+def _check_schema(raw: Any) -> tuple[int | None, tuple[str, ...]]:
+    """Validate against the versioned schema; unversioned files only warn."""
+    from .config_schema import CONFIG_VERSION, SUPPORTED_VERSIONS, validate_config
+
+    if not isinstance(raw, dict):
+        raise ValueError("Configuration must be a YAML mapping.")
+    if "version" not in raw:
+        issues = validate_config({"version": CONFIG_VERSION, **raw})
+        return None, tuple(str(issue) for issue in issues)
+    version = raw["version"]
+    if isinstance(version, bool) or version not in SUPPORTED_VERSIONS:
+        supported = ", ".join(str(item) for item in SUPPORTED_VERSIONS)
+        raise ValueError(f"Unsupported configuration version {version!r}; this PHFrame reads version {supported}.")
+    issues = validate_config(raw)
+    if issues:
+        listed = "\n".join(f"  - {issue}" for issue in issues[:20])
+        more = f"\n  ... and {len(issues) - 20} more" if len(issues) > 20 else ""
+        raise ValueError(f"Configuration does not match schema version {version}:\n{listed}{more}")
+    return version, ()
 
 
 def _expand_env(value: str) -> str:

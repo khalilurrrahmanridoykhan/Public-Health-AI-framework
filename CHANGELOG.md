@@ -9,11 +9,14 @@ All notable changes to PHFrame will be documented here. The project intends to f
 - Add a public API contract covering Python exports, CLI commands and options, HTTP routes, and the plugin hook, with a reviewed snapshot in `docs/public-api-contract.json` and a test that fails on unreviewed changes.
 - Add the public API stability and deprecation policy in `docs/api-stability.md`.
 - Add an HTTP API reference: an OpenAPI 3.1 document (`docs/openapi.json`, also served at `/api/openapi.json`) and a Markdown guide (`docs/http-api.md`) with the parameters, request bodies, and responses of every route, plus a test that checks live responses against the documented schemas.
+- Add a versioned `phframe.yaml` configuration schema: a JSON Schema (`docs/phframe.schema.json`) and a generated reference (`docs/configuration.md`) covering every section, key, type, default, and environment override. Files that declare `version: 1` are validated strictly and fail with the offending key named, such as `datasets.case_reports.fields.cases.requird: unknown key; did you mean 'required'?`; files without `version` still load and `phframe check` lists the findings as warnings.
 - Add `CITATION.cff`, a `make reproduce` command that runs all checks and regenerates the example dashboards, and a data dictionary and provenance record for the synthetic example datasets.
 - Add the Phase 7 data intelligence pipeline: governed staging and profiling, quality review, audited repair, geography intelligence, semantic contracts, professional dashboard generation, governed copilot proposals, and continuous assurance.
 
 ### Changed
 
+- `phframe new` writes `version: 1` at the top of `phframe.yaml`, and `phframe check` reports the configuration version.
+- `POST /api/connectors` validates the connector against the configuration schema before saving it, so a misspelled key is rejected instead of being written to `phframe.yaml`.
 - Dashboards are independent workspaces that can combine several datasets; saved dashboards store a `datasets` list instead of a single `dataset`.
 - Plan Phase 8 (1.0 stabilization) as the current roadmap priority.
 
