@@ -1,0 +1,650 @@
+{
+  "contract_version": 1,
+  "python": [
+    "DatasetSchema",
+    "FieldSchema",
+    "PHFrame",
+    "ProjectConfig",
+    "__version__"
+  ],
+  "cli": {
+    "analyze": [
+      "--category",
+      "--date",
+      "--interactive",
+      "--location",
+      "--open",
+      "--output",
+      "--population",
+      "--sheet",
+      "--title",
+      "--value",
+      "-o",
+      "<input>"
+    ],
+    "backup": [
+      "--config",
+      "--output"
+    ],
+    "check": [
+      "--config"
+    ],
+    "doctor": [
+      "--config"
+    ],
+    "import": [
+      "--config",
+      "--dry-run",
+      "--map",
+      "--mapping",
+      "--save-mapping",
+      "--sheet",
+      "<dataset>",
+      "<source>"
+    ],
+    "imports": [
+      "--config",
+      "--limit"
+    ],
+    "migrate": [
+      "--check",
+      "--config"
+    ],
+    "new": [
+      "--directory",
+      "-d",
+      "<name>"
+    ],
+    "plugin": [],
+    "plugin list": [],
+    "plugin new": [
+      "--directory",
+      "-d",
+      "<name>"
+    ],
+    "restore": [
+      "--config",
+      "<source>"
+    ],
+    "serve": [
+      "--config",
+      "--host",
+      "--port",
+      "--reload"
+    ],
+    "sync": [
+      "--all",
+      "--config",
+      "--dry-run",
+      "--due",
+      "<connector>"
+    ],
+    "syncs": [
+      "--config",
+      "--connector",
+      "--limit"
+    ],
+    "worker": [
+      "--config",
+      "--interval",
+      "--once"
+    ]
+  },
+  "http": [
+    {
+      "path": "/",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/ai/audit",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/ai/chat",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/ai/chat/{chat_id:int}/report",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/ai/deidentify/{dataset}",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/ai/summaries",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/ai/summaries/{summary_id:int}",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/ai/summaries/{summary_id:int}/export",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/ai/summaries/{summary_id:int}/review",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/auth/login",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/auth/logout",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/auth/status",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/boundaries",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/boundaries/countries",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/boundaries/{boundary_id}",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/browser-import/{dataset}",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/browser-import/{dataset}/preview",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/connectors",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/connectors/{connector}",
+      "methods": [
+        "DELETE"
+      ]
+    },
+    {
+      "path": "/api/connectors/{connector}/sync",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/dashboards/{dashboard}",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/data-quality",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/data-quality/{rule}",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/dimensions",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/dimensions/{dimension}",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/epi-curve/{dataset}",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/filters",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/geospatial/{dataset}",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/import-example/{dataset}",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/import-mappings",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/import-mappings/{name}",
+      "methods": [
+        "PUT"
+      ]
+    },
+    {
+      "path": "/api/imports",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/imports/{run_id:int}/errors",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/indicators",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/indicators/{indicator}",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/integrations/cloudflare/account",
+      "methods": [
+        "PUT"
+      ]
+    },
+    {
+      "path": "/api/integrations/cloudflare/broker/callback",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/integrations/cloudflare/callback",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/integrations/cloudflare/connect",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/integrations/cloudflare/disconnect",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/integrations/cloudflare/status",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/integrations/dhis2/callback",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/integrations/dhis2/connect",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/integrations/dhis2/data-sets",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/integrations/dhis2/disconnect",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/integrations/dhis2/import-data-set",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/integrations/dhis2/password-connect",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/integrations/dhis2/status",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/intelligence/knowledge-packs",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/operations/audit",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/organisation-units",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/organisation-units/{code}",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/project/datasets/{dataset}/fields",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/publications",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/publications/bundle",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/publications/deploy",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/publications/feed/{dashboard_id}",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/publications/preview",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/settings",
+      "methods": [
+        "GET",
+        "PUT"
+      ]
+    },
+    {
+      "path": "/api/settings/assets/{kind}",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/staging",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/staging/{version_id:int}",
+      "methods": [
+        "GET",
+        "PATCH"
+      ]
+    },
+    {
+      "path": "/api/staging/{version_id:int}/assistant",
+      "methods": [
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/staging/{version_id:int}/assurance",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/staging/{version_id:int}/dashboards",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/staging/{version_id:int}/dashboards/{dashboard_id:int}",
+      "methods": [
+        "PATCH"
+      ]
+    },
+    {
+      "path": "/api/staging/{version_id:int}/geography",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/staging/{version_id:int}/quality",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/staging/{version_id:int}/repairs",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/staging/{version_id:int}/rows",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/staging/{version_id:int}/semantic",
+      "methods": [
+        "GET",
+        "PATCH",
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/syncs",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/thresholds",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/thresholds/{threshold}",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/transformations",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/visualize/{dataset}",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/api/{dataset}",
+      "methods": [
+        "GET",
+        "POST"
+      ]
+    },
+    {
+      "path": "/api/{dataset}/{record_id:int}",
+      "methods": [
+        "DELETE",
+        "GET",
+        "PATCH",
+        "PUT"
+      ]
+    },
+    {
+      "path": "/app",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/assets/leaflet.css",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/assets/leaflet.js",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/assets/phframe-logo.png",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/assets/phframe.css",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/assets/phframe.js",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/assets/project/{kind}",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/health",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/login",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/ready",
+      "methods": [
+        "GET"
+      ]
+    }
+  ],
+  "plugins": {
+    "entry_point_group": "phframe.plugins",
+    "hook": "setup(app, config)"
+  }
+}
