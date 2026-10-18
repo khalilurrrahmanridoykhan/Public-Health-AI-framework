@@ -39,3 +39,13 @@ python -m public_health_framework.contract > docs/public-api-contract.json
 ```
 
 The snapshot diff then shows reviewers exactly which public surface changed.
+
+## HTTP request and response schemas
+
+[`http-api.md`](http-api.md) and the OpenAPI 3.1 document [`openapi.json`](openapi.json) describe the parameters, request bodies, and responses of every HTTP route; applications also serve the document at `/api/openapi.json`. Both files are generated from `public_health_framework/http_reference.py`. `tests/test_http_reference.py` fails when a route in the contract has no documented operation, when a live response uses an undocumented status or does not match its schema, or when the generated files are stale. Regenerate them after a reviewed change:
+
+```bash
+python -m public_health_framework.http_reference --write docs
+```
+
+Documented response fields are stable. Responses may gain fields in minor releases, so clients should ignore fields they do not recognise.
