@@ -84,6 +84,10 @@
       "--connector",
       "--limit"
     ],
+    "upgrade": [
+      "--check",
+      "--config"
+    ],
     "worker": [
       "--config",
       "--interval",
