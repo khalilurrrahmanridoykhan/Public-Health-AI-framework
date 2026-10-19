@@ -34,6 +34,10 @@ def test_frontend_shell_and_assets(tmp_path: Path):
     assert "data-size" in javascript.text
     assert "ph-dashboard-layout:" in javascript.text
     assert "Dashboard layout saved." in javascript.text
+    assert "ph-onboarding-banner" in javascript.text
+    assert "This project has no data yet" in javascript.text
+    assert 'href="#/import"' in javascript.text
+    assert ".ph-onboarding-banner" in css.text
     assert "Bar chart" in javascript.text
     assert "Donut chart" in javascript.text
     assert "Line chart" in javascript.text

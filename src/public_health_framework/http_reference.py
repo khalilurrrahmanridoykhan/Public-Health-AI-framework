@@ -122,7 +122,7 @@ COMPONENTS: dict[str, dict[str, Any]] = {
     "ApiIndex": obj({
         "project": string(), "field_types": STRINGS,
         "datasets": {"type": "object", "additionalProperties": obj({
-            "label": string(), "endpoint": string(),
+            "label": string(), "endpoint": string(), "records": integer(description="Current row count, for an empty-project onboarding prompt."),
             "fields": {"type": "object", "additionalProperties": obj({
                 "type": string(), "required": boolean(), "protected": boolean(), "label": nullable(string()),
             })},

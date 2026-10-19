@@ -4,6 +4,10 @@ All notable changes to PHFrame will be documented here. The project intends to f
 
 ## [Unreleased]
 
+### Added
+
+- Add a current row count (`records`) to each dataset in the `/api` metadata response, and show a "This project has no data yet" banner with a direct link to Import on the Dashboard screen whenever every dataset is empty — a brand-new project no longer looks broken before its first import.
+
 ## [1.0.0rc1] - 2026-10-18
 
 Phases 1–8.5 of [PLAN.md](PLAN.md) are complete. This release candidate has passed every internal certification gate in [docs/certification.md](docs/certification.md); the independent sign-offs in that document are a separate, deployment-specific step that no PHFrame deployment has performed yet.

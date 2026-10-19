@@ -7722,6 +7722,10 @@
                 "endpoint": {
                   "type": "string"
                 },
+                "records": {
+                  "type": "integer",
+                  "description": "Current row count, for an empty-project onboarding prompt."
+                },
                 "fields": {
                   "type": "object",
                   "additionalProperties": {
@@ -7755,6 +7759,7 @@
               "required": [
                 "label",
                 "endpoint",
+                "records",
                 "fields"
               ]
             }

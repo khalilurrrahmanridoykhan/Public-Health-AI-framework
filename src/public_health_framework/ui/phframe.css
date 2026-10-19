@@ -133,6 +133,9 @@ button, a { touch-action: manipulation; }
 .ph-import-step { padding: 1.1rem; background: var(--ph-color-background); border: 1px solid var(--ph-color-border); border-radius: .75rem; }
 .ph-error-list { max-height: 18rem; overflow: auto; }
 .ph-dashboard-heading { display: flex; align-items: end; justify-content: space-between; gap: 1.5rem; margin-bottom: 1.5rem; }
+.ph-onboarding-banner { display: flex; align-items: center; justify-content: space-between; gap: 1.5rem; flex-wrap: wrap; margin-bottom: 1.25rem; background: var(--ph-color-accent-soft); border-color: var(--ph-color-primary); }
+.ph-onboarding-banner h3 { margin: .15rem 0; }
+.ph-onboarding-banner .ph-button { white-space: nowrap; }
 .ph-dashboard-switcher { display: flex; align-items: end; gap: .6rem; margin-bottom: 1.25rem; padding: .8rem; background: var(--ph-color-surface); border: 1px solid var(--ph-color-border); border-radius: .75rem; }
 .ph-dashboard-switcher .ph-field { min-width: min(24rem, 50vw); }
 .ph-template-dialog { width: min(64rem, calc(100% - 2rem)); }
