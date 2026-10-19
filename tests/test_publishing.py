@@ -34,6 +34,25 @@ def test_snapshot_bundle_contains_aggregate_dashboard_only(tmp_path: Path):
     assert "Global Public Health Dashboard" in html
 
 
+def test_published_bundle_renders_chart_js_canvases_not_flat_bars(tmp_path: Path):
+    client = _client(tmp_path)
+    for index in range(2):
+        client.post("/api/case_reports", json={
+            "case_id": f"case-{index}", "report_date": "2026-08-01", "disease": "Malaria",
+            "status": "confirmed", "district": "Example", "country": "Bangladesh", "cases": 4,
+        })
+    payload = {"dashboard_id": "configured-main", "mode": "snapshot"}
+    response = client.post("/api/publications/bundle", json=payload)
+    assert response.status_code == 200
+    with ZipFile(BytesIO(response.content)) as archive:
+        html = archive.read("index.html").decode()
+    assert "unpkg.com/chart.js@4.5.1" in html
+    assert "new Chart(ctx" in html
+    assert "class=\"bars\"" not in html  # the old flat-bar rendering is gone
+    assert "<canvas id=" in html
+    assert "prefers-color-scheme:dark" in html
+
+
 def test_live_bundle_requires_https_and_uses_fixed_proxy(tmp_path: Path):
     client = _client(tmp_path)
     bad = client.post("/api/publications/preview", json={
