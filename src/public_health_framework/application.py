@@ -651,6 +651,7 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
                     dataset.name: {
                         "label": dataset.label,
                         "endpoint": f"/api/{dataset.name}",
+                        "records": self.storage.count(dataset),
                         "fields": {
                             name: {
                                 "type": schema.type,

@@ -34,6 +34,7 @@ def test_generated_crud_api(tmp_path: Path):
 
     metadata = client.get("/api").json()
     assert metadata["datasets"]["case_reports"]["fields"]["case_id"]["protected"] is True
+    assert metadata["datasets"]["case_reports"]["records"] == 0
 
     payload = {
         "case_id": "MAL-001",
@@ -50,6 +51,7 @@ def test_generated_crud_api(tmp_path: Path):
     record = created.json()["data"]
     assert record["id"] == 1
     assert record["cases"] == 1
+    assert client.get("/api").json()["datasets"]["case_reports"]["records"] == 1
 
     listing = client.get("/api/case_reports")
     assert listing.status_code == 200
@@ -62,6 +64,7 @@ def test_generated_crud_api(tmp_path: Path):
     deleted = client.delete("/api/case_reports/1")
     assert deleted.status_code == 204
     assert client.get("/api/case_reports/1").status_code == 404
+    assert client.get("/api").json()["datasets"]["case_reports"]["records"] == 0
 
 
 def test_crud_api_reports_validation_errors(tmp_path: Path):
