@@ -85,7 +85,11 @@ def client(tmp_path: Path, monkeypatch) -> TestClient:
     monkeypatch.setenv("PHFRAME_RATE_LIMIT", "10000")
     for name in ("PHFRAME_DHIS2_CLIENT_ID", "PHFRAME_DHIS2_CLIENT_SECRET", "PHFRAME_API_TOKEN"):
         monkeypatch.delenv(name, raising=False)
-    monkeypatch.setattr(application, "_LEAFLET_CACHE", {"leaflet.css": b".leaflet{}", "leaflet.js": b"var L={};"})
+    monkeypatch.setattr(application, "_VENDOR_CACHE", {
+        "leaflet.css": b".leaflet{}", "leaflet.js": b"var L={};",
+        "gridstack.css": b".grid-stack{}", "gridstack.js": b"var GridStack={};",
+        "chart.js": b"var Chart={};",
+    })
     root = create_project("Reference", tmp_path / "reference")
     return TestClient(PHFrame.from_file(str(root / "phframe.yaml")), follow_redirects=False)
 
@@ -134,7 +138,8 @@ def test_live_responses_match_the_reference(client: TestClient):
         ("GET", "/health", {}), ("GET", "/ready", {}), ("GET", "/api", {}), ("GET", "/api/openapi.json", {}),
         ("GET", "/", {}), ("GET", "/app", {}), ("GET", "/login", {}),
         ("GET", "/assets/phframe.css", {}), ("GET", "/assets/phframe.js", {}), ("GET", "/assets/leaflet.css", {}),
-        ("GET", "/assets/leaflet.js", {}), ("GET", "/assets/phframe-logo.png", {}), ("GET", "/assets/project/logo", {}),
+        ("GET", "/assets/leaflet.js", {}), ("GET", "/assets/gridstack.css", {}), ("GET", "/assets/gridstack.js", {}),
+        ("GET", "/assets/chart.js", {}), ("GET", "/assets/phframe-logo.png", {}), ("GET", "/assets/project/logo", {}),
         ("POST", "/api/settings/assets/logo?filename=logo.png", {"content": asset_bytes("phframe-logo.png")}),
         ("POST", "/api/settings/assets/logo?filename=logo.txt", {"content": b"x"}),
         ("GET", "/assets/project/logo", {}),

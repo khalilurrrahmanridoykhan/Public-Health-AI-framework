@@ -431,6 +431,9 @@ OPERATIONS: list[Operation] = [
     Operation("GET", "/assets/phframe.js", "Pages", "Application script", {200: Response("JavaScript module.", string(), "text/javascript")}),
     Operation("GET", "/assets/leaflet.css", "Pages", "Pinned Leaflet stylesheet", {200: Response("Leaflet 1.9.4 stylesheet, served locally so the content security policy can stay self-only.", string(), "text/css")}),
     Operation("GET", "/assets/leaflet.js", "Pages", "Pinned Leaflet script", {200: Response("Leaflet 1.9.4 script.", string(), "text/javascript")}),
+    Operation("GET", "/assets/gridstack.css", "Pages", "Pinned GridStack stylesheet", {200: Response("GridStack 14.0.0 stylesheet, served locally so the content security policy can stay self-only.", string(), "text/css")}),
+    Operation("GET", "/assets/gridstack.js", "Pages", "Pinned GridStack script", {200: Response("GridStack 14.0.0 script, powering free drag-and-drop dashboard layout.", string(), "text/javascript")}),
+    Operation("GET", "/assets/chart.js", "Pages", "Pinned Chart.js script", {200: Response("Chart.js 4.5.1 script, served locally so the content security policy can stay self-only.", string(), "text/javascript")}),
     Operation("GET", "/assets/phframe-logo.png", "Pages", "PHFrame logo", {200: Response("PNG image.", string(format="binary"), "image/png")}),
     Operation("GET", "/assets/project/{kind}", "Pages", "Project brand asset", {
         200: Response("The uploaded logo or favicon.", string(format="binary"), "image/*"),

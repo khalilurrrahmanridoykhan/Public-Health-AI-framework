@@ -95,6 +95,36 @@ Browser pages and static assets served by the application.
 |---|---|---|
 | 200 | The single-page application shell. | `text/html` string |
 
+### `GET /assets/chart.js`
+
+**Pinned Chart.js script.**
+
+No session required.
+
+| Status | Description | Body |
+|---|---|---|
+| 200 | Chart.js 4.5.1 script, served locally so the content security policy can stay self-only. | `text/javascript` string |
+
+### `GET /assets/gridstack.css`
+
+**Pinned GridStack stylesheet.**
+
+No session required.
+
+| Status | Description | Body |
+|---|---|---|
+| 200 | GridStack 14.0.0 stylesheet, served locally so the content security policy can stay self-only. | `text/css` string |
+
+### `GET /assets/gridstack.js`
+
+**Pinned GridStack script.**
+
+No session required.
+
+| Status | Description | Body |
+|---|---|---|
+| 200 | GridStack 14.0.0 script, powering free drag-and-drop dashboard layout. | `text/javascript` string |
+
 ### `GET /assets/leaflet.css`
 
 **Pinned Leaflet stylesheet.**

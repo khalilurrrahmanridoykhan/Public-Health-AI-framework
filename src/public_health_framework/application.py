@@ -26,18 +26,24 @@ from starlette.concurrency import run_in_threadpool
 from starlette.middleware.gzip import GZipMiddleware
 
 
-_LEAFLET_CACHE: dict[str, bytes] = {}
+_VENDOR_ASSETS = {
+    "leaflet.css": "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css",
+    "leaflet.js": "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js",
+    "gridstack.css": "https://unpkg.com/gridstack@14.0.0/dist/gridstack.min.css",
+    "gridstack.js": "https://unpkg.com/gridstack@14.0.0/dist/gridstack-all.js",
+    "chart.js": "https://unpkg.com/chart.js@4.5.1/dist/chart.umd.js",
+}
+_VENDOR_CACHE: dict[str, bytes] = {}
 
 
-def _leaflet_asset(name: str) -> bytes:
-    """Serve pinned Leaflet assets through PHFrame so strict CSP remains self-only."""
-    if name not in {"leaflet.css", "leaflet.js"}:
-        raise ValueError("Unknown map asset.")
-    if name not in _LEAFLET_CACHE:
-        url = f"https://unpkg.com/leaflet@1.9.4/dist/{name}"
-        with urlopen(URLRequest(url, headers={"User-Agent": "PHFrame/0.9"}), timeout=30) as response:  # nosec B310 fixed trusted origin
-            _LEAFLET_CACHE[name] = response.read()
-    return _LEAFLET_CACHE[name]
+def _vendor_asset(name: str) -> bytes:
+    """Serve pinned third-party browser assets through PHFrame so strict CSP remains self-only."""
+    if name not in _VENDOR_ASSETS:
+        raise ValueError("Unknown vendor asset.")
+    if name not in _VENDOR_CACHE:
+        with urlopen(URLRequest(_VENDOR_ASSETS[name], headers={"User-Agent": "PHFrame/0.9"}), timeout=30) as response:  # nosec B310 fixed trusted origin
+            _VENDOR_CACHE[name] = response.read()
+    return _VENDOR_CACHE[name]
 
 from . import __version__
 from .config import ConnectorSchema, DatasetSchema, FIELD_TYPES, FieldSchema, ProjectConfig
@@ -81,6 +87,9 @@ class PHFrame:
             Route("/assets/phframe.js", self.frontend_js, methods=["GET"]),
             Route("/assets/leaflet.css", self.leaflet_css, methods=["GET"]),
             Route("/assets/leaflet.js", self.leaflet_js, methods=["GET"]),
+            Route("/assets/gridstack.css", self.gridstack_css, methods=["GET"]),
+            Route("/assets/gridstack.js", self.gridstack_js, methods=["GET"]),
+            Route("/assets/chart.js", self.chart_js, methods=["GET"]),
             Route("/assets/phframe-logo.png", self.framework_logo, methods=["GET"]),
             Route("/assets/project/{kind}", self.project_asset, methods=["GET"]),
             Route("/login", self.login_page, methods=["GET"]),
@@ -241,10 +250,19 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
         return Response(asset_text("phframe.js"), media_type="text/javascript", headers={"cache-control": "public, max-age=3600"})
 
     async def leaflet_css(self, request: Request) -> Response:
-        return Response(_leaflet_asset("leaflet.css"), media_type="text/css", headers={"cache-control": "public, max-age=86400"})
+        return Response(_vendor_asset("leaflet.css"), media_type="text/css", headers={"cache-control": "public, max-age=86400"})
 
     async def leaflet_js(self, request: Request) -> Response:
-        return Response(_leaflet_asset("leaflet.js"), media_type="text/javascript", headers={"cache-control": "public, max-age=86400"})
+        return Response(_vendor_asset("leaflet.js"), media_type="text/javascript", headers={"cache-control": "public, max-age=86400"})
+
+    async def gridstack_css(self, request: Request) -> Response:
+        return Response(_vendor_asset("gridstack.css"), media_type="text/css", headers={"cache-control": "public, max-age=86400"})
+
+    async def gridstack_js(self, request: Request) -> Response:
+        return Response(_vendor_asset("gridstack.js"), media_type="text/javascript", headers={"cache-control": "public, max-age=86400"})
+
+    async def chart_js(self, request: Request) -> Response:
+        return Response(_vendor_asset("chart.js"), media_type="text/javascript", headers={"cache-control": "public, max-age=86400"})
 
     async def framework_logo(self, request: Request) -> Response:
         return Response(asset_bytes("phframe-logo.png"), media_type="image/png", headers={"cache-control": "public, max-age=86400"})

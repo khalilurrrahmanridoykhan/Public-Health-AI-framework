@@ -21,6 +21,9 @@ def test_frontend_shell_and_assets(tmp_path: Path):
     assert javascript.status_code == 200
     assert 'script.src = "/assets/leaflet.js"' in javascript.text
     assert 'style.href = "/assets/leaflet.css"' in javascript.text
+    assert 'script.src = "/assets/gridstack.js"' in javascript.text
+    assert 'style.href = "/assets/gridstack.css"' in javascript.text
+    assert 'script.src = "/assets/chart.js"' in javascript.text
     assert 'customElements.define("ph-app-shell"' in javascript.text
     assert "ph-route" in javascript.text
     for component in ["ph-data-form", "ph-case-table", "ph-filter-bar", "ph-org-unit-select", "ph-quality-panel"]:
@@ -29,11 +32,24 @@ def test_frontend_shell_and_assets(tmp_path: Path):
     assert 'role="status"' in javascript.text
     for component in ["ph-kpi", "ph-indicator-chart", "ph-epi-curve", "ph-map", "ph-dashboard"]:
         assert f'customElements.define("{component}"' in javascript.text
-    assert 'draggable="true"' in javascript.text
     assert "data-visualization" in javascript.text
-    assert "data-size" in javascript.text
     assert "ph-dashboard-layout:" in javascript.text
     assert "Dashboard layout saved." in javascript.text
+    assert "GridStack.init" in javascript.text
+    assert 'handle: ".ph-drag-handle"' in javascript.text
+    assert "grid-stack-item" in javascript.text
+    assert "gs-auto-position" in javascript.text
+    assert "columnOpts" in javascript.text
+    assert "grid-stack-item-content" in css.text
+    assert ".ui-resizable-handle" in css.text
+    assert "await PHFrame.chartjs()" in javascript.text
+    assert "new Chart(canvas" in javascript.text
+    assert 'type: "doughnut"' in javascript.text
+    assert "seriesColors" in javascript.text
+    assert "topCategories" in javascript.text
+    assert "--ph-series-1" in css.text
+    assert "--ph-series-8" in css.text
+    assert "--ph-status-critical" in css.text
     assert "ph-onboarding-banner" in javascript.text
     assert "This project has no data yet" in javascript.text
     assert 'href="#/import"' in javascript.text
@@ -42,7 +58,6 @@ def test_frontend_shell_and_assets(tmp_path: Path):
     assert "Donut chart" in javascript.text
     assert "Line chart" in javascript.text
     assert ".ph-dashboard-grid" in css.text
-    assert ".ph-drag-over" in css.text
     assert 'role="img"' in javascript.text
     for component in ["ph-notification-center", "ph-modal", "ph-confirm"]:
         assert f'customElements.define("{component}"' in javascript.text
@@ -68,13 +83,11 @@ def test_frontend_shell_and_assets(tmp_path: Path):
     assert ".ph-connectors-sidebar" in css.text
     assert 'customElements.define("ph-data-builder"' in javascript.text
     assert "data-add-widget" in javascript.text
-    assert "ph-resize-handle" in javascript.text
     assert "removeWidget" in javascript.text
     assert ".json,.xml" in javascript.text
     assert "Generic REST API" in javascript.text
     assert 'customElements.define("ph-settings-panel"' in javascript.text
     assert 'this.querySelector("form").addEventListener("submit", event => this.save(event))' in javascript.text
-    assert '"ne", "se", "sw", "nw"' in javascript.text
     assert "KoboToolbox submissions" in javascript.text
     assert ".ph-builder-layout" in css.text
     assert "data-records-tab" in javascript.text
