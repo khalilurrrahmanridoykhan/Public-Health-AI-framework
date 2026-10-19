@@ -439,14 +439,20 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
             return JSONResponse(self._publication_snapshot(dashboard), headers={"cache-control": "public, max-age=60"})
         except ValueError as error: return _error(str(error), 422)
 
-    def _publication_dashboard(self, dashboard_id: str) -> dict[str, Any]:
+    def _publication_dashboard(self, dashboard_id: str, visualizations: list[str | None] | None = None) -> dict[str, Any]:
         if dashboard_id.startswith("configured-"):
             name = dashboard_id.removeprefix("configured-"); dashboard = self.config.dashboards.get(name)
             if not dashboard: raise ValueError("Dashboard not found.")
-            return {"id": dashboard_id, "title": dashboard.label, "widgets": [{key: value for key, value in vars(widget).items() if value is not None} for widget in dashboard.widgets]}
-        dashboard = next((item for item in self.site_settings.load().get("dashboards", []) if item.get("id") == dashboard_id), None)
-        if not dashboard: raise ValueError("Dashboard not found.")
-        return dashboard
+            widgets = [{key: value for key, value in vars(widget).items() if value is not None} for widget in dashboard.widgets]
+            result = {"id": dashboard_id, "title": dashboard.label, "widgets": widgets}
+        else:
+            found = next((item for item in self.site_settings.load().get("dashboards", []) if item.get("id") == dashboard_id), None)
+            if not found: raise ValueError("Dashboard not found.")
+            result = {**found, "widgets": [dict(widget) for widget in found.get("widgets", [])]}
+        if visualizations:
+            for widget, visualization in zip(result["widgets"], visualizations):
+                if visualization: widget["visualization"] = visualization
+        return result
 
     def _publication_snapshot(self, dashboard: dict[str, Any]) -> dict[str, Any]:
         widgets = []
@@ -454,12 +460,14 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
         boundary = self.site_settings.boundary(str(boundary_layers[-1]["id"])) if boundary_layers else None
         for widget in dashboard.get("widgets", []):
             kind, result = widget.get("type"), {"type": widget.get("type"), "title": widget.get("title", widget.get("type", "Widget"))}
+            visualization = widget.get("visualization")
+            if visualization: result["visualization"] = visualization
             if kind == "content": result["html"] = widget.get("html", "")
             elif kind == "kpi" and widget.get("indicator") in self.config.indicators:
                 result.update(self.storage.indicator(self.config.indicators[widget["indicator"]]))
             elif kind in {"chart", "map"} and widget.get("dimension") in self.config.dimensions:
                 result.update(self.storage.dimension(self.config.dimensions[widget["dimension"]]))
-                if kind == "map" and boundary:
+                if kind == "map" and boundary and visualization in (None, "tiles"):
                     result["boundary"] = {key: boundary.get(key) for key in ("country", "level", "source", "license")}
                     result["geojson"] = boundary.get("geojson")
             elif kind in {"field_kpi", "field_chart"} and widget.get("dataset") in self.config.datasets:
@@ -480,7 +488,11 @@ code{{background:#e8f3f2;padding:3px 6px;border-radius:5px}}a{{color:#087e8b}}.m
         return {"generated_at": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(), "widgets": widgets}
 
     def _publication_payload(self, payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], str, str, int]:
-        dashboard = self._publication_dashboard(str(payload.get("dashboard_id", ""))); mode = str(payload.get("mode", "snapshot")); upstream = str(payload.get("upstream_url", "")); refresh = max(1, min(int(payload.get("refresh_minutes", 15)), 1440)); audit = publication_audit(self.config, dashboard, mode, upstream)
+        raw_visualizations = payload.get("widget_visualizations")
+        if raw_visualizations is not None and not isinstance(raw_visualizations, list):
+            raise ValueError("widget_visualizations must be a list.")
+        visualizations = [str(item) if item else None for item in raw_visualizations] if raw_visualizations else None
+        dashboard = self._publication_dashboard(str(payload.get("dashboard_id", "")), visualizations); mode = str(payload.get("mode", "snapshot")); upstream = str(payload.get("upstream_url", "")); refresh = max(1, min(int(payload.get("refresh_minutes", 15)), 1440)); audit = publication_audit(self.config, dashboard, mode, upstream)
         if not audit["approved"]: raise ValueError("Privacy review failed: " + "; ".join(audit["findings"]))
         return dashboard, audit, mode, upstream, refresh
 
