@@ -7,6 +7,9 @@ All notable changes to PHFrame will be documented here. The project intends to f
 ### Added
 
 - Add a current row count (`records`) to each dataset in the `/api` metadata response, and show a "This project has no data yet" banner with a direct link to Import on the Dashboard screen whenever every dataset is empty — a brand-new project no longer looks broken before its first import.
+- Redesign the Dashboard builder on GridStack: every widget can now be dragged to any position in the grid, not just reordered and resized vertically, and resized from any edge or corner. The linear reorder/size-preset system (drag-to-reorder, Size dropdown, 8-handle custom resize) is replaced by true free 2D placement, persisted per widget as `x`, `y`, `w`, `h`.
+- Replace the hand-rolled SVG bar, donut, line, and column charts with Chart.js, styled from a validated, CVD-safe 8-color categorical palette (`--ph-series-1`..`8`) plus status and sequential tokens, with real tooltips, legends, and animation. Category charts beyond 8 groups fold the smallest into an "Other" bucket to stay within the validated palette's accessibility guarantees.
+- Vendor GridStack and Chart.js the same way as Leaflet: fetched and cached server-side from a pinned version, served same-origin at `/assets/gridstack.css`, `/assets/gridstack.js`, and `/assets/chart.js`, so the browser never contacts a third-party CDN directly.
 
 ## [1.0.0rc1] - 2026-10-18
 

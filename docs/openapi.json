@@ -7231,6 +7231,102 @@
         }
       }
     },
+    "/assets/chart.js": {
+      "get": {
+        "operationId": "pinnedChartJsScript",
+        "tags": [
+          "Pages"
+        ],
+        "summary": "Pinned Chart.js script",
+        "responses": {
+          "200": {
+            "description": "Chart.js 4.5.1 script, served locally so the content security policy can stay self-only.",
+            "content": {
+              "text/javascript": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; retry after the `retry-after` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/assets/gridstack.css": {
+      "get": {
+        "operationId": "pinnedGridstackStylesheet",
+        "tags": [
+          "Pages"
+        ],
+        "summary": "Pinned GridStack stylesheet",
+        "responses": {
+          "200": {
+            "description": "GridStack 14.0.0 stylesheet, served locally so the content security policy can stay self-only.",
+            "content": {
+              "text/css": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; retry after the `retry-after` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
+    "/assets/gridstack.js": {
+      "get": {
+        "operationId": "pinnedGridstackScript",
+        "tags": [
+          "Pages"
+        ],
+        "summary": "Pinned GridStack script",
+        "responses": {
+          "200": {
+            "description": "GridStack 14.0.0 script, powering free drag-and-drop dashboard layout.",
+            "content": {
+              "text/javascript": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded; retry after the `retry-after` header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "security": []
+      }
+    },
     "/assets/leaflet.css": {
       "get": {
         "operationId": "pinnedLeafletStylesheet",

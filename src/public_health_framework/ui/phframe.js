@@ -57,7 +57,37 @@ const PHFrame = {
     });
     return this._leafletPromise;
   },
-  notify(message) { dispatchEvent(new CustomEvent("ph-notify", { detail: { message } })); }
+  async gridstack() {
+    if (window.GridStack) return window.GridStack;
+    if (!this._gridstackPromise) this._gridstackPromise = new Promise((resolve, reject) => {
+      const style = document.createElement("link"); style.rel = "stylesheet"; style.href = "/assets/gridstack.css"; document.head.append(style);
+      const script = document.createElement("script"); script.src = "/assets/gridstack.js"; script.onload = () => resolve(window.GridStack); script.onerror = () => reject(new Error("Dashboard layout library could not load.")); document.head.append(script);
+    });
+    return this._gridstackPromise;
+  },
+  async chartjs() {
+    if (window.Chart) return window.Chart;
+    if (!this._chartjsPromise) this._chartjsPromise = new Promise((resolve, reject) => {
+      const script = document.createElement("script"); script.src = "/assets/chart.js"; script.onload = () => resolve(window.Chart); script.onerror = () => reject(new Error("Chart library could not load.")); document.head.append(script);
+    });
+    return this._chartjsPromise;
+  },
+  notify(message) { dispatchEvent(new CustomEvent("ph-notify", { detail: { message } })); },
+  cssVar(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); },
+  seriesColor(index) { return this.cssVar(`--ph-series-${(index % 8) + 1}`); },
+  seriesColors(count) { return Array.from({ length: count }, (_, index) => this.seriesColor(index)); },
+  chartInk() { return this.cssVar("--ph-color-text"); },
+  chartMuted() { return this.cssVar("--ph-color-muted"); },
+  chartGrid() { return this.cssVar("--ph-chart-grid"); },
+  chartSurface() { return this.cssVar("--ph-color-surface"); },
+  /** Fold values beyond the 8 validated categorical slots into a single grey "Other" bucket (dataviz skill: palette.md). */
+  topCategories(values, limit = 8) {
+    if (values.length <= limit) return values;
+    const sorted = [...values].sort((a, b) => b.count - a.count);
+    const kept = sorted.slice(0, limit - 1);
+    const other = sorted.slice(limit - 1).reduce((sum, item) => sum + item.count, 0);
+    return [...kept, { value: "Other", count: other }];
+  },
 };
 
 class PHElement extends HTMLElement {
@@ -268,22 +298,43 @@ class PHIndicatorChart extends PHElement {
       const values = response.data.values;
       const visualization = this.getAttribute("visualization") || "bar";
       if (!values.length) { this.innerHTML = this.empty("No dimension data yet"); return; }
-      const maximum = Math.max(1, ...values.map(item => item.count));
-      if (visualization === "donut") {
-        const total = values.reduce((sum, item) => sum + item.count, 0);
-        let offset = 0;
-        const colors = ["#13b8a6", "#5b8def", "#f59e0b", "#e76f92", "#8b7cf6", "#4fb477"];
-        const segments = values.map((item, index) => { const length = total ? item.count / total * 100 : 0; const segment = `<circle cx="60" cy="60" r="45" pathLength="100" fill="none" stroke="${colors[index % colors.length]}" stroke-width="18" stroke-dasharray="${length} ${100 - length}" stroke-dashoffset="${-offset}"><title>${PHFrame.escape(item.value)}: ${item.count}</title></circle>`; offset += length; return segment; }).join("");
-        const legend = values.map((item, index) => `<li><span style="--ph-legend-color:${colors[index % colors.length]}"></span><b>${PHFrame.escape(item.value ?? "Unknown")}</b><small>${item.count}</small></li>`).join("");
-        this.innerHTML = `<div class="ph-widget-body ph-donut-layout"><svg class="ph-donut" viewBox="0 0 120 120" role="img" aria-label="${PHFrame.escape(response.data.label)} donut chart">${segments}<text x="60" y="57" text-anchor="middle" class="ph-donut-total">${total}</text><text x="60" y="72" text-anchor="middle" class="ph-donut-caption">total</text></svg><ul class="ph-chart-legend">${legend}</ul></div>${this.table(values, "Value", "Count", visualization === "table")}`;
-      } else if (visualization === "table") {
-        this.innerHTML = this.table(values, "Value", "Count", true);
-      } else {
-        const width = 600, row = 44;
-        const bars = values.map((item, index) => `<g transform="translate(0 ${index * row})"><text class="ph-axis-label" x="0" y="25">${PHFrame.escape(item.value ?? "Unknown")}</text><rect class="ph-chart-track" x="155" y="7" width="390" height="25" rx="7"></rect><rect class="ph-chart-bar" x="155" y="7" width="${Math.round(item.count / maximum * 390)}" height="25" rx="7"><title>${item.count}</title></rect><text class="ph-axis-value" x="580" y="25" text-anchor="end">${item.count}</text></g>`).join("");
-        this.innerHTML = `<div class="ph-widget-body"><svg class="ph-chart" viewBox="0 0 ${width} ${Math.max(row, values.length * row)}" role="img" aria-label="${PHFrame.escape(response.data.label)} bar chart">${bars}</svg></div>${this.table(values, "Value", "Count")}`;
-      }
+      if (visualization === "table") { this.innerHTML = this.table(values, "Value", "Count", true); return; }
+      const label = response.data.label || this.getAttribute("title") || "Chart";
+      this.innerHTML = `<div class="ph-widget-body"><div class="ph-chart-canvas"><canvas role="img" aria-label="${PHFrame.escape(label)}, a ${visualization === "donut" ? "donut" : "bar"} chart"></canvas></div></div>${this.table(values, "Value", "Count")}`;
+      await this.draw(values, visualization);
     } catch (error) { this.innerHTML = `<p class="ph-error" role="alert">${PHFrame.escape(error.message)}</p>`; }
+  }
+  async draw(values, visualization) {
+    const Chart = await PHFrame.chartjs();
+    const canvas = this.querySelector("canvas");
+    if (!canvas) return;
+    this._chart?.destroy();
+    const labels = values.map(item => item.value ?? "Unknown");
+    if (visualization === "donut") {
+      const grouped = PHFrame.topCategories(values);
+      const colors = PHFrame.seriesColors(grouped.length);
+      this._chart = new Chart(canvas, {
+        type: "doughnut",
+        data: { labels: grouped.map(item => item.value ?? "Unknown"), datasets: [{ data: grouped.map(item => item.count), backgroundColor: colors, borderColor: PHFrame.chartSurface(), borderWidth: 2 }] },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { position: "bottom", labels: { color: PHFrame.chartInk(), boxWidth: 12, padding: 14 } } },
+        },
+      });
+      return;
+    }
+    this._chart = new Chart(canvas, {
+      type: "bar",
+      data: { labels, datasets: [{ data: values.map(item => item.count), backgroundColor: PHFrame.seriesColor(0), borderRadius: 4, maxBarThickness: 28 }] },
+      options: {
+        indexAxis: "y", responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { beginAtZero: true, grid: { color: PHFrame.chartGrid() }, ticks: { color: PHFrame.chartMuted() } },
+          y: { grid: { display: false }, ticks: { color: PHFrame.chartMuted() } },
+        },
+      },
+    });
   }
   empty(message) { return `<div class="ph-empty-state"><span>↗</span><p>${message}</p></div>`; }
   table(values, first, second, visible = false) {
@@ -301,15 +352,37 @@ class PHEpiCurve extends PHElement {
       const values = response.data;
       const visualization = this.getAttribute("visualization") || "line";
       if (!values.length) { this.innerHTML = `<div class="ph-empty-state"><span>⌁</span><p>No time-series data yet</p></div>`; return; }
-      const maximum = Math.max(1, ...values.map(item => item.value));
       const table = `<div class="${visualization === "table" ? "ph-table-wrap ph-chart-table" : "ph-sr-only"}"><table class="ph-table"><caption>Epidemiological curve data</caption><thead><tr><th>Date</th><th>Value</th></tr></thead><tbody>${values.map(item => `<tr><td>${PHFrame.escape(item.date)}</td><td>${item.value}</td></tr>`).join("")}</tbody></table></div>`;
       if (visualization === "table") { this.innerHTML = table; return; }
-      const positions = values.map((item, index) => ({ x: values.length === 1 ? 300 : index / (values.length - 1) * 530 + 45, y: 190 - item.value / maximum * 145 }));
-      const grid = [45, 93, 142, 190].map(y => `<line class="ph-chart-grid" x1="45" y1="${y}" x2="575" y2="${y}"></line>`).join("");
-      const marks = visualization === "column" ? positions.map((point, index) => `<rect class="ph-chart-bar" x="${point.x - 13}" y="${point.y}" width="26" height="${190 - point.y}" rx="5"><title>${PHFrame.escape(values[index].date)}: ${values[index].value}</title></rect>`).join("") : `<polyline class="ph-chart-line" points="${positions.map(point => `${point.x},${point.y}`).join(" ")}"></polyline>${positions.map((point, index) => `<circle class="ph-chart-point" cx="${point.x}" cy="${point.y}" r="5"><title>${PHFrame.escape(values[index].date)}: ${values[index].value}</title></circle>`).join("")}`;
-      const labels = positions.filter((_, index) => index === 0 || index === positions.length - 1).map((point, index) => `<text class="ph-axis-label" x="${point.x}" y="214" text-anchor="${index ? "end" : "start"}">${PHFrame.escape(values[index ? values.length - 1 : 0].date)}</text>`).join("");
-      this.innerHTML = `<div class="ph-widget-body"><svg class="ph-chart" viewBox="0 0 600 225" role="img" aria-label="Cases by reporting date">${grid}${marks}${labels}</svg></div>${table}`;
+      this.innerHTML = `<div class="ph-widget-body"><div class="ph-chart-canvas"><canvas role="img" aria-label="Cases by reporting date, a ${visualization === "column" ? "column" : "line"} chart"></canvas></div></div>${table}`;
+      await this.draw(values, visualization);
     } catch (error) { this.innerHTML = `<p class="ph-error" role="alert">${PHFrame.escape(error.message)}</p>`; }
+  }
+  async draw(values, visualization) {
+    const Chart = await PHFrame.chartjs();
+    const canvas = this.querySelector("canvas");
+    if (!canvas) return;
+    this._chart?.destroy();
+    const color = PHFrame.seriesColor(0);
+    this._chart = new Chart(canvas, {
+      type: visualization === "column" ? "bar" : "line",
+      data: {
+        labels: values.map(item => item.date),
+        datasets: [{
+          data: values.map(item => item.value), borderColor: color, backgroundColor: visualization === "column" ? color : `color-mix(in srgb, ${color} 18%, transparent)`,
+          borderRadius: visualization === "column" ? 4 : 0, fill: visualization !== "column", tension: .25,
+          pointRadius: visualization === "column" ? 0 : 3, pointBackgroundColor: color, pointHoverRadius: 5, borderWidth: 2,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: PHFrame.chartMuted(), maxRotation: 0, autoSkip: true } },
+          y: { beginAtZero: true, grid: { color: PHFrame.chartGrid() }, ticks: { color: PHFrame.chartMuted() } },
+        },
+      },
+    });
   }
 }
 
@@ -476,6 +549,8 @@ class PHDashboardManager extends PHElement {
 }
 
 class PHDashboard extends PHElement {
+  static cellHeight = 70;
+  static columns = 12;
   set definition(value) { this._definition = value; if (this.isConnected && this._metadata) this.render(); }
   get metadata() { return this._metadata; }
   set metadata(value) { this._metadata = value; if (this.isConnected && this._definition) this.render(); }
@@ -490,31 +565,52 @@ class PHDashboard extends PHElement {
   }
   widgetId(widget, index) { return widget._id || `${widget.type}-${widget.indicator || widget.dimension || widget.dataset || index}-${index}`; }
   defaults(widget) {
-    if (widget.type === "content") return { visualization: "text", size: "wide", choices: [["text", "Rich text"]] };
-    if (widget.type === "geo_map") return { visualization: "coordinates", size: "wide", choices: [["coordinates", "Coordinate map"]] };
-    if (widget.type === "kpi" || widget.type === "field_kpi") return { visualization: "number", size: "compact", choices: [["number", "Number"], ["gauge", "Gauge"]] };
-    if (widget.type === "chart" || widget.type === "field_chart") return { visualization: "bar", size: "medium", choices: [["bar", "Bar chart"], ["donut", "Donut chart"], ["table", "Data table"]] };
-    if (widget.type === "map") return { visualization: "tiles", size: "medium", choices: [["tiles", "Tile map"], ["bar", "Bar chart"], ["donut", "Donut chart"], ["table", "Data table"]] };
-    return { visualization: "line", size: "wide", choices: [["line", "Line chart"], ["column", "Column chart"], ["table", "Data table"]] };
+    if (widget.type === "content") return { visualization: "text", choices: [["text", "Rich text"]] };
+    if (widget.type === "geo_map") return { visualization: "coordinates", choices: [["coordinates", "Coordinate map"]] };
+    if (widget.type === "kpi" || widget.type === "field_kpi") return { visualization: "number", choices: [["number", "Number"], ["gauge", "Gauge"]] };
+    if (widget.type === "chart" || widget.type === "field_chart") return { visualization: "bar", choices: [["bar", "Bar chart"], ["donut", "Donut chart"], ["table", "Data table"]] };
+    if (widget.type === "map") return { visualization: "tiles", choices: [["tiles", "Tile map"], ["bar", "Bar chart"], ["donut", "Donut chart"], ["table", "Data table"]] };
+    return { visualization: "line", choices: [["line", "Line chart"], ["column", "Column chart"], ["table", "Data table"]] };
+  }
+  defaultLayout(widget) {
+    if (widget.type === "kpi" || widget.type === "field_kpi") return { w: 3, h: 3 };
+    if (widget.type === "content") return { w: 6, h: 3 };
+    return { w: 6, h: 5 };
   }
   loadSettings() {
     try { return JSON.parse(localStorage.getItem(this.storageKey)) || {}; } catch (_) { return {}; }
   }
-  saveSettings() {
-    const cards = [...this.querySelectorAll(".ph-dashboard-card")];
-    this.settings.order = cards.map(card => card.dataset.widgetId);
-    localStorage.setItem(this.storageKey, JSON.stringify(this.settings));
-  }
+  saveSettings() { localStorage.setItem(this.storageKey, JSON.stringify(this.settings)); }
   draw() {
+    this.grid?.destroy(false);
     const allWidgets = [...this.dashboard.widgets, ...(this.settings.customWidgets || [])];
     const hidden = new Set(this.settings.hidden || []);
     const indexed = allWidgets.map((widget, index) => ({ widget, index, id: this.widgetId(widget, index) })).filter(item => !hidden.has(item.id));
-    const order = this.settings.order || [];
-    indexed.sort((a, b) => { const ai = order.indexOf(a.id), bi = order.indexOf(b.id); return (ai < 0 ? 999 + a.index : ai) - (bi < 0 ? 999 + b.index : bi); });
-    const cards = indexed.map(item => this.card(item.widget, item.index, item.id)).join("");
+    const cards = indexed.map(item => this.card(item.widget, item.id)).join("");
     const title = this.dashboard.title || this.dashboard.label, description = this.dashboard.description || "Live metrics, content, maps, and trends from your selected data";
-    this.innerHTML = `<section class="ph-dashboard-heading"><div><p class="ph-eyebrow">${PHFrame.escape(this.dashboard.template || "Data overview")}</p><h2>${PHFrame.escape(title)}</h2><p class="ph-muted">${PHFrame.escape(description)}</p></div><div class="ph-dashboard-actions"><button class="ph-button" type="button" data-add-widget>+ Add visualization</button><button class="ph-button ph-button-secondary" type="button" data-add-content>+ Add text</button><button class="ph-button ph-button-secondary" type="button" data-reset>Reset layout</button><span class="ph-save-state" role="status">Changes save automatically</span></div></section><div class="ph-dashboard-grid" aria-label="Customizable dashboard">${cards || `<div class="ph-empty-state"><span>＋</span><p>Blank dashboard. Add text, a table, chart, metric, trend, or map.</p></div>`}</div>${this.widgetDialog()}${this.contentDialog()}`;
+    this.innerHTML = `<section class="ph-dashboard-heading"><div><p class="ph-eyebrow">${PHFrame.escape(this.dashboard.template || "Data overview")}</p><h2>${PHFrame.escape(title)}</h2><p class="ph-muted">${PHFrame.escape(description)}</p></div><div class="ph-dashboard-actions"><button class="ph-button" type="button" data-add-widget>+ Add visualization</button><button class="ph-button ph-button-secondary" type="button" data-add-content>+ Add text</button><button class="ph-button ph-button-secondary" type="button" data-reset>Reset layout</button><span class="ph-save-state" role="status">Drag any card by its ⠿ handle, or its edge to resize — changes save automatically</span></div></section><div class="ph-dashboard-grid grid-stack" aria-label="Customizable dashboard">${cards || `<div class="ph-empty-state"><span>＋</span><p>Blank dashboard. Add text, a table, chart, metric, trend, or map.</p></div>`}</div>${this.widgetDialog()}${this.contentDialog()}`;
     this.bind();
+    if (cards) this.initGrid();
+  }
+  async initGrid() {
+    const GridStack = await PHFrame.gridstack();
+    const container = this.querySelector(".ph-dashboard-grid");
+    if (!container) return;
+    this.grid = GridStack.init({
+      column: PHDashboard.columns, cellHeight: PHDashboard.cellHeight, margin: 8, float: false,
+      handle: ".ph-drag-handle", columnOpts: { breakpoints: [{ w: 640, c: 1 }] },
+    }, container);
+    let settling = true;
+    Promise.resolve().then(() => { settling = false; });
+    this.grid.on("change", (event, items) => {
+      for (const item of items || []) {
+        const id = item.el?.getAttribute("gs-id");
+        if (!id) continue;
+        this.settings[id] = { ...(this.settings[id] || {}), x: item.x, y: item.y, w: item.w, h: item.h };
+      }
+      this.saveSettings();
+      if (!settling) PHFrame.notify("Dashboard layout saved.");
+    });
   }
   widgetDialog() {
     const datasetLabel = dataset => this.metadata.datasets?.[dataset]?.label || dataset || "Configured source";
@@ -531,11 +627,10 @@ class PHDashboard extends PHElement {
     return `<dialog class="ph-dialog ph-widget-dialog"><form method="dialog" class="ph-stack" data-widget-form><div class="ph-widget-header"><div><p class="ph-eyebrow">Dashboard builder</p><h2>Add visualization</h2></div><button value="cancel" class="ph-dialog-close" aria-label="Close">×</button></div><div class="ph-field"><label for="ph-widget-title">Title</label><input id="ph-widget-title" name="title" required placeholder="My visualization"></div><div class="ph-field"><label for="ph-widget-source">Data source</label><select id="ph-widget-source" name="source" required>${indicators}${numericFields}${dimensions}${fields}${trends}${maps}</select></div><div class="ph-actions"><button class="ph-button" value="default" data-create-widget>Add to dashboard</button><button value="cancel">Cancel</button></div></form></dialog>`;
   }
   contentDialog() { return `<dialog class="ph-dialog ph-content-dialog"><form method="dialog" class="ph-stack" data-content-form><div class="ph-widget-header"><div><p class="ph-eyebrow">Dashboard content</p><h2>Add text, heading, paragraph, or link</h2></div><button value="cancel" class="ph-dialog-close">×</button></div><div class="ph-field"><label>Block title</label><input name="title" required placeholder="About this dashboard"></div><ph-rich-editor data-dashboard-editor></ph-rich-editor><div class="ph-actions"><button class="ph-button" value="default">Add content</button><button value="cancel">Cancel</button></div></form></dialog>`; }
-  card(widget, index, id) {
+  card(widget, id) {
     const defaults = this.defaults(widget), saved = this.settings[id] || {};
-    const visualization = saved.visualization || defaults.visualization, size = saved.size || defaults.size;
+    const visualization = saved.visualization || defaults.visualization;
     const options = defaults.choices.map(([value, label]) => `<option value="${value}" ${value === visualization ? "selected" : ""}>${label}</option>`).join("");
-    const sizeOptions = [["compact", "Small"], ["medium", "Medium"], ["wide", "Wide"]].map(([value, label]) => `<option value="${value}" ${value === size ? "selected" : ""}>${label}</option>`).join("");
     let component;
     if (widget.type === "content") component = `<div class="ph-dashboard-content ph-prose">${widget.html || ""}</div>`;
     else if (widget.type === "geo_map") component = `<ph-geo-map dataset="${widget.dataset}" latitude-field="${widget.latitude_field}" longitude-field="${widget.longitude_field}"></ph-geo-map>`;
@@ -545,11 +640,12 @@ class PHDashboard extends PHElement {
     else if (widget.type === "field_chart") component = `<ph-indicator-chart dataset="${widget.dataset}" field="${widget.field}" visualization="${visualization}"></ph-indicator-chart>`;
     else if (widget.type === "map") component = `<ph-map dimension="${widget.dimension}" visualization="${visualization}"></ph-map>`;
     else component = `<ph-epi-curve dataset="${widget.dataset}" date-field="${widget.date_field}" value-field="${widget.value_field || ""}" visualization="${visualization}"></ph-epi-curve>`;
-    const span = saved.span || { compact: 3, medium: 6, wide: 12 }[size], height = saved.height || 285;
-    const handles = ["n", "e", "s", "w", "ne", "se", "sw", "nw"].map(direction => `<button class="ph-resize-handle ph-resize-${direction}" data-resize="${direction}" type="button" aria-label="Resize ${PHFrame.escape(widget.title)} ${direction}" title="Drag to resize"></button>`).join("");
+    const layout = { ...this.defaultLayout(widget), ...saved };
+    const hasPosition = saved.x != null && saved.y != null;
+    const position = hasPosition ? `gs-x="${saved.x}" gs-y="${saved.y}"` : `gs-auto-position="true"`;
     const edit = widget.type === "content" ? `<button class="ph-edit-content" type="button" aria-label="Edit ${PHFrame.escape(widget.title)}" title="Edit content">✎</button>` : "";
     const dataset = widget.dataset || this.metadata.indicators?.[widget.indicator]?.dataset || this.metadata.dimensions?.[widget.dimension]?.dataset, source = dataset ? ` · ${this.metadata.datasets?.[dataset]?.label || dataset}` : "";
-    return `<article class="ph-card ph-dashboard-card ph-size-${size}" style="--ph-widget-span:${span};--ph-widget-height:${height}px" data-widget-id="${id}"><header class="ph-widget-header"><div><p class="ph-widget-kind">${PHFrame.escape(widget.type === "epi_curve" ? "Trend" : widget.type)}${PHFrame.escape(source)}</p><h3>${PHFrame.escape(widget.title)}</h3></div><div class="ph-card-actions"><button class="ph-drag-handle" type="button" draggable="true" aria-label="Drag ${PHFrame.escape(widget.title)}" title="Drag to reorder">⠿</button>${edit}<button class="ph-remove-widget" type="button" aria-label="Remove ${PHFrame.escape(widget.title)}" title="Remove visualization">×</button></div></header><div class="ph-widget-controls"><label>View<select data-visualization>${options}</select></label><label>Size<select data-size>${sizeOptions}</select></label><button type="button" data-move="up" aria-label="Move ${PHFrame.escape(widget.title)} earlier">←</button><button type="button" data-move="down" aria-label="Move ${PHFrame.escape(widget.title)} later">→</button></div><div class="ph-widget-content">${component}</div>${handles}</article>`;
+    return `<div class="grid-stack-item" gs-id="${id}" gs-w="${layout.w}" gs-h="${layout.h}" ${position}><div class="grid-stack-item-content ph-card ph-dashboard-card" data-widget-id="${id}"><header class="ph-widget-header"><div><p class="ph-widget-kind">${PHFrame.escape(widget.type === "epi_curve" ? "Trend" : widget.type)}${PHFrame.escape(source)}</p><h3>${PHFrame.escape(widget.title)}</h3></div><div class="ph-card-actions"><button class="ph-drag-handle" type="button" aria-label="Drag ${PHFrame.escape(widget.title)}" title="Drag to move">⠿</button>${edit}<button class="ph-remove-widget" type="button" aria-label="Remove ${PHFrame.escape(widget.title)}" title="Remove visualization">×</button></div></header><div class="ph-widget-controls"><label>View<select data-visualization>${options}</select></label></div><div class="ph-widget-content">${component}</div></div></div>`;
   }
   bind() {
     this.querySelector("[data-reset]").addEventListener("click", () => { localStorage.removeItem(this.storageKey); this.settings = {}; this.draw(); PHFrame.notify("Dashboard layout reset."); });
@@ -560,31 +656,17 @@ class PHDashboard extends PHElement {
     this.querySelector("[data-widget-form]").addEventListener("submit", event => { if (event.submitter?.value === "cancel") return; event.preventDefault(); this.addWidget(event.currentTarget); dialog.close(); });
     this.querySelector("[data-content-form]").addEventListener("submit", event => { if (event.submitter?.value === "cancel") return; event.preventDefault(); const form = event.currentTarget, editing = form.dataset.editing, widget = { _id: editing || `content-${Date.now()}`, type: "content", title: form.elements.title.value, html: form.querySelector("ph-rich-editor").value }; editing ? this.updateContent(widget) : this.addManagedWidget(widget); delete form.dataset.editing; contentDialog.close(); });
     this.querySelectorAll(".ph-dashboard-card").forEach(card => {
-      card.querySelector("[data-visualization]").addEventListener("change", event => this.updateCard(card, "visualization", event.target.value));
-      card.querySelector("[data-size]").addEventListener("change", event => this.updateCard(card, "size", event.target.value));
-      card.querySelectorAll("[data-move]").forEach(button => button.addEventListener("click", () => this.move(card, button.dataset.move)));
+      card.querySelector("[data-visualization]").addEventListener("change", event => this.updateVisualization(card, event.target.value));
       card.querySelector(".ph-remove-widget").addEventListener("click", () => this.removeWidget(card.dataset.widgetId));
       card.querySelector(".ph-edit-content")?.addEventListener("click", () => this.editContent(card.dataset.widgetId, contentDialog));
-      card.querySelectorAll("[data-resize]").forEach(handle => handle.addEventListener("pointerdown", event => this.startResize(event, card, handle.dataset.resize)));
-      card.addEventListener("dragstart", event => { if (!event.target.closest(".ph-drag-handle")) { event.preventDefault(); return; } card.classList.add("ph-dragging"); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", card.dataset.widgetId); });
-      card.addEventListener("dragend", () => { card.classList.remove("ph-dragging"); this.querySelectorAll(".ph-drag-over").forEach(item => item.classList.remove("ph-drag-over")); });
-      card.addEventListener("dragover", event => { event.preventDefault(); card.classList.add("ph-drag-over"); });
-      card.addEventListener("dragleave", () => card.classList.remove("ph-drag-over"));
-      card.addEventListener("drop", event => { event.preventDefault(); const source = this.querySelector(`[data-widget-id="${CSS.escape(event.dataTransfer.getData("text/plain"))}"]`); if (source && source !== card) card.before(source); card.classList.remove("ph-drag-over"); this.saveSettings(); PHFrame.notify("Dashboard layout saved."); });
     });
   }
-  updateCard(card, property, value) {
+  updateVisualization(card, visualization) {
     const id = card.dataset.widgetId;
-    this.settings[id] = { ...(this.settings[id] || {}), [property]: value };
-    if (property === "size") { const span = { compact: 3, medium: 6, wide: 12 }[value]; this.settings[id].span = span; card.className = `ph-card ph-dashboard-card ph-size-${value}`; card.style.setProperty("--ph-widget-span", span); }
-    else { const visualization = card.querySelector("[data-visualization]").value; const component = card.querySelector("ph-kpi, ph-indicator-chart, ph-map, ph-epi-curve"); if (component) { component.setAttribute("visualization", visualization); component.render(); } }
+    this.settings[id] = { ...(this.settings[id] || {}), visualization };
+    const component = card.querySelector("ph-kpi, ph-indicator-chart, ph-map, ph-epi-curve");
+    if (component) { component.setAttribute("visualization", visualization); component.render(); }
     this.saveSettings();
-  }
-  move(card, direction) {
-    const sibling = direction === "up" ? card.previousElementSibling : card.nextElementSibling;
-    if (!sibling) return;
-    if (direction === "up") sibling.before(card); else sibling.after(card);
-    this.saveSettings(); card.querySelector(".ph-drag-handle").focus(); PHFrame.notify("Dashboard layout saved.");
   }
   addWidget(form) {
     const data = new FormData(form), parts = String(data.get("source")).split("|");
@@ -604,14 +686,6 @@ class PHDashboard extends PHElement {
     if (!this.dashboard.configured) { this.dashboard = { ...this.dashboard, widgets: this.dashboard.widgets.filter((widget, index) => this.widgetId(widget, index) !== id) }; this.dispatchEvent(new CustomEvent("ph-dashboard-definition", { bubbles: true, detail: this.dashboard })); }
     else { this.settings.hidden = [...new Set([...(this.settings.hidden || []), id])]; this.saveSettings(); }
     this.draw(); PHFrame.notify("Dashboard item removed.");
-  }
-  startResize(event, card, direction) {
-    event.preventDefault(); event.stopPropagation();
-    const startX = event.clientX, startY = event.clientY, startSpan = Number(getComputedStyle(card).getPropertyValue("--ph-widget-span")) || 6, startHeight = card.offsetHeight;
-    const gridWidth = this.querySelector(".ph-dashboard-grid").clientWidth, columnWidth = gridWidth / 12;
-    const move = pointer => { const horizontal = direction.includes("e") ? pointer.clientX - startX : (direction.includes("w") ? startX - pointer.clientX : 0); const vertical = direction.includes("s") ? pointer.clientY - startY : (direction.includes("n") ? startY - pointer.clientY : 0); const span = Math.min(12, Math.max(2, Math.round(startSpan + horizontal / columnWidth))); const height = Math.min(720, Math.max(210, startHeight + vertical)); card.style.setProperty("--ph-widget-span", span); card.style.setProperty("--ph-widget-height", `${height}px`); card.dataset.resizeSpan = span; card.dataset.resizeHeight = Math.round(height); };
-    const end = () => { removeEventListener("pointermove", move); removeEventListener("pointerup", end); const id = card.dataset.widgetId; this.settings[id] = { ...(this.settings[id] || {}), span: Number(card.dataset.resizeSpan || startSpan), height: Number(card.dataset.resizeHeight || startHeight) }; this.saveSettings(); PHFrame.notify("Widget size saved."); };
-    addEventListener("pointermove", move); addEventListener("pointerup", end, { once: true });
   }
 }
 

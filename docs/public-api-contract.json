@@ -599,6 +599,24 @@
       ]
     },
     {
+      "path": "/assets/chart.js",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/assets/gridstack.css",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
+      "path": "/assets/gridstack.js",
+      "methods": [
+        "GET"
+      ]
+    },
+    {
       "path": "/assets/leaflet.css",
       "methods": [
         "GET"

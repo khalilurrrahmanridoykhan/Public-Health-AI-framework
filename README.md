@@ -23,7 +23,7 @@ Current capabilities include:
 - Import audit history and safe schema migration checks
 - Portable HTML dashboards for offline sharing
 - Declarative indicators with count, sum, average, rate, ratio, and percentage calculations
-- Drag-resizable dashboards with add/remove controls and browser-saved visualization choices
+- Freely positioned, drag-and-drop dashboards — move any card anywhere in the grid, resize from any edge, with add/remove controls and browser-saved layout and visualization choices
 - Browser-managed typed columns for worldwide, programme-specific data models
 - Browser imports with downloadable examples and scheduled generic API, DHIS2, KoboToolbox, and ODK synchronization
 - Editable branding, navigation, footer, themes, primary color, dashboard title, logo, and favicon
@@ -62,8 +62,8 @@ The Phase 3 interface is served directly by PHFrame and has no React or external
 - Hash-based application routing and a responsive application shell
 - Metadata-driven record forms and protected-field-aware tables
 - Saved filters and organisation-unit selection
-- KPI cards, grouped SVG charts, epidemiological curves, and offline tile choropleths
-- Declarative dashboard composition in `phframe.yaml`
+- KPI cards, Chart.js-powered bar/donut charts and epidemiological curves, and offline tile choropleths
+- A freely positioned, drag-and-drop dashboard grid (GridStack) with declarative composition in `phframe.yaml`
 - Light, dark, and high-contrast themes using CSS design tokens
 - English and Bengali localization foundations with project-specific translation overrides
 - Keyboard focus styling, skip navigation, reduced-motion support, live notifications, modal dialogs, and confirmations
