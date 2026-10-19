@@ -2147,6 +2147,7 @@ A connector definition with the same fields as the `connectors` section of phfra
 | `upstream_url` | string | no |  |
 | `refresh_minutes` | integer | no |  |
 | `project_name` | string | no | Cloudflare Pages project name; deploy only. |
+| `widget_visualizations` | array of string or null | no | One entry per dashboard widget, in order; the browser-only visualization choice (e.g. `donut`) to render that widget with, or null to use the default for its type. |
 
 ### PrivacyAudit
 

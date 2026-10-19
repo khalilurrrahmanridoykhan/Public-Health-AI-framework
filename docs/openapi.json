@@ -10185,6 +10185,16 @@
           "project_name": {
             "type": "string",
             "description": "Cloudflare Pages project name; deploy only."
+          },
+          "widget_visualizations": {
+            "type": "array",
+            "items": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "description": "One entry per dashboard widget, in order; the browser-only visualization choice (e.g. `donut`) to render that widget with, or null to use the default for its type."
           }
         },
         "required": [

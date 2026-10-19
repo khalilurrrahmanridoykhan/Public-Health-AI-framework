@@ -313,7 +313,11 @@ COMPONENTS: dict[str, dict[str, Any]] = {
         "mode": string(enum=["snapshot", "live"], default="snapshot"), "upstream_url": string(),
         "refresh_minutes": {"type": "integer", "minimum": 1, "maximum": 1440, "default": 15},
         "project_name": string(description="Cloudflare Pages project name; deploy only."),
-    }, optional=("mode", "upstream_url", "refresh_minutes", "project_name")),
+        "widget_visualizations": {
+            "type": "array", "items": nullable(string()),
+            "description": "One entry per dashboard widget, in order; the browser-only visualization choice (e.g. `donut`) to render that widget with, or null to use the default for its type.",
+        },
+    }, optional=("mode", "upstream_url", "refresh_minutes", "project_name", "widget_visualizations")),
     "PrivacyAudit": obj({
         "approved": boolean(), "mode": string(), "dashboard_id": nullable(string()), "row_level_records": integer(),
         "protected_fields": integer(), "sources": array(ANY_OBJECT), "findings": STRINGS, "live_endpoint": string(), "notice": string(),

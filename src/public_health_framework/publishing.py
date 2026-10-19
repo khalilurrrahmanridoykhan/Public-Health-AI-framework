@@ -73,35 +73,51 @@ def _interactive_page(title: str, payload: str, primary: str, mode: str) -> str:
 :root{--p:__PRIMARY__;--bg:#f4f7f7;--card:#fff;--text:#17313d;--muted:#58717b;--border:#d5e1e3;--grid:#e1e0d9}
 @media(prefers-color-scheme:dark){:root{--bg:#0b1b22;--card:#14272f;--text:#edf7f8;--muted:#b4cbd1;--border:#45616b;--grid:#2c2c2a}}
 *{box-sizing:border-box}
+html{scroll-behavior:smooth}
 body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
-header{padding:2.4rem 5vw;color:#fff;background:var(--p)}
+header{position:sticky;top:0;z-index:5;padding:1.6rem 5vw;color:#fff;background:var(--p)}
 header h1{margin:0 0 .3rem;font-size:1.8rem}
-main{max-width:1200px;margin:auto;padding:2rem}
+.jump-nav{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:1rem;padding:0;list-style:none}
+.jump-nav a{padding:.35rem .8rem;color:#fff;background:rgb(255 255 255 / 16%);border-radius:999px;font-size:.78rem;text-decoration:none;white-space:nowrap}
+.jump-nav a:hover{background:rgb(255 255 255 / 28%)}
+main{max-width:1200px;margin:auto;padding:2rem;scroll-margin-top:1rem}
 .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1.1rem}
-article{padding:1.3rem;background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:0 10px 30px rgb(23 49 61 / 6%);transition:box-shadow .18s ease}
+article{padding:1.3rem;background:var(--card);border:1px solid var(--border);border-radius:14px;box-shadow:0 10px 30px rgb(23 49 61 / 6%);transition:box-shadow .18s ease;scroll-margin-top:5.5rem}
 article:hover{box-shadow:0 14px 36px rgb(23 49 61 / 11%)}
 article.map-card,article.chart-card{grid-column:1/-1}
 article h2{margin:0 0 .9rem;font-size:1rem;font-weight:700}
 .value{font-size:2.6rem;font-weight:800;color:var(--p);letter-spacing:-.03em}
 .canvas-wrap{position:relative;height:280px}
+.donut-wrap{max-width:22rem}
 .map{height:480px;border-radius:10px;overflow:hidden}
 .legend{display:grid;gap:4px;min-width:115px;padding:10px;background:#fffffff0;border-radius:8px;box-shadow:0 2px 12px #0003}
 .legend span{display:flex;align-items:center;gap:6px;font-size:12px}
 .legend i{width:14px;height:14px;border:1px solid #789}
+.table-wrap{max-height:18rem;overflow:auto}
+.table-wrap table{width:100%;border-collapse:collapse;font-size:.85rem}
+.table-wrap th,.table-wrap td{padding:.5rem;border-bottom:1px solid var(--border);text-align:left}
 footer{padding:2rem;text-align:center;color:var(--muted)}
 .status{font-size:.8rem;opacity:.8}
 @media(max-width:640px){main{padding:1rem}.map{height:390px}.canvas-wrap{height:220px}}
-</style></head><body><header><h1>__TITLE__</h1><p class="status">__MODE__ dashboard · aggregate data only</p></header><main><div class="grid" id="dashboard"></div></main><footer>Published with PHFrame</footer><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/chart.js@4.5.1/dist/chart.umd.js"></script><script id="ph-data" type="application/json">__PAYLOAD__</script><script>
-const state=JSON.parse(document.querySelector('#ph-data').textContent),host=document.querySelector('#dashboard'),pendingMaps=[],pendingCharts=[],charts=[];
+</style></head><body><header><h1>__TITLE__</h1><p class="status">__MODE__ dashboard · aggregate data only</p><nav class="jump-nav" id="jump-nav" aria-label="Jump to visualization"></nav></header><main><div class="grid" id="dashboard"></div></main><footer>Published with PHFrame</footer><script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/chart.js@4.5.1/dist/chart.umd.js"></script><script id="ph-data" type="application/json">__PAYLOAD__</script><script>
+const state=JSON.parse(document.querySelector('#ph-data').textContent),host=document.querySelector('#dashboard'),nav=document.querySelector('#jump-nav'),pendingMaps=[],pendingCharts=[],charts=[];
 const cssVar=name=>getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const categoricalPalette=['#2a78d6','#eb6834','#1baf7a','#eda100','#e87ba4','#008300','#6250d6','#e34948'];
 const tiles={'openstreetmap':['https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png','© OpenStreetMap contributors'],'carto-light':['https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png','© OpenStreetMap contributors © CARTO'],'carto-dark':['https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png','© OpenStreetMap contributors © CARTO'],'esri-imagery':['https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}','Tiles © Esri']};
 function esc(v){const e=document.createElement('span');e.textContent=v??'';return e.innerHTML}function norm(v){return String(v||'').toLowerCase().normalize('NFKD').replace(/[^a-z0-9]/g,'')}
-function render(w){if(w.html)return w.html;if(w.geojson){const id=`map-${pendingMaps.length}`;pendingMaps.push({id,w});return `<div class="map" id="${id}"></div>`}if(w.value!==undefined)return `<div class="value">${Number(w.value).toLocaleString()}</div><p>${esc(w.operation||'aggregate')}</p>`;if(w.values&&w.values.length){const id=`chart-${pendingCharts.length}`;pendingCharts.push({id,w});return `<div class="canvas-wrap"><canvas id="${id}" role="img" aria-label="${esc(w.title||'Chart')}"></canvas></div>`}return '<p>No aggregate data available.</p>'}
-function cardClass(w){return w.geojson?'map-card':(w.values&&w.values.length?'chart-card':'')}
-function draw(data){pendingMaps.length=0;pendingCharts.length=0;charts.forEach(c=>c.destroy());charts.length=0;const values=data.widgets||[];host.innerHTML=values.map(w=>`<article class="${cardClass(w)}"><h2>${esc(w.title||w.type)}</h2>${render(w)}</article>`).join('');requestAnimationFrame(()=>{pendingMaps.forEach(initMap);pendingCharts.forEach(initChart)})}
-function initChart(item){if(!window.Chart)return;const ctx=document.getElementById(item.id);if(!ctx)return;const values=item.w.values,trend='date' in values[0],color=cssVar('--p')||'__PRIMARY__',muted=cssVar('--muted'),grid=cssVar('--grid');
+function dataTable(w){const trend='date' in w.values[0],rows=w.values.map(v=>`<tr><td>${esc(trend?v.date:(v.value??'Unknown'))}</td><td>${trend?v.value:v.count}</td></tr>`).join('');return `<div class="table-wrap"><table><thead><tr><th>${trend?'Date':'Value'}</th><th>${trend?'Value':'Count'}</th></tr></thead><tbody>${rows}</tbody></table></div>`}
+function render(w){if(w.html)return w.html;if(w.geojson){const id=`map-${pendingMaps.length}`;pendingMaps.push({id,w});return `<div class="map" id="${id}"></div>`}if(w.value!==undefined)return `<div class="value">${Number(w.value).toLocaleString()}</div><p>${esc(w.operation||'aggregate')}</p>`;if(w.values&&w.values.length){if(w.visualization==='table')return dataTable(w);const id=`chart-${pendingCharts.length}`;pendingCharts.push({id,w});return `<div class="${w.visualization==='donut'?'donut-wrap':'canvas-wrap'}"><canvas id="${id}" role="img" aria-label="${esc(w.title||'Chart')}"></canvas></div>`}return '<p>No aggregate data available.</p>'}
+function cardClass(w){if(w.geojson)return 'map-card';if(!w.values||!w.values.length||w.visualization==='table')return '';return w.visualization==='donut'?'':'chart-card'}
+function draw(data){pendingMaps.length=0;pendingCharts.length=0;charts.forEach(c=>c.destroy());charts.length=0;const values=data.widgets||[];if(nav)nav.innerHTML=values.map((w,i)=>`<a href="#widget-${i}">${esc(w.title||w.type)}</a>`).join('');host.innerHTML=values.map((w,i)=>`<article id="widget-${i}" class="${cardClass(w)}"><h2>${esc(w.title||w.type)}</h2>${render(w)}</article>`).join('');requestAnimationFrame(()=>{pendingMaps.forEach(initMap);pendingCharts.forEach(initChart)})}
+function initChart(item){if(!window.Chart)return;const ctx=document.getElementById(item.id);if(!ctx)return;const values=item.w.values,vis=item.w.visualization,color=cssVar('--p')||'__PRIMARY__',muted=cssVar('--muted'),grid=cssVar('--grid'),ink=cssVar('--text');
 const common={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}};
-const chart=trend?new Chart(ctx,{type:'line',data:{labels:values.map(v=>v.date),datasets:[{data:values.map(v=>v.value),borderColor:color,backgroundColor:`color-mix(in srgb, ${color} 18%, transparent)`,fill:true,tension:.25,pointRadius:3,pointBackgroundColor:color,pointHoverRadius:5,borderWidth:2}]},options:{...common,scales:{x:{grid:{display:false},ticks:{color:muted,maxRotation:0,autoSkip:true}},y:{beginAtZero:true,grid:{color:grid},ticks:{color:muted}}}}}):new Chart(ctx,{type:'bar',data:{labels:values.slice(0,20).map(v=>v.value??'Unknown'),datasets:[{data:values.slice(0,20).map(v=>v.count),backgroundColor:color,borderRadius:4,maxBarThickness:28}]},options:{...common,indexAxis:'y',scales:{x:{beginAtZero:true,grid:{color:grid},ticks:{color:muted}},y:{grid:{display:false},ticks:{color:muted}}}}});
+let chart;
+if(vis==='donut'){
+chart=new Chart(ctx,{type:'doughnut',data:{labels:values.map(v=>v.value??'Unknown'),datasets:[{data:values.map(v=>v.count),backgroundColor:values.map((_,i)=>categoricalPalette[i%categoricalPalette.length]),borderColor:cssVar('--card'),borderWidth:2}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{color:ink,boxWidth:12,padding:14}}}}});
+}else{
+const trend=vis?(vis==='line'||vis==='column'):('date' in values[0]),column=vis==='column';
+chart=trend?new Chart(ctx,{type:column?'bar':'line',data:{labels:values.map(v=>v.date),datasets:[{data:values.map(v=>v.value),borderColor:color,backgroundColor:column?color:`color-mix(in srgb, ${color} 18%, transparent)`,borderRadius:column?4:0,fill:!column,tension:.25,pointRadius:column?0:3,pointBackgroundColor:color,pointHoverRadius:5,borderWidth:2}]},options:{...common,scales:{x:{grid:{display:false},ticks:{color:muted,maxRotation:0,autoSkip:true}},y:{beginAtZero:true,grid:{color:grid},ticks:{color:muted}}}}}):new Chart(ctx,{type:'bar',data:{labels:values.slice(0,20).map(v=>v.value??'Unknown'),datasets:[{data:values.slice(0,20).map(v=>v.count),backgroundColor:color,borderRadius:4,maxBarThickness:28}]},options:{...common,indexAxis:'y',scales:{x:{beginAtZero:true,grid:{color:grid},ticks:{color:muted}},y:{grid:{display:false},ticks:{color:muted}}}}});
+}
 charts.push(chart)}
 function initMap(item){if(!window.L)return;const w=item.w,counts=new Map((w.values||[]).map(x=>[norm(x.value),Number(x.count||0)])),max=Math.max(1,...counts.values()),color=v=>!v?'#e7ecef':v/max>.8?'#7f0000':v/max>.6?'#c62828':v/max>.4?'#ef5350':v/max>.2?'#ff8a3d':'#fff59d',name=f=>{const p=f.properties||{};return p.shapeName||p.name||p.NAME_1||p.NAME_2||p.NAME||'Area'},map=L.map(item.id,{scrollWheelZoom:false}),base=tiles[state.basemap]||tiles['carto-light'];L.tileLayer(base[0],{attribution:base[1],maxZoom:19}).addTo(map);let layer=L.geoJSON(w.geojson,{style:f=>{const n=counts.get(norm(name(f)))||0;return{color:'#34444c',weight:1,fillColor:color(n),fillOpacity:.82}},onEachFeature:(f,l)=>{const n=name(f),v=counts.get(norm(n))||0;l.bindTooltip(`${esc(n)}: ${v}`,{sticky:true}).bindPopup(`<b>${esc(n)}</b><br>Value: ${v.toLocaleString()}`);l.on({mouseover:e=>e.target.setStyle({weight:3,fillOpacity:1}),mouseout:e=>layer.resetStyle(e.target)})}}).addTo(map);map.fitBounds(layer.getBounds(),{padding:[16,16]});const legend=L.control({position:'topright'});legend.onAdd=()=>{const d=L.DomUtil.create('div','legend'),steps=[0,.2,.4,.6,.8].map(x=>Math.round(max*x));d.innerHTML='<b>Value</b>'+steps.map(x=>`<span><i style="background:${color(x)}"></i>${x.toLocaleString()}${x===steps.at(-1)?'+':''}</span>`).join('');return d};legend.addTo(map)}
 draw(state.snapshot);async function refresh(){try{const r=await fetch('/api/live');if(r.ok)draw(await r.json())}catch(e){}}if(state.mode==='live'){refresh();setInterval(refresh,state.refresh_minutes*60000)}
